@@ -1,0 +1,55 @@
+{
+  "root": true,
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
+  },
+  "extends": [
+    "eslint:recommended"
+  ],
+  "ignorePatterns": [
+    "**/dist/**"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "**.cjs"
+      ],
+      "parserOptions": {
+        "sourceType": "commonjs"
+      },
+      "globals": {
+        "require": "readonly"
+      }
+    },
+    {
+      "files": [
+        "**/*.@(ts|js)"
+      ],
+      "plugins": [
+        "@typescript-eslint"
+      ],
+      "parser": "@typescript-eslint/parser",
+      "extends": [
+        "plugin:@typescript-eslint/recommended"
+      ]
+    },
+    {
+      "files": [
+        "**/tests/**/*.@(ts|js|cjs)"
+      ],
+      "plugins": [
+        "jest",
+        "jest-formatting"
+      ],
+      "extends": [
+        "plugin:jest/recommended",
+        "plugin:jest-formatting/strict"
+      ],
+      "rules": {
+        "jest/prefer-called-with": "error",
+        "jest/prefer-spy-on": "error"
+      }
+    }
+  ]
+}

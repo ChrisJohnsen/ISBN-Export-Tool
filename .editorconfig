@@ -1,0 +1,16 @@
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+
+[.vscode/*.dict]
+; On Windows, Spell Right VS Code extension fails unless file has CRLF endings.
+; Use {/.vscode/*.dict text eol=crlf} in .git/info/attributes to let Windows
+; have CRLFs without forcing it on other platforms.
+end_of_line = unset
+
+[*.{ts,js,json,yml}]
+charset = utf-8
+indent_style = space
+indent_size = 2
