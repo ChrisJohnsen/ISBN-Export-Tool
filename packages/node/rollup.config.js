@@ -14,7 +14,7 @@ export default [
         format: 'cjs',
       },
     ],
-    external: ['extlib'],
+    external: ['papaparse'],
     plugins: [/* commonjs(), */ node_resolve(), esbuild()],
   },
   {

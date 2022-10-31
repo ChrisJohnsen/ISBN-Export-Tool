@@ -1012,6 +1012,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/papaparse@npm:^5.3.5":
+  version: 5.3.5
+  resolution: "@types/papaparse@npm:5.3.5"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 7b8e9e06c96b3f1df32b555ec4ebe1a698658ee74abab602a680e64ff907774d86688c188337a43ef68a7b9408b25310c5a1e0100e15c17e07dfccf05a50412b
+  languageName: node
+  linkType: hard
+
 "@types/prettier@npm:^2.1.5":
   version: 2.7.1
   resolution: "@types/prettier@npm:2.7.1"
@@ -3800,7 +3809,9 @@ __metadata:
     "@rollup/plugin-commonjs": "npm:^23.0.2"
     "@rollup/plugin-node-resolve": "npm:^15.0.1"
     "@types/node": "npm:^18.11.7"
+    "@types/papaparse": "npm:^5.3.5"
     esbuild: "npm:^0.15.12"
+    papaparse: "npm:^5.3.2"
     rollup-plugin-esbuild: "npm:^4.10.1"
     ts-jest: "npm:^29.0.3"
   languageName: unknown
@@ -3926,6 +3937,13 @@ __metadata:
   version: 2.2.0
   resolution: "p-try@npm:2.2.0"
   checksum: 1b9a6b5d6f42a46e36f053ee737a72cbe8f7990ee65e0d7bc3f8f8324e233d5b5e790f9f660bcc44d93738a2b12108dec1f7a39c9650d276fd1f9d73d54d4f55
+  languageName: node
+  linkType: hard
+
+"papaparse@npm:^5.3.2":
+  version: 5.3.2
+  resolution: "papaparse@npm:5.3.2"
+  checksum: aa57af305bda4c802e5ae63a3827ee481737c12f5bd15bcccd76346f100fe4505bee6bcfd96541036ceef24789cf981684db0e8d99c0303966d79fcae2f0cf6e
   languageName: node
   linkType: hard
 
