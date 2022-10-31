@@ -11,3 +11,6 @@
 
 #!.yarn/cache
 .pnp.*
+
+# esbuild copies its exe here when using pnpapi...
+/node_modules/.cache/esbuild/

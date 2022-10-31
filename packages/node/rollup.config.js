@@ -2,7 +2,7 @@
 
 import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
-import typescript from 'rollup-plugin-ts';
+import esbuild from 'rollup-plugin-esbuild';
 
 export default [
   {
@@ -15,7 +15,7 @@ export default [
       },
     ],
     external: ['extlib'],
-    plugins: [/* commonjs(), */ node_resolve(), typescript()],
+    plugins: [/* commonjs(), */ node_resolve(), esbuild()],
   },
   {
     input: 'src/test.ts',
@@ -27,6 +27,6 @@ export default [
       },
     ],
     external: [],
-    plugins: [commonjs(), node_resolve(), typescript()],
+    plugins: [commonjs(), node_resolve(), esbuild()],
   },
 ];
