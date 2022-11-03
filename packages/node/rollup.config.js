@@ -15,7 +15,7 @@ export default [
       },
     ],
     external: ['papaparse'],
-    plugins: [/* commonjs(), */ node_resolve(), esbuild()],
+    plugins: [/* commonjs(), */ node_resolve(), esbuild({ target: "es2022" })],
   },
   {
     input: 'src/test.ts',
@@ -27,6 +27,6 @@ export default [
       },
     ],
     external: [],
-    plugins: [commonjs(), node_resolve(), esbuild()],
+    plugins: [commonjs(), node_resolve(), esbuild({ target: "es2022" })],
   },
 ];
