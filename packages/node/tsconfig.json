@@ -3,6 +3,9 @@
     "src/**/*"
   ],
   "compilerOptions": {
+    "lib": [
+      "DOM"
+    ],
     "checkJs": true,
     "moduleResolution": "node16"
   },
