@@ -3,33 +3,55 @@ import { parse, type ParseConfig } from 'papaparse';
 import { type FileHandle, readFile } from 'node:fs/promises';
 import { type PathLike } from 'node:fs';
 
-interface ParseOpts<T> {
-  header?: boolean;
-  rowFunc: (row: T) => void,
+interface RowInfo {
+  offset: number,
+  empty?: boolean,
+  missingColumns: readonly string[],
+  extraColumns: readonly string[],
+}
+
+interface ParseOpts {
+  row: (row: Record<string, string>, info: RowInfo) => void,
   done?: () => void,
 }
 
-// XXX enforce opts and TRow
-
-function parseCSV<TRow>(data: string, opts: ParseOpts<TRow>) {
-  let maybe_last_line = false;
-  const config: ParseConfig<TRow, unknown> = {
-    header: opts.header,
+function parseCSV(data: string, opts: ParseOpts) {
+  let previousLineWasEmpty = false;
+  let firstRow: readonly string[] | undefined;
+  const config: ParseConfig<string[], never> = {
     step: function (result/*, parser */) {
-      if (maybe_last_line) {
-        throw 'data after last line?';
-      }
       if (result.errors?.length > 0) {
-        const errors = result.errors;
-        if (errors.length == 1 && errors[0].type == 'FieldMismatch' && errors[0].code == 'TooFewFields') {
-          maybe_last_line = true;
-        } else {
-          console.error('STEP ERROR', result.errors);
-          throw ({ errors: result.errors });
-        }
+        console.error('STEP ERROR', result.errors);
+        throw { error: 'ParseError', offset: result.meta.cursor, details: result.errors };
       } else {
-        opts.rowFunc(result.data);
-        // XXX might need to pass back other info from result?
+        const data = result.data;
+        if (data.length == 1 && data[0] == '') {
+          previousLineWasEmpty = true;
+        } else {
+          if (!firstRow) {
+            firstRow = Object.freeze(data);
+          } else {
+            if (previousLineWasEmpty) {
+              // emit empty row, then continue
+              opts.row({}, { empty: true, offset: result.meta.cursor, extraColumns: [], missingColumns: firstRow });
+              previousLineWasEmpty = false;
+            }
+            const rowObj = Object.fromEntries(firstRow.flatMap((columnHeader, i) => {
+              if (i >= data.length) {
+                return []
+              } else {
+                return [[columnHeader, data[i]]];
+              }
+            }));
+            const info: RowInfo = { offset: result.meta.cursor, missingColumns: [], extraColumns: [] };
+            if (data.length > firstRow.length) {
+              info.extraColumns = data.slice(firstRow.length);
+            } else if (data.length < firstRow.length) {
+              info.missingColumns = firstRow.slice(data.length);
+            }
+            opts.row(rowObj, info);
+          }
+        }
       }
     },
     complete() {
@@ -45,13 +67,12 @@ async function main(path: PathLike | FileHandle) {
   return new Promise((resolve, reject) => {
     try {
       let n = 1;
-      parseCSV<Record<string, string>>(csv, {
-        header: true,
-        rowFunc(row: Record<string, string>) {
-          const isbn13 = row.ISBN13
-          const exclusiveShelf = row['Exclusive Shelf']
+      parseCSV(csv, {
+        row(rowObj) {
+          const isbn13 = rowObj.ISBN13
+          const exclusiveShelf = rowObj['Exclusive Shelf']
           if (isbn13 == '=""' && exclusiveShelf == 'to-read') {
-            console.log(n, row);
+            console.log(n, rowObj);
             n++
           }
         },
