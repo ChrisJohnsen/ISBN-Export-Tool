@@ -10,8 +10,10 @@ interface RowInfo {
   extraColumns: readonly string[],
 }
 
+type Row = Record<string, string>;
+
 interface ParseOpts {
-  row: (row: Record<string, string>, info: RowInfo) => void,
+  row: (row: Row, info: RowInfo) => void,
   done?: () => void,
 }
 
@@ -61,27 +63,36 @@ function parseCSV(data: string, opts: ParseOpts) {
   parse(data, config);
 }
 
-async function main(path: PathLike | FileHandle) {
-  const csv = await readFile(path, { encoding: 'utf-8' });
-
+function reduceCSV<T>(csv: string, fn: (accumulator: T, rowObj: Row) => T, initial: T): Promise<T> {
   return new Promise((resolve, reject) => {
+    let accumulator = initial;
     try {
-      let n = 1;
       parseCSV(csv, {
         row(rowObj) {
-          const isbn13 = rowObj.ISBN13
-          const exclusiveShelf = rowObj['Exclusive Shelf']
-          if (isbn13 == '=""' && exclusiveShelf == 'to-read') {
-            console.log(n, rowObj);
-            n++
-          }
+          accumulator = fn(accumulator, rowObj);
         },
-        done() { resolve(null) },
+        done() { resolve(accumulator) },
       });
     } catch (e) {
-      console.log('main error', e);
-      reject({ error: 'main error', info: e });
+      console.log('reduce error', e);
+      reject({ error: 'reduce error', info: e });
     }
+  });
+}
+
+async function main(path: PathLike | FileHandle) {
+  const csv = await readFile(path, { encoding: 'utf-8' });
+  reduceCSV(csv, (noISBNs: Row[], row) => {
+    const isbn13 = row.ISBN13
+    const exclusiveShelf = row['Exclusive Shelf']
+    if (isbn13 == '=""' && exclusiveShelf == 'to-read') {
+      noISBNs.push(row);
+    }
+    return noISBNs;
+  }, []).then(noISBNs => {
+    noISBNs.forEach((row, n) => {
+      console.log(n + 1, row);
+    })
   });
 }
 
