@@ -1,4 +1,4 @@
-import { parse, type ParseConfig } from 'papaparse';
+import { parse, unparse, type ParseConfig } from 'papaparse';
 
 import { type FileHandle, readFile } from 'node:fs/promises';
 import { type PathLike } from 'node:fs';
@@ -115,9 +115,12 @@ async function main(path: PathLike | FileHandle) {
       filter(row => row.ISBN13 == '=""' && row['Exclusive Shelf'] == 'to-read'),
     ),
   ).then(noISBNs => {
-    noISBNs.forEach((row, n) => {
-      console.log(n + 1, row);
-    })
+    console.log(unparse(noISBNs.map(row => {
+      return {
+        Title: row['Title'],
+        Author: row['Author'],
+      };
+    })));
   });
 }
 
