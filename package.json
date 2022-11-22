@@ -1,6 +1,6 @@
 {
   "name": "goodreads-export-tools",
-  "packageManager": "yarn@4.0.0-rc.27",
+  "packageManager": "yarn@4.0.0-rc.30",
   "type": "module",
   "private": true,
   "workspaces": [
