@@ -63,13 +63,18 @@ function parseCSV(data: string, opts: ParseOpts) {
   parse(data, config);
 }
 
-function reduceCSV<T>(csv: string, fn: (accumulator: T, rowObj: Row) => T, initial: T): Promise<T> {
+interface Reducer<V, A> {
+  fn: (accumulator: A, value: V) => A,
+  initial: A
+}
+
+function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
   return new Promise((resolve, reject) => {
-    let accumulator = initial;
+    let accumulator = reducer.initial;
     try {
       parseCSV(csv, {
         row(rowObj) {
-          accumulator = fn(accumulator, rowObj);
+          accumulator = reducer.fn(accumulator, rowObj);
         },
         done() { resolve(accumulator) },
       });
@@ -80,16 +85,36 @@ function reduceCSV<T>(csv: string, fn: (accumulator: T, rowObj: Row) => T, initi
   });
 }
 
+type FlatMapper<T, U = T> = (value: T) => U[];
+
+function collect<T>(...flatMappers: FlatMapper<T>[]): Reducer<T, T[]> {
+  return {
+    fn: (acc, value) => {
+      return acc.concat(flatMappers.reduce((values, fn) => {
+        return values.flatMap(fn);
+      }, [value]));
+    },
+    initial: []
+  };
+}
+
+function filter<T>(fn: (value: T) => boolean): FlatMapper<T> {
+  return (value) => {
+    if (fn(value)) {
+      return [value];
+    } else {
+      return [];
+    }
+  };
+}
+
 async function main(path: PathLike | FileHandle) {
   const csv = await readFile(path, { encoding: 'utf-8' });
-  reduceCSV(csv, (noISBNs: Row[], row) => {
-    const isbn13 = row.ISBN13
-    const exclusiveShelf = row['Exclusive Shelf']
-    if (isbn13 == '=""' && exclusiveShelf == 'to-read') {
-      noISBNs.push(row);
-    }
-    return noISBNs;
-  }, []).then(noISBNs => {
+  reduceCSV(csv,
+    collect(
+      filter(row => row.ISBN13 == '=""' && row['Exclusive Shelf'] == 'to-read'),
+    ),
+  ).then(noISBNs => {
     noISBNs.forEach((row, n) => {
       console.log(n + 1, row);
     })
