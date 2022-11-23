@@ -86,13 +86,36 @@ function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
 }
 
 type FlatMapper<T, U = T> = (value: T) => U[];
+type FlatMapper2 = (value: any) => unknown[];
+type Piped<ABR> =
+  ABR extends [infer A, ...infer BR] ?
+  (A extends FlatMapper<infer Ain, infer Aout> ?
+    BR extends [] ?
+    FlatMapper<Ain, Aout> :
+    (BR extends [infer B, ...infer R] ?
+      (B extends FlatMapper<infer Bin, infer Bout> ?
+        (Aout extends Bin ?
+          (R extends [] ?
+            FlatMapper<Ain, Bout> :
+            Piped<[Piped<[A, B]>, ...R]>) :
+          never) :
+        never) :
+      never) :
+    never) :
+  never;
+function pipe<F extends FlatMapper2[]>(...flatMappers: F): Piped<F> {
+  function piper(...args: Parameters<Piped<F>>): ReturnType<Piped<F>> {
+    return <ReturnType<Piped<F>>>flatMappers.reduce((values: unknown[], fn): unknown[] => {
+      return values.flatMap(fn);
+    }, args);
+  }
+  return <Piped<F>>piper;
+}
 
-function collect<T>(...flatMappers: FlatMapper<T>[]): Reducer<T, T[]> {
+function collect<T, U>(flatMapper: FlatMapper<T, U>): Reducer<T, U[]> {
   return {
     fn: (acc, value) => {
-      return acc.concat(flatMappers.reduce((values, fn) => {
-        return values.flatMap(fn);
-      }, [value]));
+      return acc.concat(flatMapper(value));
     },
     initial: []
   };
@@ -112,7 +135,10 @@ async function main(path: PathLike | FileHandle) {
   const csv = await readFile(path, { encoding: 'utf-8' });
   reduceCSV(csv,
     collect(
-      filter(row => row.ISBN13 == '=""' && row['Exclusive Shelf'] == 'to-read'),
+      pipe(
+        filter((row: Row) => row.ISBN13 == '=""'),
+        filter((row: Row) => row['Exclusive Shelf'] == 'to-read'),
+      )
     ),
   ).then(noISBNs => {
     console.log(unparse(noISBNs.map(row => {
@@ -121,6 +147,7 @@ async function main(path: PathLike | FileHandle) {
         Author: row['Author'],
       };
     })));
+    console.log(noISBNs.length);
   });
 }
 
