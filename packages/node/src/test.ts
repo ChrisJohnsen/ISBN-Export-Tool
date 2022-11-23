@@ -87,6 +87,7 @@ function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
 
 type FlatMapper<T, U = T> = (value: T) => U[];
 type FlatMapper2 = (value: any) => unknown[];
+type BrokenPipe = FlatMapper<never, 'broken pipe: previous output (or source) not compatible with next input'>;
 type Piped<ABR> =
   ABR extends [infer A, ...infer BR] ?
   (A extends FlatMapper<infer Ain, infer Aout> ?
@@ -98,7 +99,7 @@ type Piped<ABR> =
           (R extends [] ?
             FlatMapper<Ain, Bout> :
             Piped<[Piped<[A, B]>, ...R]>) :
-          never) :
+          BrokenPipe) :
         never) :
       never) :
     never) :
