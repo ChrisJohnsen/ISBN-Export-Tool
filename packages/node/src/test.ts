@@ -88,29 +88,31 @@ function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
 type FlatMapper<T, U = T> = (value: T) => U[];
 type FlatMapper2 = (value: any) => unknown[];
 type BrokenPipe = FlatMapper<never, 'broken pipe: previous output (or source) not compatible with next input'>;
-type Piped<ABR> =
+type Piped<ABR extends FlatMapper2[], Initial = Parameters<ABR[0]>[0]> =
   ABR extends [infer A, ...infer BR] ?
   (A extends FlatMapper<infer Ain, infer Aout> ?
-    BR extends [] ?
-    FlatMapper<Ain, Aout> :
-    (BR extends [infer B, ...infer R] ?
-      (B extends FlatMapper<infer Bin, infer Bout> ?
-        (Aout extends Bin ?
-          (R extends [] ?
-            FlatMapper<Ain, Bout> :
-            Piped<[Piped<[A, B]>, ...R]>) :
-          BrokenPipe) :
+    (Initial extends Ain ?
+      BR extends [] ?
+      FlatMapper<Ain, Aout> :
+      (BR extends [infer B, ...infer R extends FlatMapper2[]] ?
+        (B extends FlatMapper<infer Bin, infer Bout> ?
+          (Aout extends Bin ?
+            (R extends [] ?
+              FlatMapper<Ain, Bout> :
+              Piped<[Piped<[A, B]>, ...R]>) :
+            BrokenPipe) :
+          never) :
         never) :
-      never) :
+      BrokenPipe) :
     never) :
-  never;
-function pipe<F extends FlatMapper2[]>(...flatMappers: F): Piped<F> {
+  FlatMapper<Initial>;
+function pipe<T, F extends FlatMapper2[]>(...flatMappers: F): Piped<F, T> {
   function piper(...args: Parameters<Piped<F>>): ReturnType<Piped<F>> {
     return <ReturnType<Piped<F>>>flatMappers.reduce((values: unknown[], fn): unknown[] => {
       return values.flatMap(fn);
     }, args);
   }
-  return <Piped<F>>piper;
+  return <Piped<F, T>><unknown>piper;
 }
 
 function collect<T, U>(flatMapper: FlatMapper<T, U>): Reducer<T, U[]> {
