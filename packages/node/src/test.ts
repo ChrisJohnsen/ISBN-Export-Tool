@@ -155,4 +155,4 @@ async function main(path: PathLike | FileHandle) {
 }
 
 const [/*node*/, /*program*/, ...args] = process.argv;
-main(args[0]).then(() => console.log('top done')).catch(e => console.error('top error', e));
+main(args[0]).then(() => console.log('top done'), e => console.error('top error', e));
