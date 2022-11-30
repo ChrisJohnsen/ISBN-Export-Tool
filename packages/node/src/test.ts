@@ -1,7 +1,8 @@
-import { parse, unparse, type ParseConfig } from 'papaparse';
 
-import { type FileHandle, readFile } from 'node:fs/promises';
-import { type PathLike } from 'node:fs';
+/* ******** *
+ *  csv
+ * ******** */
+import { parse, unparse, type ParseConfig } from 'papaparse';
 
 interface RowInfo {
   offset: number,
@@ -63,10 +64,7 @@ function parseCSV(data: string, opts: ParseOpts) {
   parse(data, config);
 }
 
-interface Reducer<V, A> {
-  fn: (accumulator: A, value: V) => A,
-  initial: A
-}
+// import {type Reducer} from 'reducer.js'
 
 function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -85,34 +83,61 @@ function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
   });
 }
 
-type FlatMapper<T, U = T> = (value: T) => U[];
-type FlatMapper2 = (value: any) => unknown[];
-type BrokenPipe = FlatMapper<never, 'broken pipe: previous output (or source) not compatible with next input'>;
-type Piped<ABR extends FlatMapper2[], Initial = Parameters<ABR[0]>[0]> =
-  ABR extends [infer A, ...infer BR] ?
-  (A extends FlatMapper<infer Ain, infer Aout> ?
-    (Initial extends Ain ?
-      BR extends [] ?
-      FlatMapper<Ain, Aout> :
-      (BR extends [infer B, ...infer R extends FlatMapper2[]] ?
-        (B extends FlatMapper<infer Bin, infer Bout> ?
-          (Aout extends Bin ?
-            (R extends [] ?
-              FlatMapper<Ain, Bout> :
-              Piped<[Piped<[A, B]>, ...R]>) :
-            BrokenPipe) :
-          never) :
-        never) :
-      BrokenPipe) :
-    never) :
-  FlatMapper<Initial>;
-function pipe<T, F extends FlatMapper2[]>(...flatMappers: F): Piped<F, T> {
-  function piper(...args: Parameters<Piped<F>>): ReturnType<Piped<F>> {
-    return <ReturnType<Piped<F>>>flatMappers.reduce((values: unknown[], fn): unknown[] => {
-      return values.flatMap(fn);
-    }, args);
+/* ******** *
+ *  reducer
+ * ******** */
+
+interface Reducer<V, A> {
+  fn: (accumulator: A, value: V) => A,
+  initial: A
+}
+
+type FlatMapper<T = any, U = T> = (arg: T) => U[];
+type FlatMapperInput<T extends FlatMapper> = T extends FlatMapper<infer I, any> ? I : never;
+type FlatMapperOutput<T extends FlatMapper> = T extends FlatMapper<any, infer O> ? O : never;
+
+// Rewrites every function output to be the input of its next function
+type PipedInputs<Fs extends FlatMapper[]> =
+  Fs extends []
+  ? Fs
+  : Fs extends [FlatMapper]
+  ? Fs
+  : Fs extends [infer A extends FlatMapper, infer B extends FlatMapper, ...infer R extends FlatMapper[]]
+  ? [FlatMapper<FlatMapperInput<A>, FlatMapperInput<B>>, ...PipedInputs<[B, ...R]>]
+  : FlatMapper[] // a non-FlatMapper snuck in? tell them that they all need to be FlatMappers
+  ;
+
+// Rewrites every function input to be the output of its previous function
+type PipedOutputs<Fs extends FlatMapper[]> =
+  Fs extends []
+  ? Fs
+  : Fs extends [FlatMapper]
+  ? Fs
+  : Fs extends [...infer R extends FlatMapper[], infer Y extends FlatMapper, infer Z extends FlatMapper]
+  ? [...PipedOutputs<[...R, Y]>, FlatMapper<FlatMapperOutput<Y>, FlatMapperOutput<Z>>]
+  : FlatMapper[] // a non-FlatMapper snuck in? tell them that they all need to be FlatMappers
+  ;
+
+type PipeOf<Fs extends FlatMapper[]> =
+  Fs extends []
+  ? <T>(arg: T) => [T]
+  : Fs extends [infer A extends FlatMapper]
+  ? A
+  : Fs extends [infer A extends FlatMapper, ...FlatMapper[], infer Z extends FlatMapper]
+  ? (...args: Parameters<A>) => ReturnType<Z>
+  : never
+  ;
+
+function pipe<Fs extends FlatMapper[]>(...fns: PipedOutputs<Fs>): PipeOf<Fs> {
+  function piper(arg: FlatMapperInput<PipeOf<Fs>>): FlatMapperOutput<PipeOf<Fs>>[] {
+    return fns.reduce(
+      (values: unknown[], fn: FlatMapper) =>
+        values.flatMap(fn),
+      [arg]);
   }
-  return <Piped<F, T>><unknown>piper;
+  return (
+    <PipeOf<Fs>> // can avoid this type assertion if we also remove the PipeOf return type; loses the fancy generic return type in the zero functions case though
+    piper);
 }
 
 function collect<T, U>(flatMapper: FlatMapper<T, U>): Reducer<T, U[]> {
@@ -133,6 +158,13 @@ function filter<T>(fn: (value: T) => boolean): FlatMapper<T> {
     }
   };
 }
+
+/* ******** *
+ * main
+ * ******** */
+
+import { type FileHandle, readFile } from 'node:fs/promises';
+import { type PathLike } from 'node:fs';
 
 async function main(path: PathLike | FileHandle) {
   const csv = await readFile(path, { encoding: 'utf-8' });
