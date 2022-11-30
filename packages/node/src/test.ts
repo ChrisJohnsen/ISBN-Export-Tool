@@ -163,11 +163,15 @@ function filter<T>(fn: (value: T) => boolean): FlatMapper<T> {
  * util
  * ******** */
 
-function pick<K extends string[]>(...keys: K): (obj: Record<string, unknown>) => { [T in K[number]]?: unknown } {
+type PropKey = string | number | symbol;
+
+function pick<K extends PropKey>(keys: K[]): <O extends Record<PropKey, unknown>>(obj: O) => { [J in K]?: O[J] } {
   return o =>
     keys.reduce((newObj, key) => {
-      newObj[key] = o[key];
-      return newObj
+      if (key in o) {
+        newObj[key] = o[key];
+      }
+      return newObj;
     }, Object.create(null));
 }
 
@@ -188,7 +192,7 @@ async function main(path: PathLike | FileHandle) {
       )
     ),
   ).then(noISBNs => {
-    console.log(unparse(noISBNs.map(pick('Title', 'Author'))));
+    console.log(unparse(noISBNs.map(pick(['Title', 'Author']))));
     console.log(noISBNs.length);
   });
 }
