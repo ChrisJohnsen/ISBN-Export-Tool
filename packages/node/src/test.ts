@@ -175,6 +175,10 @@ function pick<K extends PropKey>(keys: K[]): <O extends Record<PropKey, unknown>
     }, Object.create(null));
 }
 
+function propEq<K extends PropKey, V>(key: K, value: V): <O extends Record<PropKey, unknown>>(o: O) => boolean {
+  return o => key in o && o[key] == value;
+}
+
 /* ******** *
  * main
  * ******** */
@@ -187,10 +191,9 @@ async function main(path: PathLike | FileHandle) {
   reduceCSV(csv,
     collect(
       pipe(
-        filter((row: Row) => row.ISBN13 == '=""'),
-        filter((row: Row) => row['Exclusive Shelf'] == 'to-read'),
-      )
-    ),
+        filter(propEq('ISBN13', '=""')),
+        filter(propEq('Exclusive Shelf', 'to-read')),
+      ))
   ).then(noISBNs => {
     console.log(unparse(noISBNs.map(pick(['Title', 'Author']))));
     console.log(noISBNs.length);
