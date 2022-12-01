@@ -128,7 +128,26 @@ type PipeOf<Fs extends FlatMapper[]> =
   : never
   ;
 
-function pipe<Fs extends FlatMapper[]>(...fns: PipedOutputs<Fs>): PipeOf<Fs> {
+function pipe(): <T>(arg: T) => [T];
+function pipe<A, B>(
+  ab: FlatMapper<A, B>
+): FlatMapper<A, B>;
+function pipe<A, B, C>(
+  ab: FlatMapper<A, B>,
+  bc: FlatMapper<B, C>
+): FlatMapper<A, C>;
+function pipe<A, B, C, D>(
+  ab: FlatMapper<A, B>,
+  bc: FlatMapper<B, C>,
+  cd: FlatMapper<C, D>
+): FlatMapper<A, D>;
+function pipe<A, B, C, D, E>(
+  ab: FlatMapper<A, B>,
+  bc: FlatMapper<B, C>,
+  cd: FlatMapper<C, D>,
+  de: FlatMapper<D, E>
+): FlatMapper<A, E>;
+function pipe<Fs extends FlatMapper[]>(...fns: Fs): PipeOf<Fs> {
   function piper(arg: FlatMapperInput<PipeOf<Fs>>): FlatMapperOutput<PipeOf<Fs>>[] {
     return fns.reduce(
       (values: unknown[], fn: FlatMapper) =>
@@ -175,7 +194,7 @@ function pick<K extends PropKey>(keys: K[]): <O extends Record<PropKey, unknown>
     }, Object.create(null));
 }
 
-function propEq<K extends PropKey, V>(key: K, value: V): <O extends Record<PropKey, unknown>>(o: O) => boolean {
+function propEq<K extends PropKey, V>(key: K, value: V): <O extends Record<PropKey, unknown>>(obj: O) => boolean {
   return o => key in o && o[key] == value;
 }
 
