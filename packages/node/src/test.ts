@@ -202,22 +202,45 @@ function propEq<K extends PropKey, V>(key: K, value: V): <O extends Record<PropK
  * main
  * ******** */
 
-import { type FileHandle, readFile } from 'node:fs/promises';
-import { type PathLike } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
-async function main(path: PathLike | FileHandle) {
-  const csv = await readFile(path, { encoding: 'utf-8' });
-  reduceCSV(csv,
-    collect(
-      pipe(
-        filter(propEq('ISBN13', '=""')),
-        filter(propEq('Exclusive Shelf', 'to-read')),
-      ))
-  ).then(noISBNs => {
-    console.log(unparse(noISBNs.map(pick(['Title', 'Author']))));
-    console.log(noISBNs.length);
+import { Builtins, Cli, Command, Option } from 'clipanion';
+
+class MissingISBNs extends Command {
+  static usage = Command.Usage({
+    description: 'Extract to-read entries without ISBNs',
+    details: `
+      Extract list of entries from the to-read shelf that lack ISBNs.
+
+      These might be eBooks, or audio books.
+      You might want to change which edition you have shelved (and re-export)
+      before using other commands that process ISBNs from the to-read shelf.
+    `,
+    examples: [
+      [
+        'Extract ISBN-less to-read entries from export named `export.csv`.',
+        '$0 path/to/export.csv'
+      ],
+    ]
   });
+  csvPath = Option.String();
+  async execute() {
+    const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
+    reduceCSV(csv,
+      collect(
+        pipe(
+          filter(propEq('ISBN13', '=""')),
+          filter(propEq('Exclusive Shelf', 'to-read')),
+        ))
+    ).then(noISBNs => {
+      console.log(unparse(noISBNs.map(pick(['Title', 'Author']))));
+      console.log(noISBNs.length);
+    });
+  }
 }
 
-const [/*node*/, /*program*/, ...args] = process.argv;
-main(args[0]).then(() => console.log('top done'), e => console.error('top error', e));
+Cli.from([
+  Builtins.HelpCommand, Builtins.VersionCommand,
+  MissingISBNs,
+], { binaryName: 'goodreads-tool', binaryLabel: 'Goodreads export tools', binaryVersion: '0.1' })
+  .runExit(process.argv.slice(2), {});

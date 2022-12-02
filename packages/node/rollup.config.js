@@ -14,16 +14,20 @@ export default [
         format: 'cjs',
       },
     ],
-    external: ['papaparse'],
+    external: ['papaparse', 'clipanion'],
     plugins: [/* commonjs(), */ node_resolve(), esbuild({ target: "es2022" })],
   },
   {
     input: 'src/test.ts',
     output: [
-      { file: 'dist/test-bundled.mjs' },
+      {
+        file: 'dist/test-bundled.mjs',
+        inlineDynamicImports: true,
+      },
       {
         file: 'dist/test-bundled.cjs',
         format: 'cjs',
+        inlineDynamicImports: true,
       },
     ],
     external: [],
