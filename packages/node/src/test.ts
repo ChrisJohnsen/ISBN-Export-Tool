@@ -24,7 +24,6 @@ function parseCSV(data: string, opts: ParseOpts) {
   const config: ParseConfig<string[], never> = {
     step: function (result/*, parser */) {
       if (result.errors?.length > 0) {
-        console.error('STEP ERROR', result.errors);
         throw { error: 'ParseError', offset: result.meta.cursor, details: result.errors };
       } else {
         const data = result.data;
@@ -77,7 +76,6 @@ function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
         done() { resolve(accumulator) },
       });
     } catch (e) {
-      console.log('reduce error', e);
       reject({ error: 'reduce error', info: e });
     }
   });
@@ -233,8 +231,10 @@ class MissingISBNs extends Command {
           filter(propEq('Exclusive Shelf', 'to-read')),
         ))
     ).then(noISBNs => {
-      console.log(unparse(noISBNs.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']))));
-      console.log(noISBNs.length);
+      this.context.stdout.write(unparse(noISBNs.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']))));
+      this.context.stdout.write('\n');
+      this.context.stderr.write(noISBNs.length.toString());
+      this.context.stderr.write('\n');
     });
   }
 }
