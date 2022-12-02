@@ -233,7 +233,7 @@ class MissingISBNs extends Command {
           filter(propEq('Exclusive Shelf', 'to-read')),
         ))
     ).then(noISBNs => {
-      console.log(unparse(noISBNs.map(pick(['Title', 'Author']))));
+      console.log(unparse(noISBNs.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']))));
       console.log(noISBNs.length);
     });
   }
