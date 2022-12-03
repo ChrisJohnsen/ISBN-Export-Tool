@@ -176,6 +176,10 @@ function filter<T>(fn: (value: T) => boolean): FlatMapper<T> {
   };
 }
 
+function map<T, U>(fn: (value: T) => U): FlatMapper<T, U> {
+  return (value) => [fn((value))];
+}
+
 /* ******** *
  * util
  * ******** */
@@ -196,6 +200,10 @@ function propEq<K extends PropertyKey, V>(key: K, value: V): <O extends Record<P
 
 function not<A extends unknown[]>(fn: (...args: A) => boolean): (...args: A) => boolean {
   return (...args: A) => !fn(...args);
+}
+
+function prop<K extends PropertyKey>(key: K): <O extends Record<PropertyKey, unknown>>(obj: O) => O[K] {
+  return o => o[key];
 }
 
 /* ******** *
@@ -232,11 +240,14 @@ class MissingISBNs extends Command {
         pipe(
           filter(propEq('ISBN13', '=""')),
           filter(propEq('Exclusive Shelf', 'to-read')),
+          map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])),
         ))
-    ).then(noISBNs => {
-      this.context.stdout.write(unparse(noISBNs.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']))));
+    ).then(noISBNs =>
+      [unparse(noISBNs), noISBNs.length]
+    ).then(([csv, count]) => {
+      this.context.stdout.write(csv);
       this.context.stdout.write('\n');
-      this.context.stderr.write(noISBNs.length.toString());
+      this.context.stderr.write(count.toString());
       this.context.stderr.write('\n');
     });
   }
@@ -264,14 +275,13 @@ class GetISBNs extends Command {
         pipe(
           filter(propEq('Exclusive Shelf', this.shelf)),
           filter(not(propEq('ISBN13', '=""'))),
+          map(prop('ISBN13')),
+          map(isbn => isbn.replace(/^="(.*)"$/, '$1')),
         ))
-    ).then(items => {
-      items.forEach(item => {
-        const plainISBN = item.ISBN13.replace(/^="(.*)"$/, '$1');
-        this.context.stdout.write(plainISBN);
-        this.context.stdout.write('\n');
-      });
-      this.context.stderr.write(items.length.toString());
+    ).then(isbns => {
+      this.context.stdout.write(isbns.join('\n'));
+      this.context.stdout.write('\n');
+      this.context.stderr.write(isbns.length.toString());
       this.context.stderr.write('\n');
     });
   }
