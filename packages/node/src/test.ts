@@ -229,7 +229,7 @@ class MissingISBNs extends Command {
   csvPath = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    reduceCSV(csv,
+    await reduceCSV(csv,
       collect(
         pipe(
           filter(propEq('ISBN13', '=""')),
@@ -261,7 +261,7 @@ class GetISBNs extends Command {
   shelf = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    reduceCSV(csv,
+    await reduceCSV(csv,
       collect(
         pipe(
           filter(propEq('Exclusive Shelf', this.shelf)),
