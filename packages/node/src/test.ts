@@ -180,9 +180,7 @@ function filter<T>(fn: (value: T) => boolean): FlatMapper<T> {
  * util
  * ******** */
 
-type PropKey = string | number | symbol;
-
-function pick<K extends PropKey>(keys: K[]): <O extends Record<PropKey, unknown>>(obj: O) => { [J in K]?: O[J] } {
+function pick<K extends PropertyKey>(keys: K[]): <O extends Record<PropertyKey, unknown>>(obj: O) => { [J in K]?: O[J] } {
   return o =>
     keys.reduce((newObj, key) => {
       if (key in o) {
@@ -192,7 +190,7 @@ function pick<K extends PropKey>(keys: K[]): <O extends Record<PropKey, unknown>
     }, Object.create(null));
 }
 
-function propEq<K extends PropKey, V>(key: K, value: V): <O extends Record<PropKey, unknown>>(obj: O) => boolean {
+function propEq<K extends PropertyKey, V>(key: K, value: V): <O extends Record<PropertyKey, unknown>>(obj: O) => boolean {
   return o => key in o && o[key] == value;
 }
 
