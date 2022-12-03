@@ -221,6 +221,7 @@ class MissingISBNs extends Command {
       ],
     ]
   });
+  static paths = [['missing-ISBNs'], ['missing-isbns'], ['missing'], ['mi']];
   csvPath = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
