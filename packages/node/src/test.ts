@@ -196,6 +196,10 @@ function propEq<K extends PropKey, V>(key: K, value: V): <O extends Record<PropK
   return o => key in o && o[key] == value;
 }
 
+function not<A extends unknown[]>(fn: (...args: A) => boolean): (...args: A) => boolean {
+  return (...args: A) => !fn(...args);
+}
+
 /* ******** *
  * main
  * ******** */
@@ -240,8 +244,44 @@ class MissingISBNs extends Command {
   }
 }
 
+class GetISBNs extends Command {
+  static usage = Command.Usage({
+    description: 'Extract ISBNs from items on specified shelf',
+    details: `
+      For each items on the specified shelf, produce its ISBN as output.
+      One ISBN is produced per line.
+    `,
+    examples: [
+      ['Get ISBNs for items shelved as `to-read`.',
+        '$0 getISBNs path/to/export.csv to-read']
+    ]
+  });
+  static paths = [['get-ISBNs'], ['isbns']];
+  csvPath = Option.String();
+  shelf = Option.String();
+  async execute() {
+    const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
+    reduceCSV(csv,
+      collect(
+        pipe(
+          filter(propEq('Exclusive Shelf', this.shelf)),
+          filter(not(propEq('ISBN13', '=""'))),
+        ))
+    ).then(items => {
+      items.forEach(item => {
+        const plainISBN = item.ISBN13.replace(/^="(.*)"$/, '$1');
+        this.context.stdout.write(plainISBN);
+        this.context.stdout.write('\n');
+      });
+      this.context.stderr.write(items.length.toString());
+      this.context.stderr.write('\n');
+    });
+  }
+}
+
 Cli.from([
   Builtins.HelpCommand, Builtins.VersionCommand,
   MissingISBNs,
+  GetISBNs,
 ], { binaryName: 'goodreads-tool', binaryLabel: 'Goodreads export tools', binaryVersion: '0.1' })
   .runExit(process.argv.slice(2), {});
