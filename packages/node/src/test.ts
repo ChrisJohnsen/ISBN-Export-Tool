@@ -116,7 +116,7 @@ type PipedOutputs<Fs extends FlatMapper[]> =
   : FlatMapper[] // a non-FlatMapper snuck in? tell them that they all need to be FlatMappers
   ;
 
-type PipeOf<Fs extends FlatMapper[]> =
+type FlatPipe<Fs extends FlatMapper[]> =
   Fs extends []
   ? <T>(arg: T) => [T]
   : Fs extends [infer A extends FlatMapper]
@@ -126,34 +126,77 @@ type PipeOf<Fs extends FlatMapper[]> =
   : never
   ;
 
-function pipe(): <T>(arg: T) => [T];
-function pipe<A, B>(
+function flatPipe(): <T>(arg: T) => [T];
+function flatPipe<A, B>(
   ab: FlatMapper<A, B>
 ): FlatMapper<A, B>;
-function pipe<A, B, C>(
+function flatPipe<A, B, C>(
   ab: FlatMapper<A, B>,
   bc: FlatMapper<B, C>
 ): FlatMapper<A, C>;
-function pipe<A, B, C, D>(
+function flatPipe<A, B, C, D>(
   ab: FlatMapper<A, B>,
   bc: FlatMapper<B, C>,
   cd: FlatMapper<C, D>
 ): FlatMapper<A, D>;
-function pipe<A, B, C, D, E>(
+function flatPipe<A, B, C, D, E>(
   ab: FlatMapper<A, B>,
   bc: FlatMapper<B, C>,
   cd: FlatMapper<C, D>,
   de: FlatMapper<D, E>
 ): FlatMapper<A, E>;
-function pipe<Fs extends FlatMapper[]>(...fns: Fs): PipeOf<Fs> {
-  function piper(arg: FlatMapperInput<PipeOf<Fs>>): FlatMapperOutput<PipeOf<Fs>>[] {
+function flatPipe<Fs extends FlatMapper[]>(...fns: Fs): FlatPipe<Fs> {
+  function piper(arg: FlatMapperInput<FlatPipe<Fs>>): FlatMapperOutput<FlatPipe<Fs>>[] {
     return fns.reduce(
       (values: unknown[], fn: FlatMapper) =>
         values.flatMap(fn),
       [arg]);
   }
   return (
-    <PipeOf<Fs>> // can avoid this type assertion if we also remove the PipeOf return type; loses the fancy generic return type in the zero functions case though
+    <FlatPipe<Fs>> // can avoid this type assertion if we also remove the PipeOf return type; loses the fancy generic return type in the zero functions case though
+    piper);
+}
+
+type Mapper<T = any, U = T> = (arg: T) => U;
+
+type Pipe<Fs extends Mapper[]> =
+  Fs extends []
+  ? <T>(arg: T) => T
+  : Fs extends [infer A extends Mapper]
+  ? A
+  : Fs extends [infer A extends Mapper, ...Mapper[], infer Z extends Mapper]
+  ? Mapper<Parameters<A>[0], ReturnType<Z>>
+  : never
+  ;
+
+function pipe(): <T>(arg: T) => T;
+function pipe<A, B>(
+  ab: Mapper<A, B>
+): Mapper<A, B>;
+function pipe<A, B, C>(
+  ab: Mapper<A, B>,
+  bc: Mapper<B, C>
+): Mapper<A, C>;
+function pipe<A, B, C, D>(
+  ab: Mapper<A, B>,
+  bc: Mapper<B, C>,
+  cd: Mapper<C, D>
+): Mapper<A, D>;
+function pipe<A, B, C, D, E>(
+  ab: Mapper<A, B>,
+  bc: Mapper<B, C>,
+  cd: Mapper<C, D>,
+  de: Mapper<D, E>
+): Mapper<A, E>;
+function pipe<Fs extends Mapper[]>(...fns: Fs): Pipe<Fs> {
+  function piper(arg: Parameters<Pipe<Fs>>[0]): ReturnType<Pipe<Fs>> {
+    return fns.reduce(
+      (value: unknown, fn: Mapper) =>
+        fn(value),
+      arg);
+  }
+  return (
+    <Pipe<Fs>> // can avoid this type assertion if we also remove the PipeOf return type; loses the fancy generic return type in the zero functions case though
     piper);
 }
 
@@ -176,8 +219,8 @@ function filter<T>(fn: (value: T) => boolean): FlatMapper<T> {
   };
 }
 
-function map<T, U>(fn: (value: T) => U): FlatMapper<T, U> {
-  return (value) => [fn((value))];
+function map<T, U>(fn: (value: T) => U): Mapper<T[], U[]> {
+  return (arr) => arr.map(fn);
 }
 
 /* ******** *
@@ -194,12 +237,12 @@ function pick<K extends PropertyKey>(keys: K[]): <O extends Record<PropertyKey, 
     }, Object.create(null));
 }
 
-function propEq<K extends PropertyKey, V>(key: K, value: V): <O extends Record<PropertyKey, unknown>>(obj: O) => boolean {
-  return o => key in o && o[key] == value;
+function eq<T>(value: T): (arg: T) => boolean {
+  return arg => arg == value;
 }
 
-function not<A extends unknown[]>(fn: (...args: A) => boolean): (...args: A) => boolean {
-  return (...args: A) => !fn(...args);
+function not(value: boolean) {
+  return !value;
 }
 
 function prop<K extends PropertyKey>(key: K): <O extends Record<PropertyKey, unknown>>(obj: O) => O[K] {
@@ -238,8 +281,10 @@ class MissingISBNs extends Command {
     await reduceCSV(csv,
       collect(
         pipe(
-          filter(propEq('ISBN13', '=""')),
-          filter(propEq('Exclusive Shelf', 'to-read')),
+          flatPipe(
+            filter(pipe(prop('ISBN13'), eq('=""'))),
+            filter(pipe(prop('Exclusive Shelf'), eq('to-read'))),
+          ),
           map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])),
         ))
     ).then(noISBNs =>
@@ -273,8 +318,10 @@ class GetISBNs extends Command {
     await reduceCSV(csv,
       collect(
         pipe(
-          filter(propEq('Exclusive Shelf', this.shelf)),
-          filter(not(propEq('ISBN13', '=""'))),
+          flatPipe(
+            filter(pipe(prop('Exclusive Shelf'), eq(this.shelf))),
+            filter(pipe(prop('ISBN13'), eq('=""'), not)),
+          ),
           map(prop('ISBN13')),
           map(isbn => isbn.replace(/^="(.*)"$/, '$1')),
         ))
