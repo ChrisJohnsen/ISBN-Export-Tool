@@ -6,11 +6,11 @@ import esbuild from 'rollup-plugin-esbuild';
 
 export default [
   {
-    input: 'src/test.ts',
+    input: 'src/goodreads-tool.ts',
     output: [
-      { file: 'dist/test.mjs' },
+      { file: 'dist/goodreads-tool.mjs' },
       {
-        file: 'dist/test.cjs',
+        file: 'dist/goodreads-tool.cjs',
         format: 'cjs',
       },
     ],
@@ -18,14 +18,14 @@ export default [
     plugins: [/* commonjs(), */ node_resolve(), esbuild({ target: "es2022" })],
   },
   {
-    input: 'src/test.ts',
+    input: 'src/goodreads-tool.ts',
     output: [
       {
-        file: 'dist/test-bundled.mjs',
+        file: 'dist/goodreads-tool-bundled.mjs',
         inlineDynamicImports: true,
       },
       {
-        file: 'dist/test-bundled.cjs',
+        file: 'dist/goodreads-tool-bundled.cjs',
         format: 'cjs',
         inlineDynamicImports: true,
       },
