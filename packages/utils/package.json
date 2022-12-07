@@ -38,8 +38,8 @@
     }
   },
   "devDependencies": {
-    "@jest/globals": "^29.2.2",
-    "@rollup/plugin-commonjs": "^23.0.2",
+    "@jest/globals": "^29.3.1",
+    "@rollup/plugin-commonjs": "^23.0.3",
     "@rollup/plugin-node-resolve": "^15.0.1",
     "@types/papaparse": "^5.3.5",
     "rollup-plugin-ts": "^3.0.2"
