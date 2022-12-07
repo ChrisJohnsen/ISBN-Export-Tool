@@ -14,7 +14,7 @@ export default [
         format: 'cjs',
       },
     ],
-    external: ['papaparse', 'clipanion'],
+    external: ['clipanion'],
     plugins: [/* commonjs(), */ node_resolve(), esbuild({ target: "es2022" })],
   },
   {

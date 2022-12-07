@@ -8,7 +8,7 @@ interface RowInfo {
   extraColumns: readonly string[],
 }
 
-type Row = Record<string, string>;
+export type Row = Record<string, string>;
 
 interface ParseOpts {
   row: (row: Row, info: RowInfo) => void,
@@ -61,6 +61,7 @@ function parseCSV(data: string, opts: ParseOpts) {
 }
 
 import { Reducer } from './functional.js';
+export { Reducer } from './functional.js';
 
 export function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
   return new Promise((resolve, reject) => {

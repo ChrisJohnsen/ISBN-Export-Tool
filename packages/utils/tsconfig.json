@@ -1,0 +1,15 @@
+{
+  "include": [
+    "src/**/*"
+  ],
+  "compilerOptions": {
+    "checkJs": true,
+    "declaration": true,
+    "declarationMap": true,
+    "lib": [
+      "DOM"
+    ],
+    "moduleResolution": "node16"
+  },
+  "extends": "../../configs/tsconfig-base"
+}

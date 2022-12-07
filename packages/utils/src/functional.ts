@@ -63,15 +63,13 @@ export function flatPipe<A, B, C, D, E>(
   cd: FlatMapper<C, D>,
   de: FlatMapper<D, E>
 ): FlatMapper<A, E>;
-export function flatPipe<Fs extends FlatMapper[]>(...fns: Fs) {//: FlatPipe<Fs> {
+export function flatPipe<Fs extends FlatMapper[]>(...fns: Fs) {
   function piper(arg: FlatMapperInput<FlatPipe<Fs>>): FlatMapperOutput<FlatPipe<Fs>>[] {
     return fns.reduce(
       (values: unknown[], fn: FlatMapper) => values.flatMap(fn),
       [arg]);
   }
-  return (
-    // <FlatPipe<Fs>> // can avoid this type assertion if we also remove the PipeOf return type; loses the fancy generic return type in the zero functions case though
-    piper);
+  return piper;
 }
 
 type Mapper<T = any, U = T> = (arg: T) => U;
@@ -105,15 +103,13 @@ export function pipe<A, B, C, D, E>(
   cd: Mapper<C, D>,
   de: Mapper<D, E>
 ): Mapper<A, E>;
-export function pipe<Fs extends Mapper[]>(...fns: Fs) {//: Pipe<Fs> {
+export function pipe<Fs extends Mapper[]>(...fns: Fs) {
   function piper(arg: Parameters<Pipe<Fs>>[0]): ReturnType<Pipe<Fs>> {
     return fns.reduce(
       (value: unknown, fn: Mapper) => fn(value),
       arg);
   }
-  return (
-    // <Pipe<Fs>> // can avoid this type assertion if we also remove the PipeOf return type; loses the fancy generic return type in the zero functions case though
-    piper);
+  return piper;
 }
 
 export interface Reducer<V, A> {

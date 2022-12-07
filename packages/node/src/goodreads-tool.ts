@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Builtins, Cli, Command, Option } from 'clipanion';
-import { collect, pipe, flatPipe, filter, prop, eq, map, pick, not } from './functional.js';
-import { reduceCSV, unparse } from './csv.js';
+import { collect, pipe, flatPipe, filter, prop, eq, map, pick, not } from 'utils/functional';
+import { reduceCSV, unparse } from 'utils/csv';
 
 class MissingISBNs extends Command {
   static usage = Command.Usage({

@@ -7,7 +7,9 @@
 
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 const config = {
+  displayName: '!!! TOP ???',
   projects: ['<rootDir>/packages/*'],
+  testMatch: ['NO TOP-LEVEL TESTS'],
 };
 
 export default config;
