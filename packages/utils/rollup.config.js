@@ -4,6 +4,9 @@ import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
 import typescript from 'rollup-plugin-ts';
 
+const basePlugins = [typescript()];
+const externalPlugins = [commonjs(), node_resolve(), ...basePlugins];
+
 export default [
   {
     input: 'src/functional.ts',
@@ -11,7 +14,7 @@ export default [
       { file: 'dist/functional.js' },
       { file: 'dist/functional.cjs', format: 'cjs' },
     ],
-    plugins: [typescript()],
+    plugins: basePlugins,
   },
   {
     input: 'src/csv.ts',
@@ -19,7 +22,7 @@ export default [
       { file: 'dist/csv.js' },
       { file: 'dist/csv.cjs', format: 'cjs' },
     ],
-    plugins: [commonjs(), node_resolve(), typescript()],
+    plugins: externalPlugins,
   },
   {
     input: 'src/index.ts',
@@ -27,6 +30,6 @@ export default [
       { file: 'dist/index.js' },
       { file: 'dist/index.cjs', format: 'cjs' },
     ],
-    plugins: [commonjs(), node_resolve(), typescript()],
+    plugins: externalPlugins,
   },
 ];

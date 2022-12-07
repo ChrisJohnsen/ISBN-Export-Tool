@@ -4,6 +4,9 @@ import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
 import esbuild from 'rollup-plugin-esbuild';
 
+const basePlugins = [node_resolve(), esbuild({ target: "es2022" })];
+const externalPlugins = [commonjs(), ...basePlugins];
+
 export default [
   {
     input: 'src/goodreads-tool.ts',
@@ -15,7 +18,7 @@ export default [
       },
     ],
     external: ['clipanion'],
-    plugins: [/* commonjs(), */ node_resolve(), esbuild({ target: "es2022" })],
+    plugins: basePlugins,
   },
   {
     input: 'src/goodreads-tool.ts',
@@ -31,6 +34,6 @@ export default [
       },
     ],
     external: [],
-    plugins: [commonjs(), node_resolve(), esbuild({ target: "es2022" })],
+    plugins: externalPlugins,
   },
 ];
