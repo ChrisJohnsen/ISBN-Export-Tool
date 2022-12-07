@@ -15,26 +15,6 @@
         "types": "./dist/index.d.cts",
         "require": "./dist/index.cjs"
       }
-    },
-    "./functional": {
-      "import": {
-        "types": "./dist/functional.d.ts",
-        "import": "./dist/functional.js"
-      },
-      "require": {
-        "types": "./dist/functional.d.cts",
-        "require": "./dist/functional.cjs"
-      }
-    },
-    "./csv": {
-      "import": {
-        "types": "./dist/csv.d.ts",
-        "import": "./dist/csv.js"
-      },
-      "require": {
-        "types": "./dist/csv.d.cts",
-        "require": "./dist/csv.cjs"
-      }
     }
   },
   "devDependencies": {
