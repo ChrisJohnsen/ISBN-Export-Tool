@@ -37,7 +37,7 @@ function parseCSV(data: string, opts: ParseOpts) {
             }
             const rowObj = Object.fromEntries(firstRow.flatMap((columnHeader, i) => {
               if (i >= data.length) {
-                return []
+                return [];
               } else {
                 return [[columnHeader, data[i]]];
               }

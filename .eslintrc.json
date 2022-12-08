@@ -32,7 +32,11 @@
       "parser": "@typescript-eslint/parser",
       "extends": [
         "plugin:@typescript-eslint/recommended"
-      ]
+      ],
+      "rules": {
+        "semi": [ "error", "always", { "omitLastInOneLineBlock": true } ],
+        "semi-style": [ "error", "last" ]
+      }
     },
     {
       "files": [
