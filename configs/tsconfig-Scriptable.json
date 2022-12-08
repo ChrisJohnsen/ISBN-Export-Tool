@@ -1,8 +1,6 @@
 {
   "compilerOptions": {
-    "types": [
-      "scriptable-ios"
-    ]
+    "types": [ "scriptable-ios" ]
   },
   "extends": "./tsconfig-base"
 }

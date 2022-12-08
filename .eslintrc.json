@@ -4,44 +4,26 @@
     "ecmaVersion": 2022,
     "sourceType": "module"
   },
-  "extends": [
-    "eslint:recommended"
-  ],
-  "ignorePatterns": [
-    "**/dist/**"
-  ],
+  "extends": [ "eslint:recommended" ],
+  "ignorePatterns": [ "**/dist/**" ],
   "overrides": [
     {
-      "files": [
-        "**.cjs"
-      ],
-      "parserOptions": {
-        "sourceType": "commonjs"
-      },
-      "globals": {
-        "require": "readonly"
-      }
+      "files": [ "**.cjs" ],
+      "parserOptions": { "sourceType": "commonjs" },
+      "globals": { "require": "readonly" }
     },
     {
-      "files": [
-        "**/*.@(ts|js)"
-      ],
-      "plugins": [
-        "@typescript-eslint"
-      ],
+      "files": [ "**/*.@(ts|js)" ],
+      "plugins": [ "@typescript-eslint" ],
       "parser": "@typescript-eslint/parser",
-      "extends": [
-        "plugin:@typescript-eslint/recommended"
-      ],
+      "extends": [ "plugin:@typescript-eslint/recommended" ],
       "rules": {
         "semi": [ "error", "always", { "omitLastInOneLineBlock": true } ],
         "semi-style": [ "error", "last" ]
       }
     },
     {
-      "files": [
-        "**/tests/**/*.@(ts|js|cjs)"
-      ],
+      "files": [ "**/tests/**/*.@(ts|js|cjs)" ],
       "plugins": [
         "jest",
         "jest-formatting"
