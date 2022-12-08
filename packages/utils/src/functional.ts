@@ -3,9 +3,11 @@
  * generalized by Ramda or fp-ts, but with a higher weight in code.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 type FlatMapper<T = any, U = T> = (arg: T) => U[];
 type FlatMapperInput<T extends FlatMapper> = T extends FlatMapper<infer I, any> ? I : never;
 type FlatMapperOutput<T extends FlatMapper> = T extends FlatMapper<any, infer O> ? O : never;
+/* eslint-enable */
 
 /*
 * These utility types can be used to construct the type of the `fns` parameter of
@@ -72,6 +74,7 @@ export function flatPipe<Fs extends FlatMapper[]>(...fns: Fs) {
   return piper;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Mapper<T = any, U = T> = (arg: T) => U;
 
 type Pipe<Fs extends Mapper[]> =
