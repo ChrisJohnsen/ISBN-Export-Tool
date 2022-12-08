@@ -1,13 +1,14 @@
 import { describe, test, expect } from '@jest/globals';
 import { reduceCSV, type Row } from 'utils';
+import { outdent } from 'outdent';
 
 describe('reduceCSV', () => {
   test('collect in array', async () => {
-    const csv = `
+    const csv = outdent`
       a,b,c c,d
       1,-2,three,04
       2,"two words","=""quotes""",k
-    `.trimStart().split('\n').map(s => s.trim()).join('\n');
+    `;
     const result = await reduceCSV(csv, {
       fn: (acc, row) => acc.concat([row]),
       initial: [] as Row[]

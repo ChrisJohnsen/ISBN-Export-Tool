@@ -4008,6 +4008,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"outdent@npm:^0.8.0":
+  version: 0.8.0
+  resolution: "outdent@npm:0.8.0"
+  checksum: e9d544d6fb10f366067b37c43c761a1819b12652a30a122a387bd9cc0b7b361da123c792d88d1ffb4f873a923de30cc424cdfcb848e8794ee318d46e3d378f76
+  languageName: node
+  linkType: hard
+
 "p-limit@npm:^2.2.0":
   version: 2.3.0
   resolution: "p-limit@npm:2.3.0"
@@ -4867,6 +4874,7 @@ __metadata:
     "@rollup/plugin-commonjs": "npm:^23.0.3"
     "@rollup/plugin-node-resolve": "npm:^15.0.1"
     "@types/papaparse": "npm:^5.3.5"
+    outdent: "npm:^0.8.0"
     papaparse: "npm:^5.3.2"
     rollup-plugin-ts: "npm:^3.0.2"
   languageName: unknown
