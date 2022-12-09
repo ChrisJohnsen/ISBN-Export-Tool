@@ -1,5 +1,5 @@
 import { parse, type ParseConfig } from 'papaparse';
-export { unparse } from 'papaparse';
+import { unparse } from 'papaparse';
 
 interface RowInfo {
   offset: number,
@@ -77,4 +77,21 @@ export function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> 
       reject({ error: 'reduce error', info: e });
     }
   });
+}
+
+export function toCSV(rows: Row[]): string;
+export function toCSV(headerAndRows: string[][]): string;
+export function toCSV(data: {
+  header: string[],
+  rows: string[][] | Row[],
+}): string;
+export function toCSV(arg: Row[] | string[][] | {
+  header: string[],
+  rows: string[][] | Row[],
+}): string {
+  if (Array.isArray(arg)) {
+    return unparse<string[] | Row>(arg);
+  } else {
+    return unparse<string[] | Row>({ fields: arg.header, data: arg.rows });
+  }
 }

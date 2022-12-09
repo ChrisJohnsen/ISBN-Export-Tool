@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Builtins, Cli, Command, Option } from 'clipanion';
 import { collect, pipe, flatPipe, filter, prop, eq, map, pick, not } from 'utils';
-import { reduceCSV, unparse } from 'utils';
+import { reduceCSV, toCSV } from 'utils';
 
 class MissingISBNs extends Command {
   static usage = Command.Usage({
@@ -34,7 +34,7 @@ class MissingISBNs extends Command {
           map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])),
         ))
     ).then(noISBNs =>
-      [unparse(noISBNs), noISBNs.length]
+      [toCSV(noISBNs), noISBNs.length]
     ).then(([csv, count]) => {
       this.context.stdout.write(csv);
       this.context.stdout.write('\n');
