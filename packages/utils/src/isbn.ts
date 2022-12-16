@@ -55,13 +55,17 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         editionsFaults: [],
       };
 
-    const editionsResults = await Promise.all(validWorkIds.map(async workId => {
-      const editions = JSON.parse(await fetch(`https://openlibrary.org/works/${workId}/editions.json`));
+    const editionsResults = await Promise.allSettled(validWorkIds.map(async workId => {
+      const response = await fetch(`https://openlibrary.org/works/${workId}/editions.json`);
+      const editions = (() => {
+        try { return JSON.parse(response) } catch (e) {
+          throw new ContentError(`${workId}/editions.json response is not parseable as JSON`);
+        }
+      })();
       if (!isObject(editions))
-        return { isbns: [], faults: [new ContentError(`${workId}/editions.json response is not an object`)] };
-
+        throw new ContentError(`${workId}/editions.json response is not an object`);
       if (!hasArrayProperty('entries', editions))
-        return { isbns: [], faults: [new ContentError(`${workId}/editions.json response .entries is missing or not an array`)] };
+        throw new ContentError(`${workId}/editions.json response .entries is missing or not an array`);
 
       let allISBNs: string[] = [];
       const faults: ContentError[] = [];
@@ -85,12 +89,17 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     }));
     const results: Required<EditionsISBNResults> = { isbns: [], editionsFaults: [], workFaults };
     editionsResults.forEach((editionResults) => {
-      results.isbns = results.isbns.concat(editionResults.isbns);
-      results.editionsFaults = results.editionsFaults.concat(editionResults.faults);
+      if (editionResults.status == 'fulfilled') {
+        results.isbns = results.isbns.concat(editionResults.value.isbns);
+        results.editionsFaults = results.editionsFaults.concat(editionResults.value.faults);
+      } else {
+        const reason = editionResults.reason;
+        const fault = reason instanceof ContentError ? reason : new ContentError(reason.toString());
+        results.editionsFaults = results.editionsFaults.concat([fault]);
+      }
     });
     if (results.isbns.length < 1)
       return {
-        isbns: [],
         workFaults,
         editionsFaults: [new ContentError(`no valid ISBNs among in all editions.jsons for all ${isbn} works`)].concat(results.editionsFaults)
       };

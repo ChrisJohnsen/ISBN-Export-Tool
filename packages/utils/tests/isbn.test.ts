@@ -107,34 +107,6 @@ function editionsURL(workId: string) {
 const toJ = JSON.stringify;
 
 describe('edition fetcher', () => {
-  test('minimal responses', async () => {
-    const isbn = '9876543210';
-    const workId = 'OL123456789W';
-    const editionISBNs = ['9876543210', '8765432109876', ['7654321098', '6543210987654']];
-
-    const fetcher = jest.fn<Fetcher>()
-      .mockResolvedValueOnce(
-        pipe(bookResponse,
-          keep({ works: [{ key: '' }] }),
-          toJ)(workId))
-      .mockResolvedValueOnce(
-        pipe(editionsResponse,
-          keep({ entries: [{ isbn_10: '', isbn_13: '' }] }),
-          toJ)(editionISBNs));
-
-    const result = await otherEditionsOfISBN(fetcher, isbn);
-
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
-    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
-    expect(fetcher).toHaveReturnedTimes(2);
-    expect(result).toStrictEqual({
-      isbns: editionISBNs.flat(),
-      workFaults: [],
-      editionsFaults: [],
-    });
-  });
-
   test('isbn fetch fails', async () => {
     const isbn = '9876543210';
     const err = 'failed to fetch isbn or its redirect';
@@ -171,7 +143,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('missing works in work response', async () => {
+  test('work response missing .works', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -183,7 +155,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('empty works in work response', async () => {
+  test('work response .works is empty', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -195,7 +167,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('missing works[n].key in work response', async () => {
+  test('work response missing works[n].key', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -219,7 +191,7 @@ describe('edition fetcher', () => {
     result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('works[n].key does not .startWith(/works) in work response', async () => {
+  test('work response works[n].key does not .startWith(/works)', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -243,10 +215,10 @@ describe('edition fetcher', () => {
     result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('works[n].key: mix of valid, invalid and missing', async () => {
+  test('work response works[n].key: mix of valid, invalid and missing', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
-    const editionISBNs = ['9876543210', '8765432109876', ['7654321098', '6543210987654']];
+    const editionISBNs = ['9876543210', '8765432109'];
 
     const fetcher = jest.fn<Fetcher>()
       .mockResolvedValueOnce(toJ({
@@ -270,5 +242,164 @@ describe('edition fetcher', () => {
     expect(result.workFaults).toHaveLength(3);
 
     result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+
+  test('editions fetch fails', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const err = 'failed to fetch editions';
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ(bookResponse(workId)))
+      .mockRejectedValueOnce(err);
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
+    expect(fetcher).toHaveReturnedTimes(2);
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toHaveLength(2);
+
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+
+  test('editions response not JSON', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ(bookResponse(workId)))
+      .mockResolvedValueOnce('just plain text, not JSON');
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
+    expect(fetcher).toHaveReturnedTimes(2);
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toHaveLength(2);
+
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+
+  test('editions response not an object', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ(bookResponse(workId)))
+      .mockResolvedValueOnce('123');
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
+    expect(fetcher).toHaveReturnedTimes(2);
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toHaveLength(2);
+
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+
+  test('editions response missing .entries', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ(bookResponse(workId)))
+      .mockResolvedValueOnce(toJ({ count: 1 }));
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
+    expect(fetcher).toHaveReturnedTimes(2);
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toHaveLength(2);
+
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+
+  test('editions response .entries is empty', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ(bookResponse(workId)))
+      .mockResolvedValueOnce(toJ({ entries: [] }));
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
+    expect(fetcher).toHaveReturnedTimes(2);
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toHaveLength(1);
+
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+
+  test('editions response .entries[n]: none has .isbn_10 or .isbn_13', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ(bookResponse(workId)))
+      .mockResolvedValueOnce(toJ({ entries: [{ no_isbn: true }, { isbn_14: '!', isbn_12: '?' }, {}] }));
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
+    expect(fetcher).toHaveReturnedTimes(2);
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toHaveLength(4);
+
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+
+  test('multiple works, some invalid, multiple editions, some invalid', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const workId2 = 'OL234567890W';
+    const editionISBNs = ['9876543210', [], '8765432109876', ['7654321098', '6543210987654']];
+    const editionISBNs2 = [[], '5432109876', ['4321098765432', '3210987654']];
+
+    const fetcher = jest.fn<Fetcher>().mockImplementation(async url =>
+      toJ((url => {
+        if (url == isbnURL(isbn)) return {
+          works: [
+            { key: `/works/${workId}` },
+            { key: '/work/invalid' },
+            { key: `/works/${workId2}` }
+          ],
+        };
+        if (url == editionsURL(workId))
+          return editionsResponse(editionISBNs);
+        if (url == editionsURL(workId2))
+          return editionsResponse(editionISBNs2);
+        throw `Unexpected URL to fetch: ${url}!`;
+      })(url)));
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenCalledWith(editionsURL(workId));
+    expect(fetcher).toHaveBeenCalledWith(editionsURL(workId2));
+    expect(fetcher).toHaveReturnedTimes(3);
+    expect(result.workFaults).toHaveLength(1);
+    expect(result.editionsFaults).toHaveLength(2);
+    expect(result.isbns?.slice().sort()).toStrictEqual(editionISBNs.concat(editionISBNs2).flat().sort());
+
+    result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 });
