@@ -26,8 +26,8 @@ function editionsURL(workId: string) {
 
 const toJ = JSON.stringify;
 
-describe('edition fetcher', () => {
-  test('isbn fetch fails', async () => {
+describe('work response faults', () => {
+  test('fetch fails', async () => {
     const isbn = '9876543210';
     const err = 'failed to fetch isbn or its redirect';
     const fetcher = jest.fn<Fetcher>()
@@ -39,7 +39,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('isbn response not JSON', async () => {
+  test('not JSON', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -51,7 +51,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('isbn response not object', async () => {
+  test('not object', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -63,7 +63,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('work response missing .works', async () => {
+  test('missing .works', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -75,7 +75,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('work response .works is empty', async () => {
+  test('.works is empty', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -87,7 +87,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(1);
   });
 
-  test('work response missing works[n].key', async () => {
+  test('missing works[n].key', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -111,7 +111,7 @@ describe('edition fetcher', () => {
     result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('work response works[n].key does not .startWith(/works)', async () => {
+  test('works[n].key does not .startWith(/works)', async () => {
     const isbn = '9876543210';
 
     const fetcher = jest.fn<Fetcher>()
@@ -135,7 +135,7 @@ describe('edition fetcher', () => {
     result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('work response works[n].key: mix of valid, invalid and missing', async () => {
+  test('works[n].key: mix of valid, invalid and missing', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
     const editionISBNs = ['9876543210', '8765432109'];
@@ -163,8 +163,10 @@ describe('edition fetcher', () => {
 
     result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
+});
 
-  test('editions fetch fails', async () => {
+describe('editions response faults', () => {
+  test('fetch fails', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
     const err = 'failed to fetch editions';
@@ -185,7 +187,7 @@ describe('edition fetcher', () => {
     result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('editions response not JSON', async () => {
+  test('not JSON', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
     const fetcher = jest.fn<Fetcher>()
@@ -205,7 +207,7 @@ describe('edition fetcher', () => {
     result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('editions response not an object', async () => {
+  test('not an object', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
     const fetcher = jest.fn<Fetcher>()
@@ -225,7 +227,7 @@ describe('edition fetcher', () => {
     result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('editions response missing .entries', async () => {
+  test('missing .entries', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
     const fetcher = jest.fn<Fetcher>()
@@ -245,7 +247,7 @@ describe('edition fetcher', () => {
     result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
-  test('editions response .entries is empty', async () => {
+  test('.entries is empty', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
     const fetcher = jest.fn<Fetcher>()
@@ -260,7 +262,7 @@ describe('edition fetcher', () => {
     expect(fetcher).toHaveReturnedTimes(2);
   });
 
-  test('editions response .entries[n]: none has .isbn_10 or .isbn_13', async () => {
+  test('.entries[n]: multiple without .isbn_10 or .isbn_13', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
     const fetcher = jest.fn<Fetcher>()
@@ -279,7 +281,9 @@ describe('edition fetcher', () => {
 
     result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
+});
 
+describe('okay, but some faults', () => {
   test('multiple works, some invalid, multiple editions, some invalid', async () => {
     const isbn = '9876543210';
     const workId = 'OL123456789W';
