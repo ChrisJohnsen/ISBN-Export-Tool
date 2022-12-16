@@ -252,17 +252,12 @@ describe('edition fetcher', () => {
       .mockResolvedValueOnce(toJ(bookResponse(workId)))
       .mockResolvedValueOnce(toJ({ entries: [] }));
 
-    const result = await otherEditionsOfISBN(fetcher, isbn);
+    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
     expect(fetcher).toHaveReturnedTimes(2);
-    expect(result.isbns).toBeUndefined();
-    expect(result.workFaults).toStrictEqual([]);
-    expect(result.editionsFaults).toHaveLength(1);
-
-    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
   test('editions response .entries[n]: none has .isbn_10 or .isbn_13', async () => {

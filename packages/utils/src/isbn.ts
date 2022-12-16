@@ -98,11 +98,14 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         results.editionsFaults = results.editionsFaults.concat([fault]);
       }
     });
-    if (results.isbns.length < 1)
+    if (results.isbns.length < 1) {
+      const newFault = new ContentError(`no valid ISBNs among in all editions.jsons for all ${isbn} works`);
+      if (workFaults.length < 1 && results.editionsFaults.length < 1) throw newFault;
       return {
         workFaults,
-        editionsFaults: [new ContentError(`no valid ISBNs among in all editions.jsons for all ${isbn} works`)].concat(results.editionsFaults)
+        editionsFaults: [newFault].concat(results.editionsFaults)
       };
+    }
     return results;
   }
   if (isbn === undefined) {
