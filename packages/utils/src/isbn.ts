@@ -49,12 +49,15 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
       return partition;
     }, { valid: [] as string[], faults: [] as ContentError[] });
 
-    if (validWorkIds.length < 1)
+    if (validWorkIds.length < 1) {
+      const newFault = new ContentError(`isbn/${isbn}.json no valid workIds`);
+      if (workFaults.length < 1) throw newFault;
+      if (workFaults.length == 1) throw workFaults[0];
       return {
-        workFaults: [new ContentError(`isbn/${isbn}.json no valid workIds`)].concat(workFaults),
+        workFaults: [newFault].concat(workFaults),
         editionsFaults: [],
       };
-
+    }
     const editionsResults = await Promise.allSettled(validWorkIds.map(async workId => {
       const response = await fetch(`https://openlibrary.org/works/${workId}/editions.json`);
       const editions = (() => {
@@ -100,7 +103,10 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     });
     if (results.isbns.length < 1) {
       const newFault = new ContentError(`no valid ISBNs among in all editions.jsons for all ${isbn} works`);
-      if (workFaults.length < 1 && results.editionsFaults.length < 1) throw newFault;
+      if (workFaults.length < 1) {
+        if (results.editionsFaults.length < 1) throw newFault;
+        else if (results.editionsFaults.length == 1) throw results.editionsFaults[0];
+      }
       return {
         workFaults,
         editionsFaults: [newFault].concat(results.editionsFaults)

@@ -111,6 +111,19 @@ describe('work response faults', () => {
     result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
+  test('works[0].key (only one) invalid', async () => {
+    const isbn = '9876543210';
+
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ({ works: [{ key: 'blah1' },] }));
+
+    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveReturnedTimes(1);
+  });
+
   test('works[n].key does not .startWith(/works)', async () => {
     const isbn = '9876543210';
 
@@ -174,17 +187,12 @@ describe('editions response faults', () => {
       .mockResolvedValueOnce(toJ(bookResponse(workId)))
       .mockRejectedValueOnce(err);
 
-    const result = await otherEditionsOfISBN(fetcher, isbn);
+    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
     expect(fetcher).toHaveReturnedTimes(2);
-    expect(result.isbns).toBeUndefined();
-    expect(result.workFaults).toStrictEqual([]);
-    expect(result.editionsFaults).toHaveLength(2);
-
-    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
   test('not JSON', async () => {
@@ -194,17 +202,12 @@ describe('editions response faults', () => {
       .mockResolvedValueOnce(toJ(bookResponse(workId)))
       .mockResolvedValueOnce('just plain text, not JSON');
 
-    const result = await otherEditionsOfISBN(fetcher, isbn);
+    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
     expect(fetcher).toHaveReturnedTimes(2);
-    expect(result.isbns).toBeUndefined();
-    expect(result.workFaults).toStrictEqual([]);
-    expect(result.editionsFaults).toHaveLength(2);
-
-    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
   test('not an object', async () => {
@@ -214,17 +217,12 @@ describe('editions response faults', () => {
       .mockResolvedValueOnce(toJ(bookResponse(workId)))
       .mockResolvedValueOnce('123');
 
-    const result = await otherEditionsOfISBN(fetcher, isbn);
+    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
     expect(fetcher).toHaveReturnedTimes(2);
-    expect(result.isbns).toBeUndefined();
-    expect(result.workFaults).toStrictEqual([]);
-    expect(result.editionsFaults).toHaveLength(2);
-
-    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
   test('missing .entries', async () => {
@@ -234,17 +232,12 @@ describe('editions response faults', () => {
       .mockResolvedValueOnce(toJ(bookResponse(workId)))
       .mockResolvedValueOnce(toJ({ count: 1 }));
 
-    const result = await otherEditionsOfISBN(fetcher, isbn);
+    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
     expect(fetcher).toHaveReturnedTimes(2);
-    expect(result.isbns).toBeUndefined();
-    expect(result.workFaults).toStrictEqual([]);
-    expect(result.editionsFaults).toHaveLength(2);
-
-    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
   });
 
   test('.entries is empty', async () => {
@@ -253,6 +246,21 @@ describe('editions response faults', () => {
     const fetcher = jest.fn<Fetcher>()
       .mockResolvedValueOnce(toJ(bookResponse(workId)))
       .mockResolvedValueOnce(toJ({ entries: [] }));
+
+    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL(workId));
+    expect(fetcher).toHaveReturnedTimes(2);
+  });
+
+  test('.entries[0]: (only one) invalid', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(toJ(bookResponse(workId)))
+      .mockResolvedValueOnce(toJ({ entries: [{ no_isbn: true }] }));
 
     await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
 
