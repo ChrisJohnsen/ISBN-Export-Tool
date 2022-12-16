@@ -112,6 +112,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isString(value: any): value is string {
   return typeof value == 'string';
 }
@@ -128,6 +129,7 @@ function hasArrayProperty<K extends string, T>(keyString: K, obj: Record<K, unkn
   return keyString in obj && obj[keyString] && Array.isArray(obj[keyString]);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isObject<K extends PropertyKey, V>(maybeObject: any): maybeObject is Record<K, V> {
   return maybeObject && typeof maybeObject == 'object';
 }
