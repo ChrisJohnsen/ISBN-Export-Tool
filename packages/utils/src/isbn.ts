@@ -58,61 +58,107 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         editionsFaults: [],
       };
     }
-    const editionsResults = await Promise.allSettled(validWorkIds.map(async workId => {
-      const response = await fetch(`https://openlibrary.org/works/${workId}/editions.json`);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function convertError(err: any) {
+      return err instanceof ContentError ? err : new ContentError(err.toString());
+    }
+
+    type Results = { isbns: string[], faults: ContentError[] };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function addError(results: Results, err: any): Results {
+      return { ...results, faults: results.faults.concat([convertError(err)]) };
+    }
+
+    function combineResults(results: Results, newResults: Results): Results {
+      return {
+        isbns: results.isbns.concat(newResults.isbns),
+        faults: results.faults.concat(newResults.faults),
+      };
+    }
+
+    const EditionsURLPrefix = 'https://openlibrary.org/works/';
+
+    async function processEditionsURL(fetch: Fetcher, url: string) {
+      const response = await fetch(url);
+      const editionsURLTail = url.startsWith(EditionsURLPrefix) ? url.slice(EditionsURLPrefix.length) : url;
       const editions = (() => {
         try { return JSON.parse(response) } catch (e) {
-          throw new ContentError(`${workId}/editions.json response is not parseable as JSON`);
+          throw new ContentError(`${editionsURLTail} response is not parseable as JSON`);
         }
       })();
       if (!isObject(editions))
-        throw new ContentError(`${workId}/editions.json response is not an object`);
+        throw new ContentError(`${editionsURLTail} response is not an object`);
       if (!hasArrayProperty('entries', editions))
-        throw new ContentError(`${workId}/editions.json response .entries is missing or not an array`);
+        throw new ContentError(`${editionsURLTail} response .entries is missing or not an array`);
+
+      const faults: ContentError[] = [];
+      let next: string | undefined;
+      if (hasObjectProperty('links', editions) && hasProperty('next', editions.links)) {
+        if (!isString(editions.links.next))
+          faults.push(new ContentError(`${editionsURLTail} .entires.links.next is present but not a string`));
+        else
+          next = editions.links.next;
+      }
 
       let allISBNs: string[] = [];
-      const faults: ContentError[] = [];
       editions.entries.forEach((entry, index) => {
         const isbns: string[] = [];
         function process<K extends string>(k: K, o: unknown) {
           if (isObject(o) && hasProperty(k, o)) {
             const v = o[k];
             if (!isString(v))
-              faults.push(new ContentError(`${workId}/editions.json .entries[${index}].${k} is not a string`));
+              faults.push(new ContentError(`${editionsURLTail} .entries[${index}].${k} is not a string`));
             else isbns.push(v);
           }
         }
         process('isbn_10', entry);
         process('isbn_13', entry);
         if (isbns.length < 1)
-          faults.push(new ContentError(`${workId}/editions.json .entries[${index}] has neither .isbn_10 nor .isbn_13`));
+          faults.push(new ContentError(`${editionsURLTail} .entries[${index}] has neither .isbn_10 nor .isbn_13`));
         allISBNs = allISBNs.concat(isbns);
       });
-      return { isbns: allISBNs, faults };
-    }));
-    const results: Required<EditionsISBNResults> = { isbns: [], editionsFaults: [], workFaults };
-    editionsResults.forEach((editionResults) => {
+      return { isbns: allISBNs, faults, ...isString(next) ? { next } : {} };
+    }
+
+    async function processAllEditionsPages(fetch: Fetcher, url: string): Promise<Results> {
+      return processEditionsURL(fetch, url).then(results => {
+        if (isString(results.next))
+          return processAllEditionsPages(fetch, results.next).then(
+            nextResults => { return combineResults(results, nextResults) },
+            err => { return addError(results, err) }
+          );
+        return results;
+      }, err => {
+        throw err;
+      });
+    }
+
+    const results = (await Promise.allSettled(
+      validWorkIds.map(async workId =>
+        processAllEditionsPages(fetch, `${EditionsURLPrefix}${workId}/editions.json`)))
+    ).reduce((results, editionResults) => {
       if (editionResults.status == 'fulfilled') {
-        results.isbns = results.isbns.concat(editionResults.value.isbns);
-        results.editionsFaults = results.editionsFaults.concat(editionResults.value.faults);
+        return combineResults(results, editionResults.value);
       } else {
         const reason = editionResults.reason;
-        const fault = reason instanceof ContentError ? reason : new ContentError(reason.toString());
-        results.editionsFaults = results.editionsFaults.concat([fault]);
+        return addError(results, reason);
       }
-    });
+    }, { isbns: [], faults: [] } as { isbns: string[], faults: ContentError[] });
+
     if (results.isbns.length < 1) {
       const newFault = new ContentError(`no valid ISBNs among in all editions.jsons for all ${isbn} works`);
       if (workFaults.length < 1) {
-        if (results.editionsFaults.length < 1) throw newFault;
-        else if (results.editionsFaults.length == 1) throw results.editionsFaults[0];
+        if (results.faults.length < 1) throw newFault;
+        else if (results.faults.length == 1) throw results.faults[0];
       }
       return {
         workFaults,
-        editionsFaults: [newFault].concat(results.editionsFaults)
+        editionsFaults: [newFault].concat(results.faults)
       };
     }
-    return results;
+    return { isbns: results.isbns, workFaults, editionsFaults: results.faults };
   }
   if (isbn === undefined) {
     return more;
@@ -126,19 +172,27 @@ function isString(value: any): value is string {
   return typeof value == 'string';
 }
 
-function hasProperty<K extends string, T>(key: K, obj: Record<K, unknown>): obj is { [k in K]: T } {
+function hasProperty<K extends string, O extends object, T>
+  (key: K, obj: O): obj is O & { [k in K]: T } {
   return key in obj;
 }
 
-function hasStringProperty<K extends string>(keyString: K, obj: Record<K, unknown>): obj is { [k in K]: string } {
-  return keyString in obj && typeof obj[keyString] == 'string';
+function hasStringProperty<K extends string, O extends Record<string, unknown>>
+  (keyString: K, obj: O): obj is O & { [k in K]: string } {
+  return keyString in obj && isString(obj[keyString]);
 }
 
-function hasArrayProperty<K extends string, T>(keyString: K, obj: Record<K, unknown>): obj is { [k in K]: T[] } {
+function hasArrayProperty<K extends string, O extends Record<string, unknown>, T>
+  (keyString: K, obj: O): obj is O & { [k in K]: T[] } {
   return keyString in obj && obj[keyString] && Array.isArray(obj[keyString]);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isObject<K extends PropertyKey, V>(maybeObject: any): maybeObject is Record<K, V> {
+function hasObjectProperty<K extends string, O extends Record<string, unknown>>
+  (keyString: K, obj: O): obj is O & { [k in K]: Record<PropertyKey, unknown> } {
+  return hasProperty(keyString, obj) && isObject(obj[keyString]);
+}
+
+function isObject<K extends PropertyKey>
+  (maybeObject: any): maybeObject is Record<K, unknown> { // eslint-disable-line @typescript-eslint/no-explicit-any
   return maybeObject && typeof maybeObject == 'object';
 }

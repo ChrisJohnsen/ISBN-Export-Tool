@@ -7,12 +7,15 @@ function bookResponse(workId: string) {
   };
 }
 
-function editionsResponse(editionISBNs: (string | string[])[]) {
+function editionsResponse(editionISBNs: (string | string[])[], next?: { workId: string, nextStart: number }) {
   function tagged(isbns: (string | string[])[]) {
     const tag = (isbn: string) => isbn.length == 10 ? { isbn_10: isbn } : { isbn_13: isbn };
     return isbns.map(is => Array.isArray(is) ? Object.assign({}, ...is.map(tag)) : tag(is));
   }
   return {
+    ...next == null
+      ? {}
+      : { links: { next: editionsURL(next.workId, next.nextStart) } },
     entries: tagged(editionISBNs),
   };
 }
@@ -20,8 +23,9 @@ function editionsResponse(editionISBNs: (string | string[])[]) {
 function isbnURL(isbn: string) {
   return `https://openlibrary.org/isbn/${isbn}.json`;
 }
-function editionsURL(workId: string) {
-  return `https://openlibrary.org/works/${workId}/editions.json`;
+function editionsURL(workId: string, offset?: number) {
+  const offsetQuery = offset == null || offset == 0 ? '' : `?offset=${offset}`;
+  return `https://openlibrary.org/works/${workId}/editions.json${offsetQuery}`;
 }
 
 const toJ = JSON.stringify;
@@ -291,6 +295,59 @@ describe('editions response faults', () => {
   });
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function multiFetcher(fetches: Map<string, any>): Fetcher {
+  return async (url) => {
+    if (fetches.has(url)) {
+      return toJ(fetches.get(url)!); // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    }
+    throw `Unexpected URL to fetch: ${url}!`;
+  };
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function paginateEditions(pageSize: number, workId: string, editionISBNs: (string | string[])[]): Map<string, any> {
+  function* pages(size: number, total: number) {
+    let start = 0;
+    while (start < total) {
+      const end = Math.min(start + size, total);
+      yield { start, end, last: end >= total };
+      start = end;
+    }
+  }
+  return Array.from(pages(pageSize, editionISBNs.length))
+    .reduce((map, { start, end, last }) => map.set(
+      editionsURL(workId, start),
+      editionsResponse(editionISBNs.slice(start, end), last ? undefined : { workId, nextStart: end })),
+      new Map());
+}
+
+describe('editions with next links', () => {
+  test('one editions: three pages', async () => {
+    const isbn = '9876543210';
+    const workId = 'OL123456789W';
+    const editionISBNs = [
+      '9876543210', ['7654321098', '8765432109876'],
+      ['5432109865432', '4321098765'], '6543210987654',
+      '3210987654'
+    ];
+    const editionsFetches = paginateEditions(2, workId, editionISBNs);
+
+    const fetcher = jest.fn<Fetcher>().mockImplementation(multiFetcher(
+      new Map(editionsFetches).set(isbnURL(isbn), bookResponse(workId))));
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+
+    Array.from(editionsFetches.keys()).forEach(url => expect(fetcher).toHaveBeenCalledWith(url));
+
+    expect(fetcher).toHaveReturnedTimes(4);
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toStrictEqual([]);
+    expect(result.isbns?.slice().sort()).toStrictEqual(editionISBNs.flat().sort());
+  });
+
 describe('okay, but some faults', () => {
   test('multiple works, some invalid, multiple editions, some invalid', async () => {
     const isbn = '9876543210';
@@ -299,21 +356,18 @@ describe('okay, but some faults', () => {
     const editionISBNs = ['9876543210', [], '8765432109876', ['7654321098', '6543210987654']];
     const editionISBNs2 = [[], '5432109876', ['4321098765432', '3210987654']];
 
-    const fetcher = jest.fn<Fetcher>().mockImplementation(async url =>
-      toJ((url => {
-        if (url == isbnURL(isbn)) return {
+    const fetcher = jest.fn<Fetcher>().mockImplementation(
+      multiFetcher(new Map()
+        .set(isbnURL(isbn), {
           works: [
             { key: `/works/${workId}` },
             { key: '/work/invalid' },
             { key: `/works/${workId2}` }
           ],
-        };
-        if (url == editionsURL(workId))
-          return editionsResponse(editionISBNs);
-        if (url == editionsURL(workId2))
-          return editionsResponse(editionISBNs2);
-        throw `Unexpected URL to fetch: ${url}!`;
-      })(url)));
+        })
+        .set(editionsURL(workId), editionsResponse(editionISBNs))
+        .set(editionsURL(workId2), editionsResponse(editionISBNs2))
+      ));
 
     const result = await otherEditionsOfISBN(fetcher, isbn);
 
