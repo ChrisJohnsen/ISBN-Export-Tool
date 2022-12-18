@@ -348,6 +348,48 @@ describe('editions with next links', () => {
     expect(result.isbns?.slice().sort()).toStrictEqual(editionISBNs.flat().sort());
   });
 
+  test('two works, one page and three pages of editions', async () => {
+    const isbn = '9876543210';
+    const workId1 = 'OL123456789W';
+    const editionISBNs1 = [
+      '9876543210', ['7654321098', '8765432109876'], '6543210987',
+    ];
+    const editionsFetches1 = paginateEditions(3, workId1, editionISBNs1);
+    const workId2 = 'OL234567891W';
+    const editionISBNs2 = [
+      '5432109876543', [], ['4321098765', '3210987654321'],
+      '2109876543', '1098765432109', [],
+      [], '9987654321',
+    ];
+    const editionsFetches2 = paginateEditions(3, workId2, editionISBNs2);
+
+    const fetcher = jest.fn<Fetcher>().mockImplementation(multiFetcher(
+      new Map([...editionsFetches1, ...editionsFetches2])
+        .set(isbnURL(isbn), {
+          works: [
+            { key: `/works/${workId1}` },
+            { key: `/works/${workId2}` },
+          ]
+        })));
+
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+
+    [...editionsFetches1.keys(), ...editionsFetches2.keys()]
+      .forEach(url => expect(fetcher).toHaveBeenCalledWith(url));
+
+    expect(fetcher).toHaveReturnedTimes(5);
+    expect(result.workFaults).toStrictEqual([]);
+    expect(result.editionsFaults).toHaveLength(3);
+    expect(result.isbns?.slice().sort()).toStrictEqual(editionISBNs1.concat(editionISBNs2).flat().sort());
+
+    result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+  });
+});
+
 describe('okay, but some faults', () => {
   test('multiple works, some invalid, multiple editions, some invalid', async () => {
     const isbn = '9876543210';
