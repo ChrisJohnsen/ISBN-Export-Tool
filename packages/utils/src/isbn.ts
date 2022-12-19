@@ -90,8 +90,6 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
       })();
       if (!isObject(editions))
         throw new ContentError(`${editionsURLTail} response is not an object`);
-      if (!hasArrayProperty('entries', editions))
-        throw new ContentError(`${editionsURLTail} response .entries is missing or not an array`);
 
       const faults: ContentError[] = [];
       let next: string | undefined;
@@ -100,6 +98,14 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
           faults.push(new ContentError(`${editionsURLTail} .entires.links.next is present but not a string`));
         else
           next = editions.links.next;
+      }
+
+      if (!hasArrayProperty('entries', editions)) {
+        const fault = new ContentError(`${editionsURLTail} response .entries is missing or not an array`);
+        if (faults.length < 1 && !next)
+          throw fault;
+        else
+          return { isbns: [], faults: faults.concat([fault]), ...isString(next) ? { next } : {} };
       }
 
       let allISBNs: string[] = [];

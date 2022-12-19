@@ -463,4 +463,28 @@ describe('okay, but some faults', () => {
     expect(result.workFaults).toHaveLength(1);
     expect(result.editionsFaults).toHaveLength(2);
   });
+
+  test('missing .entries in 2nd of 3 editions pages', async () => {
+    const data = new FetcherBuilder({
+      isbn: '9876543210',
+      pageSize: 2,
+      works: {
+        'OL123456789W': [
+          '9876543210', [],
+          [], [], // .entries to be deleted
+          '8765432109876', ['7654321098', '6543210987654'],
+        ],
+      },
+    });
+    const fetcher = jest.fn<Fetcher>().mockImplementation(data
+      .editEditions((editions, info) => { if (info.pageNum == 2) delete editions.entries; })
+      .fetcher());
+
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    data.makeAssertions(fetcher, result);
+
+    expect(result.workFaults).toHaveLength(0);
+    expect(result.editionsFaults).toHaveLength(2);
+  });
 });
