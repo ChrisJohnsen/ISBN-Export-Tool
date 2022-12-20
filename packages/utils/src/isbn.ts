@@ -1,3 +1,5 @@
+// parse Open Library resources to find ISBNs of other editions of given ISBN
+
 export type Fetcher = (url: string) => Promise<string>;
 
 export class ContentError {
@@ -201,4 +203,22 @@ function hasObjectProperty<K extends string, O extends Record<string, unknown>>
 function isObject<K extends PropertyKey>
   (maybeObject: any): maybeObject is Record<K, unknown> { // eslint-disable-line @typescript-eslint/no-explicit-any
   return maybeObject && typeof maybeObject == 'object';
+}
+
+// ISBN validation and conversion
+
+/// <reference path='./isbn3.d.ts'/>
+import { parse } from 'isbn3';
+
+export function validateISBN(maybeISBN: string): boolean {
+  return !!parse(maybeISBN);
+}
+
+export function equivalentISBNs(isbn: string): string[] {
+  const validISBN = parse(isbn);
+  if (!validISBN) return [isbn.replace(/\s|-/g, '')];
+  const isbns = [];
+  if (validISBN.isbn10) isbns.push(validISBN.isbn10);
+  if (validISBN.isbn13) isbns.push(validISBN.isbn13);
+  return isbns;
 }

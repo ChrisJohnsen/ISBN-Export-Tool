@@ -3066,6 +3066,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"isbn3@npm:^1.1.29":
+  version: 1.1.29
+  resolution: "isbn3@npm:1.1.29"
+  bin:
+    isbn: bin/isbn
+    isbn-audit: bin/isbn-audit
+    isbn-checksum: bin/isbn-checksum
+  checksum: e6fc1e30ac031bda084b61af0ae000d48b55d762deb29ee95368d41f860a77dd8f5c2a05bf12645bfde5732993b1d286fe131504052e16391bd5ff95883293c1
+  languageName: node
+  linkType: hard
+
 "isbot@npm:3.4.5":
   version: 3.4.5
   resolution: "isbot@npm:3.4.5"
@@ -4943,6 +4954,7 @@ __metadata:
     "@rollup/plugin-commonjs": "npm:^23.0.5"
     "@rollup/plugin-node-resolve": "npm:^15.0.1"
     "@types/papaparse": "npm:^5.3.5"
+    isbn3: "npm:^1.1.29"
     outdent: "npm:^0.8.0"
     papaparse: "npm:^5.3.2"
     rollup-plugin-ts: "npm:^3.0.2"
