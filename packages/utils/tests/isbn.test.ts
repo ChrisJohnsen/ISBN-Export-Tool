@@ -176,7 +176,7 @@ function paginateEditions(pageSize: number, workId: string, editionISBNs: (strin
   }
   function editionsResponse(editionISBNs: (string | string[])[], next?: { workId: string, nextStart: number }) {
     function tagged(isbns: (string | string[])[]) {
-      const tag = (isbn: string) => isbn.length == 10 ? { isbn_10: isbn } : { isbn_13: isbn };
+      const tag = (isbn: string) => isbn.replace(/\s|-/g, '').length == 10 ? { isbn_10: isbn } : { isbn_13: isbn };
       return isbns.map(is => Array.isArray(is) ? Object.assign({}, ...is.map(tag)) : tag(is));
     }
     return {
@@ -213,7 +213,7 @@ class FetcherBuilder {
     this.originalISBNs = new Set();
     this.workEditionsPages = new Map();
     Object.entries(data.works).forEach(([workId, isbns]) => {
-      isbns.flat().forEach(isbn => this.originalISBNs.add(isbn));
+      isbns.flat().forEach(isbn => this.originalISBNs.add(isbn.replace(/\s|-/g, '').toUpperCase()));
       const editionsPages = paginateEditions(data.pageSize ?? +Infinity, workId, isbns);
       this.workEditionsPages.set(workId, editionsPages);
     });
@@ -523,6 +523,25 @@ describe('okay, but some faults', () => {
     data.makeAssertions(fetcher, result);
 
     expect(result.isbns).toHaveProperty('size', 4);
+    expect(result.workFaults).toHaveLength(0);
+    expect(result.editionsFaults).toHaveLength(0);
+  });
+
+  test('ISBNs are normalized (no spaces, hyphens, uppercase)', async () => {
+    const data = new FetcherBuilder({
+      isbn: '9876543210',
+      works: {
+        'OL123456789W': ['987-654-321-0', '876-54-32-10987-6', ['765-43210-98-76-5']],
+        'OL234567890W': ['65 432-1098 7', ['543 210 98-7654 3', '4 321-09876-x']],
+      },
+    });
+    const fetcher = jest.fn<Fetcher>().mockImplementation(data.fetcher());
+
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    data.makeAssertions(fetcher, result);
+
+    expect(result.isbns?.has('432109876X')).toBeTruthy();
     expect(result.workFaults).toHaveLength(0);
     expect(result.editionsFaults).toHaveLength(0);
   });

@@ -131,7 +131,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         process('isbn_13', entry);
         if (isbns.length < 1)
           faults.push(new ContentError(`${editionsURLTail} .entries[${index}] has neither .isbn_10 nor .isbn_13`));
-        isbns.forEach(isbn => allISBNs.add(isbn));
+        isbns.forEach(isbn => allISBNs.add(isbn.replace(/\s|-/g, '').toUpperCase()));
       });
       return { isbns: allISBNs, faults, ...isString(next) ? { next } : {} };
     }
