@@ -7,7 +7,7 @@ export class ContentError {
 }
 
 export interface EditionsISBNResults {
-  isbns?: string[],
+  isbns?: Set<string>,
   workFaults: ContentError[],
   editionsFaults: ContentError[],
 }
@@ -66,7 +66,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
       return err instanceof ContentError ? err : new ContentError(err.toString());
     }
 
-    type Results = { isbns: string[], faults: ContentError[] };
+    type Results = { isbns: Set<string>, faults: ContentError[] };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function addError(results: Results, err: any): Results {
@@ -74,8 +74,13 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     }
 
     function combineResults(results: Results, newResults: Results): Results {
+      function* concatIterables<T>(...iterables: Iterable<T>[]): Iterable<T> {
+        for (const iterable of iterables) {
+          yield* iterable;
+        }
+      }
       return {
-        isbns: results.isbns.concat(newResults.isbns),
+        isbns: new Set(concatIterables(results.isbns, newResults.isbns)),
         faults: results.faults.concat(newResults.faults),
       };
     }
@@ -102,15 +107,16 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
           next = editions.links.next;
       }
 
+      const allISBNs: Set<string> = new Set();
+
       if (!hasArrayProperty('entries', editions)) {
         const fault = new ContentError(`${editionsURLTail} response .entries is missing or not an array`);
         if (faults.length < 1 && !next)
           throw fault;
         else
-          return { isbns: [], faults: faults.concat([fault]), ...isString(next) ? { next } : {} };
+          return { isbns: allISBNs, faults: faults.concat([fault]), ...isString(next) ? { next } : {} };
       }
 
-      let allISBNs: string[] = [];
       editions.entries.forEach((entry, index) => {
         const isbns: string[] = [];
         function process<K extends string>(k: K, o: unknown) {
@@ -125,7 +131,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         process('isbn_13', entry);
         if (isbns.length < 1)
           faults.push(new ContentError(`${editionsURLTail} .entries[${index}] has neither .isbn_10 nor .isbn_13`));
-        allISBNs = allISBNs.concat(isbns);
+        isbns.forEach(isbn => allISBNs.add(isbn));
       });
       return { isbns: allISBNs, faults, ...isString(next) ? { next } : {} };
     }
@@ -153,9 +159,9 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         const reason = editionResults.reason;
         return addError(results, reason);
       }
-    }, { isbns: [], faults: [] } as { isbns: string[], faults: ContentError[] });
+    }, { isbns: new Set(), faults: [] } as { isbns: Set<string>, faults: ContentError[] });
 
-    if (results.isbns.length < 1) {
+    if (results.isbns.size < 1) {
       const newFault = new ContentError(`no valid ISBNs among in all editions.jsons for all ${isbn} works`);
       if (workFaults.length < 1) {
         if (results.faults.length < 1) throw newFault;

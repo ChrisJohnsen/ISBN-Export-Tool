@@ -203,17 +203,17 @@ class FetcherBuilder {
   public isbn: string;
   isbnURL(): string { return isbnURL(this.isbn) }
   private book: Book;
-  private originalISBNs: string[];
+  private originalISBNs: Set<string>;
   private workEditionsPages: Map<string, { start: number, editions: Editions }[]>;
   constructor(data: FetcherData) {
     this.isbn = data.isbn;
     this.book = {
       works: Object.keys(data.works).map(workId => ({ key: `/works/${workId}` })),
     };
-    this.originalISBNs = [];
+    this.originalISBNs = new Set();
     this.workEditionsPages = new Map();
     Object.entries(data.works).forEach(([workId, isbns]) => {
-      this.originalISBNs.push(...isbns.flat());
+      isbns.flat().forEach(isbn => this.originalISBNs.add(isbn));
       const editionsPages = paginateEditions(data.pageSize ?? +Infinity, workId, isbns);
       this.workEditionsPages.set(workId, editionsPages);
     });
@@ -283,8 +283,8 @@ class FetcherBuilder {
       result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
       result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
 
-      if (result.isbns == null) expect(this.originalISBNs).toHaveLength(0);
-      else expect(result.isbns.slice().sort()).toStrictEqual(this.originalISBNs.slice().sort());
+      if (result.isbns == null) expect(this.originalISBNs).toHaveProperty('size', 0);
+      else expect(Array.from(result.isbns).sort()).toStrictEqual(Array.from(this.originalISBNs).sort());
     }
     /* eslint-enable */
   }
@@ -506,6 +506,25 @@ describe('okay, but some faults', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(result.workFaults).toHaveLength(0);
     expect(result.editionsFaults).toHaveLength(1);
+  });
+
+  test('duplicate ISBNs across works or intra-editions', async () => {
+    const data = new FetcherBuilder({
+      isbn: '9876543210',
+      works: {
+        'OL123456789W': ['9876543210', '8765432109876', ['9876543210', '7654321098765']],
+        'OL234567890W': ['6543210987', ['8765432109876']],
+      },
+    });
+    const fetcher = jest.fn<Fetcher>().mockImplementation(data.fetcher());
+
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    data.makeAssertions(fetcher, result);
+
+    expect(result.isbns).toHaveProperty('size', 4);
+    expect(result.workFaults).toHaveLength(0);
+    expect(result.editionsFaults).toHaveLength(0);
   });
 });
 
