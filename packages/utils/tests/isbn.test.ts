@@ -487,6 +487,26 @@ describe('okay, but some faults', () => {
     expect(result.workFaults).toHaveLength(0);
     expect(result.editionsFaults).toHaveLength(2);
   });
+
+  test('duplicate works, editions fetched only once', async () => {
+    const data = new FetcherBuilder({
+      isbn: '9876543210',
+      works: {
+        'OL123456789W': ['9876543210', [], '8765432109876', ['7654321098', '6543210987654']],
+      },
+    });
+    const fetcher = jest.fn<Fetcher>().mockImplementation(data
+      .editBook(book => book.works.push(book.works[0]))
+      .fetcher());
+
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    data.makeAssertions(fetcher, result);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.workFaults).toHaveLength(0);
+    expect(result.editionsFaults).toHaveLength(1);
+  });
 });
 
 describe('validateISBN', () => {

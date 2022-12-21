@@ -46,12 +46,12 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     });
 
     const { valid: validWorkIds, faults: workFaults } = workIds.reduce((partition, workId) => {
-      if (isString(workId)) partition.valid.push(workId);
+      if (isString(workId)) partition.valid.add(workId);
       else partition.faults.push(workId);
       return partition;
-    }, { valid: [] as string[], faults: [] as ContentError[] });
+    }, { valid: new Set(), faults: [] as ContentError[] });
 
-    if (validWorkIds.length < 1) {
+    if (validWorkIds.size < 1) {
       const newFault = new ContentError(`isbn/${isbn}.json no valid workIds`);
       if (workFaults.length < 1) throw newFault;
       if (workFaults.length == 1) throw workFaults[0];
@@ -144,7 +144,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     }
 
     const results = (await Promise.allSettled(
-      validWorkIds.map(async workId =>
+      Array.from(validWorkIds).map(async workId =>
         processAllEditionsPages(fetch, `${EditionsURLPrefix}${workId}/editions.json`)))
     ).reduce((results, editionResults) => {
       if (editionResults.status == 'fulfilled') {
