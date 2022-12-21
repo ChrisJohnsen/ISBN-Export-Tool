@@ -253,11 +253,9 @@ export function validateISBN(maybeISBN: string): boolean {
  * If the given string is not a valid ISBN, return just a "normalized" version
  * of the string (stripped of spaces and hyphens).
  */
-export function equivalentISBNs(isbn: string): string[] {
+export function equivalentISBNs(isbn: string): [string] | [string, string] {
   const validISBN = parse(isbn);
-  if (!validISBN) return [isbn.replace(/\s|-/g, '')];
-  const isbns = [];
-  if (validISBN.isbn10) isbns.push(validISBN.isbn10);
-  if (validISBN.isbn13) isbns.push(validISBN.isbn13);
-  return isbns;
+  if (validISBN?.isbn10 && validISBN.isbn13) return [validISBN.isbn13, validISBN.isbn10];
+  else if (validISBN?.isbn13) return [validISBN.isbn13];
+  else return [isbn.replace(/\s|-/g, '')];
 }
