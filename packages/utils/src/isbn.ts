@@ -142,7 +142,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         process('isbn_13', entry);
         if (isbns.length < 1)
           faults.push(new ContentError(`${editionsURLTail} .entries[${index}] has neither .isbn_10 nor .isbn_13`));
-        isbns.forEach(isbn => allISBNs.add(isbn.replace(/\s|-/g, '').toUpperCase()));
+        isbns.forEach(isbn => allISBNs.add(normalizeISBN(isbn)));
       });
       return { isbns: allISBNs, faults, ...isString(next) ? { next } : {} };
     }
@@ -228,6 +228,14 @@ function isObject<K extends PropertyKey>
 import { parse } from 'isbn3';
 
 /**
+ * Strip spaces and hyphens, and convert to uppercase. Does not check for
+ * validity.
+ */
+export function normalizeISBN(isbnish: string): string {
+  return isbnish.replace(/\s|-/g, '').toUpperCase();
+}
+
+/**
  * Returns true if the given string is a valid ISBN.
  *
  * In addition to verifying the check digit, this will also verify whether the
@@ -257,5 +265,5 @@ export function equivalentISBNs(isbn: string): [string] | [string, string] {
   const validISBN = parse(isbn);
   if (validISBN?.isbn10 && validISBN.isbn13) return [validISBN.isbn13, validISBN.isbn10];
   else if (validISBN?.isbn13) return [validISBN.isbn13];
-  else return [isbn.replace(/\s|-/g, '')];
+  else return [normalizeISBN(isbn)];
 }

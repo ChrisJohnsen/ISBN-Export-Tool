@@ -1,5 +1,5 @@
 import { describe, test, expect, jest } from '@jest/globals';
-import { ContentError, EditionsISBNResults, equivalentISBNs, otherEditionsOfISBN, validateISBN, type Fetcher } from 'utils';
+import { ContentError, EditionsISBNResults, equivalentISBNs, normalizeISBN, otherEditionsOfISBN, validateISBN, type Fetcher } from 'utils';
 
 function isbnURL(isbn: string) {
   return `https://openlibrary.org/isbn/${isbn}.json`;
@@ -176,7 +176,7 @@ function paginateEditions(pageSize: number, workId: string, editionISBNs: (strin
   }
   function editionsResponse(editionISBNs: (string | string[])[], next?: { workId: string, nextStart: number }) {
     function tagged(isbns: (string | string[])[]) {
-      const tag = (isbn: string) => isbn.replace(/\s|-/g, '').length == 10 ? { isbn_10: isbn } : { isbn_13: isbn };
+      const tag = (isbn: string) => normalizeISBN(isbn).length == 10 ? { isbn_10: isbn } : { isbn_13: isbn };
       return isbns.map(is => Array.isArray(is) ? Object.assign({}, ...is.map(tag)) : tag(is));
     }
     return {
@@ -213,7 +213,7 @@ class FetcherBuilder {
     this.originalISBNs = new Set();
     this.workEditionsPages = new Map();
     Object.entries(data.works).forEach(([workId, isbns]) => {
-      isbns.flat().forEach(isbn => this.originalISBNs.add(isbn.replace(/\s|-/g, '').toUpperCase()));
+      isbns.flat().forEach(isbn => this.originalISBNs.add(normalizeISBN(isbn)));
       const editionsPages = paginateEditions(data.pageSize ?? +Infinity, workId, isbns);
       this.workEditionsPages.set(workId, editionsPages);
     });
@@ -598,22 +598,11 @@ describe('validateISBN', () => {
 
 describe('equivalentISBNs', () => {
   test.each([
-    'NotAnISBN',
-    '1234567890',
-    '1234567890123',
-  ])('leaves invalid ISBNs alone', notISBN => {
-    expect(equivalentISBNs(notISBN)).toStrictEqual([notISBN]);
-  });
-
-  test.each([
-    'not an\t isbn',
-    '12-345\r6789-0',
-    '123-45-678\n 9012 3',
-  ])('removes spaces and hyphens from invalid ISBNs', notISBN => {
-    const result = equivalentISBNs(notISBN);
-
-    expect(result).toHaveLength(1);
-    expect(result).toContainEqual(expect.stringMatching(/^[^\s-]+$/));
+    ['not an\t isbn', 'NOTANISBN'],
+    ['12-345\r6789-0', '1234567890'],
+    ['123-45-678\n 9012 3', '1234567890123'],
+  ])('just normalizes invalid ISBNs', (notISBN, normal) => {
+    expect(equivalentISBNs(notISBN)).toStrictEqual([normal]);
   });
 
   test.each([
@@ -652,8 +641,8 @@ describe('equivalentISBNs', () => {
     const result10 = equivalentISBNs(isbn10);
     const result13 = equivalentISBNs(isbn13);
 
-    const bare10 = isbn10.replace(/\s|-/g, '');
-    const bare13 = isbn13.replace(/\s|-/g, '');
+    const bare10 = normalizeISBN(isbn10);
+    const bare13 = normalizeISBN(isbn13);
 
     expect(bare10).toHaveLength(10);
     expect(bare13).toHaveLength(13);
@@ -670,7 +659,7 @@ describe('equivalentISBNs', () => {
     '979-10 00-00000 8',
   ])('valid 979 ISBN-13: yields nothing extra', untenable => {
     const result = equivalentISBNs(untenable);
-    const bare = untenable.replace(/\s|-/g, '');
+    const bare = normalizeISBN(untenable);
 
     expect(bare).toHaveLength(13);
     expect(result).toHaveLength(1);
