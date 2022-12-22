@@ -44,7 +44,8 @@ class GetISBNs extends Command {
   static usage = Command.Usage({
     description: 'Extract ISBNs from items on specified shelf',
     details: `
-      For each items on the specified shelf, produce its ISBN as output.
+      For each item on the specified shelf that has an ISBN,
+      produce its ISBN as output.
       One ISBN is produced per line.
     `,
     examples: [
@@ -58,8 +59,11 @@ class GetISBNs extends Command {
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
     const isbns = await reduceCSV(csv, collect(
-      row => row['Exclusive Shelf'] == this.shelf && row.ISBN13 != '=""'
-        ? [row.ISBN13.replace(/^="(.*)"$/, '$1')]
+      row => row['Exclusive Shelf'] == this.shelf
+        ? (['ISBN13', 'ISBN'] as const)
+          .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
+          .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
+          .filter(isbn => isbn != '')
         : []
     ));
     this.context.stdout.write(isbns.join('\n'));
