@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { Builtins, Cli, Command, Option } from 'clipanion';
-import { collect, pipe, flatPipe, filter, prop, eq, map, pick, not } from 'utils';
+import { collect, pipe, flatPipe, filter, prop, eq, map, pick } from 'utils';
 import { reduceCSV, toCSV } from 'utils';
 
 class MissingISBNs extends Command {
@@ -57,17 +57,11 @@ class GetISBNs extends Command {
   shelf = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    const isbns = await reduceCSV(csv,
-      collect(
-        pipe(
-          flatPipe(
-            filter(pipe(prop('Exclusive Shelf'), eq(this.shelf))),
-            filter(pipe(prop('ISBN13'), eq('=""'), not)),
-          ),
-          map(prop('ISBN13')),
-          map(isbn => isbn.replace(/^="(.*)"$/, '$1')),
-        ))
-    );
+    const isbns = await reduceCSV(csv, collect(
+      row => row['Exclusive Shelf'] == this.shelf && row.ISBN13 != '=""'
+        ? [row.ISBN13.replace(/^="(.*)"$/, '$1')]
+        : []
+    ));
     this.context.stdout.write(isbns.join('\n'));
     this.context.stdout.write('\n');
     this.context.stderr.write(isbns.length.toString());
