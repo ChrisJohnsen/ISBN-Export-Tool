@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { Builtins, Cli, Command, Option } from 'clipanion';
-import { collect, pipe, flatPipe, filter, prop, eq, map, pick } from 'utils';
+import { collect, pipe, flatPipe, filter, prop, eq, map, pick, equivalentISBNs } from 'utils';
 import { reduceCSV, toCSV } from 'utils';
 
 class MissingISBNs extends Command {
@@ -50,22 +50,30 @@ class GetISBNs extends Command {
     `,
     examples: [
       ['Get ISBNs for items shelved as `to-read`.',
-        '$0 getISBNs path/to/export.csv to-read']
+        '$0 getISBNs path/to/export.csv to-read'],
+      ['Get `to-read` ISBNs in both ISBN-10 and ISBN-13 versions (when available).',
+        '$0 getISBNs --both path/to/export.csv to-read'],
     ]
   });
   static paths = [['get-ISBNs'], ['isbns']];
+  bothISBNs = Option.Boolean('--both', {
+    description: `
+      Produce both ISBN-10 and ISBN-13 for any shelved ISBN that has equivalent versions (i.e. 978-prefixed ISBN-13s).
+    ` });
   csvPath = Option.String();
   shelf = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    const isbns = await reduceCSV(csv, collect(
+    function unique<T>(things: Iterable<T>): T[] { return Array.from(new Set(things)) }
+    const isbns = unique(await reduceCSV(csv, collect(
       row => row['Exclusive Shelf'] == this.shelf
         ? (['ISBN13', 'ISBN'] as const)
           .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
           .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
           .filter(isbn => isbn != '')
+          .flatMap(isbn => this.bothISBNs ? equivalentISBNs(isbn) : [isbn])
         : []
-    ));
+    )));
     this.context.stdout.write(isbns.join('\n'));
     this.context.stdout.write('\n');
     this.context.stderr.write(isbns.length.toString());
