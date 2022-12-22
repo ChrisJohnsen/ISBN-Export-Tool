@@ -24,7 +24,7 @@ class MissingISBNs extends Command {
   csvPath = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    await reduceCSV(csv,
+    const noISBNs = await reduceCSV(csv,
       collect(
         pipe(
           flatPipe(
@@ -33,14 +33,12 @@ class MissingISBNs extends Command {
           ),
           map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])),
         ))
-    ).then(noISBNs =>
-      [toCSV(noISBNs), noISBNs.length]
-    ).then(([csv, count]) => {
-      this.context.stdout.write(csv);
-      this.context.stdout.write('\n');
-      this.context.stderr.write(count.toString());
-      this.context.stderr.write('\n');
-    });
+    );
+    const csvOut = toCSV(noISBNs);
+    this.context.stdout.write(csvOut);
+    this.context.stdout.write('\n');
+    this.context.stderr.write(noISBNs.length.toString());
+    this.context.stderr.write('\n');
   }
 }
 
@@ -61,7 +59,7 @@ class GetISBNs extends Command {
   shelf = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    await reduceCSV(csv,
+    const isbns = await reduceCSV(csv,
       collect(
         pipe(
           flatPipe(
@@ -71,12 +69,11 @@ class GetISBNs extends Command {
           map(prop('ISBN13')),
           map(isbn => isbn.replace(/^="(.*)"$/, '$1')),
         ))
-    ).then(isbns => {
-      this.context.stdout.write(isbns.join('\n'));
-      this.context.stdout.write('\n');
-      this.context.stderr.write(isbns.length.toString());
-      this.context.stderr.write('\n');
-    });
+    );
+    this.context.stdout.write(isbns.join('\n'));
+    this.context.stdout.write('\n');
+    this.context.stderr.write(isbns.length.toString());
+    this.context.stderr.write('\n');
   }
 }
 
