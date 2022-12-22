@@ -24,16 +24,14 @@ class MissingISBNs extends Command {
   csvPath = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    const noISBNs = await reduceCSV(csv,
-      collect(
-        pipe(
-          flatPipe(
-            filter(pipe(prop('ISBN13'), eq('=""'))),
-            filter(pipe(prop('Exclusive Shelf'), eq('to-read'))),
-          ),
-          map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])),
-        ))
-    );
+    const noISBNs = await reduceCSV(csv, collect(
+      pipe(
+        flatPipe(
+          filter(pipe(prop('ISBN13'), eq('=""'))),
+          filter(pipe(prop('Exclusive Shelf'), eq('to-read'))),
+        ),
+        map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])),
+      )));
     const csvOut = toCSV(noISBNs);
     this.context.stdout.write(csvOut);
     this.context.stdout.write('\n');
