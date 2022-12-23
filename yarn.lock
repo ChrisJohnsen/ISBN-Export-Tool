@@ -4773,7 +4773,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typanion@npm:^3.8.0":
+"typanion@npm:^3.12.1, typanion@npm:^3.8.0":
   version: 3.12.1
   resolution: "typanion@npm:3.12.1"
   checksum: 492540c6ac09c20b1693dd4ca4278f95d3771892c551aad26844faec0bbbdafc28c72b0c0df60ac68252b1fade7e0e664df517d6f0be702c32929368814373c2
@@ -4897,6 +4897,7 @@ __metadata:
     outdent: "npm:^0.8.0"
     papaparse: "npm:^5.3.2"
     rollup-plugin-ts: "npm:^3.0.2"
+    typanion: "npm:^3.12.1"
   languageName: unknown
   linkType: soft
 
