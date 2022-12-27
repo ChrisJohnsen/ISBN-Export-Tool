@@ -14,6 +14,7 @@ export default [
       { file: 'dist/index.js' },
       { file: 'dist/index.cjs', format: 'cjs' },
     ],
+    external: ['papaparse', 'isbn3'],
     plugins: externalPlugins,
   },
 ];

@@ -24,16 +24,4 @@ export default [
     external: [],
     plugins: externalPlugins,
   },
-  {
-    input: 'src/goodreads-tool.ts',
-    output: [
-      { file: 'dist/goodreads-tool.mjs' },
-      {
-        file: 'dist/goodreads-tool.cjs',
-        format: 'cjs',
-      },
-    ],
-    external: ['clipanion'],
-    plugins: basePlugins,
-  },
 ];
