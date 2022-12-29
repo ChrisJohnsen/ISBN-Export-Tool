@@ -63,7 +63,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     }, { valid: new Set(), faults: [] as ContentError[] });
 
     if (validWorkIds.size < 1) {
-      const newFault = new ContentError(`isbn/${isbn}.json no valid workIds`);
+      const newFault = new ContentError(`isbn/${isbn}.json has no valid workIds`);
       if (workFaults.length < 1) throw newFault;
       if (workFaults.length == 1) throw workFaults[0];
       return {
@@ -180,7 +180,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     }, { isbns: new Set(), faults: [] } as { isbns: Set<string>, faults: ContentError[] });
 
     if (results.isbns.size < 1) {
-      const newFault = new ContentError(`no valid ISBNs among in all editions.jsons for all ${isbn} works`);
+      const newFault = new ContentError(`no valid ISBNs among all editions.jsons for all ${isbn} works`);
       if (workFaults.length < 1) {
         if (results.faults.length < 1) throw newFault;
         else if (results.faults.length == 1) throw results.faults[0];
