@@ -1,5 +1,7 @@
 import { describe, test, expect, jest } from '@jest/globals';
 import { ContentError, EditionsISBNResults, equivalentISBNs, normalizeISBN, otherEditionsOfISBN, validateISBN, type Fetcher } from 'utils';
+import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 function isbnURL(isbn: string) {
   return `https://openlibrary.org/isbn/${isbn}.json`;
@@ -443,7 +445,7 @@ describe('editions with next links', () => {
   });
 });
 
-describe('okay, but some faults', () => {
+describe('full isbn & editions tests', () => {
   test('multiple works, some invalid, multiple editions, some invalid', async () => {
     const data = new FetcherBuilder({
       isbn: '9876543210',
@@ -544,6 +546,54 @@ describe('okay, but some faults', () => {
     expect(result.isbns?.has('432109876X')).toBeTruthy();
     expect(result.workFaults).toHaveLength(0);
     expect(result.editionsFaults).toHaveLength(0);
+  });
+
+  test('real (saved) data', async () => {
+    const furl = (file: string) => {
+      if (__dirname)
+        return join(__dirname, file);
+      else
+        return new URL(file, import.meta.url);
+    };
+    const isbnResponse = await readFile(furl('isbn.json'), 'utf-8');
+    const editionsResponse = await readFile(furl('editions.json'), 'utf-8');
+
+    const fetcher = jest.fn<Fetcher>()
+      .mockResolvedValueOnce(isbnResponse)
+      .mockResolvedValueOnce(editionsResponse);
+
+    const isbn = '0-7653-9276-3';
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveReturnedTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
+    expect(fetcher).toHaveBeenNthCalledWith(2, editionsURL('OL17801248W'));
+
+    expect(result.workFaults).toHaveLength(0);
+    expect(result.editionsFaults).toHaveLength(0);
+
+    result.workFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+    result.editionsFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
+
+    expect(result.isbns).toBeDefined();
+
+    if (!result.isbns) throw 'isbns missing from result'; // let TS know isbns is not undefined
+
+    expect(Array.from(result.isbns)).toStrictEqual(['153842424X',
+      '9781538424247',
+      '9781786693044',
+      '1786693070',
+      '9781786693075',
+      '0765392763',
+      '9780765392763',
+      '0765392771',
+      '9780765392770',
+      '1786693062',
+      '9781786693068',
+      '1786693054',
+      '9781786693051',
+      '9780765392787']);
   });
 });
 
