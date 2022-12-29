@@ -133,15 +133,22 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
         function process<K extends string>(k: K, o: unknown) {
           if (isObject(o) && hasProperty(k, o)) {
             const v = o[k];
-            if (!isString(v))
-              faults.push(new ContentError(`${editionsURLTail} .entries[${index}].${k} is not a string`));
-            else isbns.push(v);
+            if (!Array.isArray(v))
+              faults.push(new ContentError(`${editionsURLTail} .entries[${index}].${k} is not an array`));
+            else {
+              v.forEach((isbn, i) => {
+                if (!isString(isbn))
+                  faults.push(new ContentError(`${editionsURLTail} .entries[${index}].${k}[${i}] is not a string`));
+                else
+                  isbns.push(isbn);
+              });
+            }
           }
         }
         process('isbn_10', entry);
         process('isbn_13', entry);
         if (isbns.length < 1)
-          faults.push(new ContentError(`${editionsURLTail} .entries[${index}] has neither .isbn_10 nor .isbn_13`));
+          faults.push(new ContentError(`${editionsURLTail} .entries[${index}] has no ISBNs`));
         isbns.forEach(isbn => allISBNs.add(normalizeISBN(isbn)));
       });
       return { isbns: allISBNs, faults, ...isString(next) ? { next } : {} };

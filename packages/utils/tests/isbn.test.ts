@@ -176,7 +176,7 @@ function paginateEditions(pageSize: number, workId: string, editionISBNs: (strin
   }
   function editionsResponse(editionISBNs: (string | string[])[], next?: { workId: string, nextStart: number }) {
     function tagged(isbns: (string | string[])[]) {
-      const tag = (isbn: string) => normalizeISBN(isbn).length == 10 ? { isbn_10: isbn } : { isbn_13: isbn };
+      const tag = (isbn: string) => normalizeISBN(isbn).length == 10 ? { isbn_10: [isbn] } : { isbn_13: [isbn] };
       return isbns.map(is => Array.isArray(is) ? Object.assign({}, ...is.map(tag)) : tag(is));
     }
     return {
