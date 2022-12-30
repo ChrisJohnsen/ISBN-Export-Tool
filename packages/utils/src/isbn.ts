@@ -1,5 +1,7 @@
 // parse Open Library resources to find ISBNs of other editions of given ISBN
 
+const OlUrlPrefix = 'https://openlibrary.org';
+
 export type Fetcher = (url: string) => Promise<string>;
 
 export class ContentError {
@@ -26,177 +28,226 @@ export interface EditionsISBNResults {
 export function otherEditionsOfISBN(fetch: Fetcher, isbn: string): Promise<EditionsISBNResults>;
 export function otherEditionsOfISBN(fetch: Fetcher): (isbn: string) => Promise<EditionsISBNResults>;
 export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<EditionsISBNResults> | ((isbn: string) => Promise<EditionsISBNResults>) {
-  async function more(isbn: string): Promise<EditionsISBNResults> {
-    const response = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
-    const edition = (() => {
-      try { return JSON.parse(response) } catch (e) {
-        throw new ContentError(`isbn/${isbn}.json response is not parseable as JSON`);
+
+  if (isbn === undefined) {
+    return otherEditionsOf_ISBN;
+  } else {
+    return otherEditionsOf_ISBN(isbn);
+  }
+
+  async function otherEditionsOf_ISBN(isbn: string): Promise<EditionsISBNResults> {
+
+    const { workIDs, faults: workFaults } = await getWorkIDsForISBN(fetch, isbn);
+
+    if (workIDs.size < 1) return { workFaults, editionsFaults: [] };
+
+    const { isbns, faults: editionsFaults } =
+      (await Promise.allSettled(Array.from(workIDs).map(
+        async workID => processAllEditionsPages(fetch, editionsURL(workID)))))
+        .reduce(absorbSettledResult, new EditionsResult);
+
+    if (isbns.size < 1) {
+
+      const newFault = new ContentError(`no valid ISBNs among all editions.jsons for all ${isbn} works`);
+
+      if (workFaults.length < 1) {
+        if (editionsFaults.length < 1) throw newFault;
+        else if (editionsFaults.length == 1) throw editionsFaults[0];
       }
-    })();
-    if (!isObject(edition))
-      throw new ContentError(`isbn/${isbn}.json response is not an object`);
 
-    if (!hasArrayProperty('works', edition))
-      throw new ContentError(`isbn/${isbn}.json response .works is missing or not an array`);
-    if (edition.works.length < 1)
-      throw new ContentError(`isbn/${isbn}.json response .works is empty`);
+      return {
+        workFaults,
+        editionsFaults: [newFault].concat(editionsFaults)
+      };
+    }
+    return { isbns, workFaults, editionsFaults };
 
-    const workIds = edition.works.map((workObj, index) => {
+    function editionsURL(workID: string) {
+      return `${OlUrlPrefix}/works/${workID}/editions.json`;
+    }
+
+    function absorbSettledResult(result: EditionsResult, settled: PromiseSettledResult<EditionsResult>) {
+      if (settled.status == 'fulfilled')
+        return result.absorb(settled.value);
+      else
+        return result.addError(settled.reason);
+    }
+  }
+}
+
+class WorkIDsResult {
+  workIDs: Set<string> = new Set;
+  faults: ContentError[] = [];
+  addWorkID(workID: string) {
+    this.workIDs?.add(workID);
+    return this;
+  }
+  addFault(fault: ContentError) {
+    this.faults.push(fault);
+    return this;
+  }
+}
+
+async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<WorkIDsResult> {
+
+  const urlTail = `/isbn/${isbn}.json`;
+
+  const response = await fetch(`${OlUrlPrefix}${urlTail}`);
+
+  const edition = (() => {
+    try { return JSON.parse(response) } catch (e) {
+      throw new ContentError(`${urlTail} response is not parseable as JSON`);
+    }
+  })();
+
+  if (!isObject(edition))
+    throw new ContentError(`${urlTail} response is not an object`);
+  if (!hasArrayProperty('works', edition))
+    throw new ContentError(`${urlTail} response .works is missing or not an array`);
+  if (edition.works.length < 1)
+    throw new ContentError(`${urlTail} response .works is empty`);
+
+  const result = edition.works.reduce(
+    (result: WorkIDsResult, workObj, index) => {
+
       if (!isObject(workObj))
-        return new ContentError(`isbn/${isbn}.json response .works[${index}] is missing or not an object`);
+        return result.addFault(new ContentError(`${urlTail} response .works[${index}] is missing or not an object`));
       if (!hasStringProperty('key', workObj))
-        return new ContentError(`isbn/${isbn}.json response .works[${index}].key is missing or not a string`);
+        return result.addFault(new ContentError(`${urlTail} response .works[${index}].key is missing or not a string`));
 
       const workKey: string = workObj.key;
       const prefix = '/works/';
 
       if (!workKey.startsWith(prefix))
-        return new ContentError(`isbn/${isbn}.json response .works[${index}].key (${workKey}) does not start with ${prefix}`);
+        return result.addFault(new ContentError(`${urlTail} response .works[${index}].key (${workKey}) does not start with ${prefix}`));
 
-      return workKey.slice(prefix.length);
-    });
+      return result.addWorkID(workKey.slice(prefix.length));
+    },
+    new WorkIDsResult);
 
-    const { valid: validWorkIds, faults: workFaults } = workIds.reduce((partition, workId) => {
-      if (isString(workId)) partition.valid.add(workId);
-      else partition.faults.push(workId);
-      return partition;
-    }, { valid: new Set(), faults: [] as ContentError[] });
+  if (result.workIDs.size < 1) {
 
-    if (validWorkIds.size < 1) {
-      const newFault = new ContentError(`isbn/${isbn}.json has no valid workIds`);
-      if (workFaults.length < 1) throw newFault;
-      if (workFaults.length == 1) throw workFaults[0];
-      return {
-        workFaults: [newFault].concat(workFaults),
-        editionsFaults: [],
-      };
+    const newFault = new ContentError(`${urlTail} has no valid workIDs`);
+
+    if (result.faults.length < 1) throw newFault;
+    if (result.faults.length == 1) throw result.faults[0];
+
+    return result.addFault(newFault);
+  }
+
+  return result;
+}
+
+class EditionsResult {
+  isbns: Set<string> = new Set();
+  faults: ContentError[] = [];
+  next?: string;
+  addISBN(isbn: string) {
+    this.isbns.add(isbn);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addError(err: any) {
+    const fault = err instanceof ContentError ? err : new ContentError(err.toString());
+    return this.addFault(fault);
+  }
+  addFault(fault: ContentError) {
+    this.faults.push(fault);
+    return this;
+  }
+  throwOrAddFault(fault: ContentError) {
+    if (this.faults.length < 1 && !this.next) throw fault;
+    this.addFault(fault);
+    return this;
+  }
+  absorb(other: EditionsResult) {
+    other.isbns.forEach(isbn => this.isbns.add(isbn));
+    other.faults.forEach(fault => this.faults.push(fault));
+    return this;
+  }
+}
+
+async function processAllEditionsPages(fetch: Fetcher, url: string): Promise<EditionsResult> {
+
+  return processEditionsURL(fetch, url).then(
+
+    results => results.next
+
+      ? processAllEditionsPages(fetch, results.next)
+
+        .then(
+          nextResults => results.absorb(nextResults),
+          err => results.addError(err)
+        )
+
+      : results,
+
+    err => { throw err });
+}
+
+async function processEditionsURL(fetch: Fetcher, url: string): Promise<EditionsResult> {
+
+  const response = await fetch(url);
+
+  const urlTail = url.startsWith(OlUrlPrefix) ? url.slice(OlUrlPrefix.length) : url;
+
+  const editions = (() => {
+    try { return JSON.parse(response) } catch (e) {
+      throw new ContentError(`${urlTail} response is not parseable as JSON`);
     }
+  })();
+  if (!isObject(editions))
+    throw new ContentError(`${urlTail} response is not an object`);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function convertError(err: any) {
-      return err instanceof ContentError ? err : new ContentError(err.toString());
+  const result = new EditionsResult;
+
+  if (hasObjectProperty('links', editions) && hasProperty('next', editions.links)) {
+    if (!isString(editions.links.next))
+      result.addFault(new ContentError(`${urlTail} .entires.links.next is present but not a string`));
+    else {
+      result.next = editions.links.next;
     }
+  }
 
-    type Results = { isbns: Set<string>, faults: ContentError[] };
+  if (!hasArrayProperty('entries', editions))
+    return result.throwOrAddFault(new ContentError(`${urlTail} response .entries is missing or not an array`));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function addError(results: Results, err: any): Results {
-      return { ...results, faults: results.faults.concat([convertError(err)]) };
-    }
+  return editions.entries.reduce(
+    (result: EditionsResult, entry, index) => {
 
-    function combineResults(results: Results, newResults: Results): Results {
-      function* concatIterables<T>(...iterables: Iterable<T>[]): Iterable<T> {
-        for (const iterable of iterables) {
-          yield* iterable;
-        }
-      }
-      return {
-        isbns: new Set(concatIterables(results.isbns, newResults.isbns)),
-        faults: results.faults.concat(newResults.faults),
-      };
-    }
+      const entryResult = ['isbn_10', 'isbn_13'].reduce(
+        (entryResult, k) => processEditionsEntry(entryResult, entry, k),
+        new EditionsResult);
 
-    const EditionsURLPrefix = 'https://openlibrary.org/works/';
+      if (entryResult.isbns.size < 1)
+        entryResult.addFault(new ContentError(`${urlTail} .entries[${index}] has no ISBNs`));
 
-    async function processEditionsURL(fetch: Fetcher, url: string) {
-      const response = await fetch(url);
-      const editionsURLTail = url.startsWith(EditionsURLPrefix) ? url.slice(EditionsURLPrefix.length) : url;
-      const editions = (() => {
-        try { return JSON.parse(response) } catch (e) {
-          throw new ContentError(`${editionsURLTail} response is not parseable as JSON`);
-        }
-      })();
-      if (!isObject(editions))
-        throw new ContentError(`${editionsURLTail} response is not an object`);
+      return result.absorb(entryResult);
 
-      const faults: ContentError[] = [];
-      let next: string | undefined;
-      if (hasObjectProperty('links', editions) && hasProperty('next', editions.links)) {
-        if (!isString(editions.links.next))
-          faults.push(new ContentError(`${editionsURLTail} .entires.links.next is present but not a string`));
-        else
-          next = editions.links.next;
-      }
+      function processEditionsEntry(result: EditionsResult, entry: unknown, isbnKey: string): EditionsResult {
 
-      const allISBNs: Set<string> = new Set();
+        if (isObject(entry) && hasProperty(isbnKey, entry)) {
 
-      if (!hasArrayProperty('entries', editions)) {
-        const fault = new ContentError(`${editionsURLTail} response .entries is missing or not an array`);
-        if (faults.length < 1 && !next)
-          throw fault;
-        else
-          return { isbns: allISBNs, faults: faults.concat([fault]), ...isString(next) ? { next } : {} };
-      }
+          const entryArray = entry[isbnKey];
 
-      editions.entries.forEach((entry, index) => {
-        const isbns: string[] = [];
-        function process<K extends string>(k: K, o: unknown) {
-          if (isObject(o) && hasProperty(k, o)) {
-            const v = o[k];
-            if (!Array.isArray(v))
-              faults.push(new ContentError(`${editionsURLTail} .entries[${index}].${k} is not an array`));
-            else {
-              v.forEach((isbn, i) => {
-                if (!isString(isbn))
-                  faults.push(new ContentError(`${editionsURLTail} .entries[${index}].${k}[${i}] is not a string`));
-                else
-                  isbns.push(isbn);
-              });
-            }
+          if (!Array.isArray(entryArray))
+            result.addFault(new ContentError(`${urlTail} .entries[${index}].${isbnKey} is not an array`));
+          else {
+
+            entryArray.forEach((isbn, i) => {
+
+              if (!isString(isbn))
+                result.addFault(new ContentError(`${urlTail} .entries[${index}].${isbnKey}[${i}] is not a string`));
+              else
+                result.addISBN(normalizeISBN(isbn));
+
+            });
           }
         }
-        process('isbn_10', entry);
-        process('isbn_13', entry);
-        if (isbns.length < 1)
-          faults.push(new ContentError(`${editionsURLTail} .entries[${index}] has no ISBNs`));
-        isbns.forEach(isbn => allISBNs.add(normalizeISBN(isbn)));
-      });
-      return { isbns: allISBNs, faults, ...isString(next) ? { next } : {} };
-    }
 
-    async function processAllEditionsPages(fetch: Fetcher, url: string): Promise<Results> {
-      return processEditionsURL(fetch, url).then(results => {
-        if (isString(results.next))
-          return processAllEditionsPages(fetch, results.next).then(
-            nextResults => { return combineResults(results, nextResults) },
-            err => { return addError(results, err) }
-          );
-        return results;
-      }, err => {
-        throw err;
-      });
-    }
-
-    const results = (await Promise.allSettled(
-      Array.from(validWorkIds).map(async workId =>
-        processAllEditionsPages(fetch, `${EditionsURLPrefix}${workId}/editions.json`)))
-    ).reduce((results, editionResults) => {
-      if (editionResults.status == 'fulfilled') {
-        return combineResults(results, editionResults.value);
-      } else {
-        const reason = editionResults.reason;
-        return addError(results, reason);
+        return result;
       }
-    }, { isbns: new Set(), faults: [] } as { isbns: Set<string>, faults: ContentError[] });
-
-    if (results.isbns.size < 1) {
-      const newFault = new ContentError(`no valid ISBNs among all editions.jsons for all ${isbn} works`);
-      if (workFaults.length < 1) {
-        if (results.faults.length < 1) throw newFault;
-        else if (results.faults.length == 1) throw results.faults[0];
-      }
-      return {
-        workFaults,
-        editionsFaults: [newFault].concat(results.faults)
-      };
-    }
-    return { isbns: results.isbns, workFaults, editionsFaults: results.faults };
-  }
-  if (isbn === undefined) {
-    return more;
-  } else {
-    return more(isbn);
-  }
+    },
+    result);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
