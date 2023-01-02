@@ -1,4 +1,4 @@
 export * from './functional.js';
 export * from './csv.js';
 export * from './isbn.js';
-export * from './cachePromisor.js';
+export * from './cache.js';

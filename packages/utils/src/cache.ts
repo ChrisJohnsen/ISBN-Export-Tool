@@ -1,4 +1,5 @@
 import * as t from 'typanion';
+import { equivalentISBNs } from './isbn.js';
 
 export type CacheablePromisor<A, R> = (arg: A) => Promise<R>;
 
@@ -24,6 +25,53 @@ export function cachePromisor<A, R>(
   }): CacheablePromisor<A, R> & { saveCache(): SavedCache<A, R> } {
 
   return _cachePromisor(fn, saved);
+}
+
+/**
+ * Wrap "ISBNs of work's other editions" `(isbn:string)=>Set<string>` function
+ * with a cache.
+ *
+ * The `isbn` argument is normalized (no spaces or hyphens, attempted conversion
+ * to ISBN-13), so equivalent variations of an ISBN will hit the cache after any
+ * one variation has been previously called.
+ *
+ * Also, once resolved the resolved `Set` is modified in several ways:
+ * - the ISBNs are normalized
+ * - the normalized `isbn` argument is itself added to the result set so that
+ *   the "editions of" relation is reflexive.
+ * - the previously cached ISBNs of any of the current resolution's ISBNs are
+ *   combined together so that the "editions of" relation is transitive.
+ * - the combined result is cached under each ISBN so that the "editions of"
+ *   relation is symmetric.
+ */
+export function cacheEditionsPromisor(
+  fn: CacheablePromisor<string, Set<string>>,
+  saved?: SavedCache<string, Set<string>>)
+  : CacheablePromisor<string, Set<string>> & { saveCache(): SavedCache<string, Set<string>> } {
+
+  const transformedCache = new Map<string, Set<string>>;
+
+  const newfn = _cachePromisor(
+    fn,
+    saved ? { isArgument: t.isString(), isResolvesTo: t.isSet(t.isString()), cache: saved } : void 0,
+    {
+      getCacheKey: (arg: string) =>
+        equivalentISBNs(arg)[0],
+      getCachedResolution: (cacheKey: string) =>
+        getCached(cacheKey, transformedCache),
+      transformResolution: (cacheKey: string, resolution: Set<string>): Set<string> => {
+        const normalized = Array.from(resolution, isbn => equivalentISBNs(isbn)[0]);
+        normalized.push(cacheKey);
+        const isbns = new Set(normalized.reduce(
+          (isbns, isbn) => isbns.concat(Array.from(transformedCache.get(isbn) ?? [])),
+          Array.from(normalized))
+          .sort());
+        return isbns;
+      },
+      cacheResolution: (cacheKey: string, resolution: Set<string>) =>
+        resolution.forEach(isbn => transformedCache.set(isbn, resolution)),
+    });
+  return newfn;
 }
 
 // cache lookup helpers
