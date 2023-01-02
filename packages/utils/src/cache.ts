@@ -2,8 +2,61 @@ import * as t from 'typanion';
 import { equivalentISBNs } from './isbn.js';
 
 export type CacheablePromisor<A, R> = (arg: A) => Promise<R>;
+export type CachedPromisor<A, R> = ((arg: A) => Promise<R>) & {
+  /**
+   * Export the cached calls (for later import into another cache).
+   *
+   * If not marshalled (no argument provided), the result will be
+   * `JSON.stringify`-able if the `A` and `R` types are `JSON.stringify`-able.
+   *
+   * If marshalled (marshalling argument provided), the result will be
+   * `JSON.stringify`-able if the converted types are `JSON.stringify`-able.
+   *
+   * `saveArgument` is used to convert each cached argument, and
+   * `saveResolution` is used to convert each cached resolution. The converted
+   * types can be whatever is convenient for your saving, persistence, or
+   * transportation needs (e.g. `JSON.stringify`).
+   *
+   * These conversions can be handy if the argument or resolution types are not
+   * directly serializable in the data format you will be using (e.g. a `Set` is
+   * not usefully `JSON.stringify`-able).
+   *
+   */
+  saveCache(): SavedCache<A, R>,
+  saveCache<As, Rs>(marshalling: {
+    saveArgument: (argument: A) => As,
+    saveResolution: (resolution: R) => Rs,
+  }): SavedCache<As, Rs>,
+};
 
-type SavedCache<A, R> = [A, R][];
+export type SavedCache<A, R> = [argument: A, resolution: R][];
+
+const taggedV1 = <A, R>(t: [A, R]): [argument: A, resolution: R] => t;
+const v1 = <A, R>(a: t.StrictValidator<unknown, A>, r: t.StrictValidator<unknown, R>) => t.isArray(t.isTuple(taggedV1([a, r])));
+const isRestorableV1 = v1(t.isUnknown(), t.isUnknown());
+
+export const isRestorable = t.isOneOf([isRestorableV1]); // update SavedCache be non-unknown formulation of latest version's type!
+
+/**
+ * These options control how the provided data is imported to populate the new
+ * cache.
+ *
+ * The output of `saveCache()` (without the marshalling argument) is
+ * `SavedCache<A,R>` and can be directly imported when creating a newly cached
+ * function (assuming the argument and resolution types are the same).
+ *
+ * If `saveCache` was previously given a marshaling argument, its output was
+ * `SavedCache<As,Rs>` (where `As` and `Rs` were specified by the user-provided
+ * marshalling functions). Such input will need to be unmarshalled before it can
+ * be imported as a new cache for the original function. Pass the previously
+ * saved value as the `import` property and appropriate unmarshalling functions
+ * for the `restoreArgument` and `restoreResolution` properties.
+ */
+export type ImportCacheOptions<A, R> = SavedCache<A, R> | {
+  import: t.InferType<typeof isRestorable>,
+  restoreArgument: (savedArgument: unknown) => A,
+  restoreResolution: (savedResolution: unknown) => R,
+};
 
 /**
  * Wrap unary `async`/`Promise`-returning `fn` with a cache.
@@ -18,11 +71,8 @@ type SavedCache<A, R> = [A, R][];
  */
 export function cachePromisor<A, R>(
   fn: CacheablePromisor<A, R>,
-  saved?: {
-    isArgument: t.StrictValidator<unknown, A>,
-    isResolvesTo: t.StrictValidator<unknown, R>,
-    cache: SavedCache<A, R>
-  }): CacheablePromisor<A, R> & { saveCache(): SavedCache<A, R> } {
+  saved?: ImportCacheOptions<A, R>
+): CachedPromisor<A, R> {
 
   return _cachePromisor(fn, saved);
 }
@@ -46,14 +96,14 @@ export function cachePromisor<A, R>(
  */
 export function cacheEditionsPromisor(
   fn: CacheablePromisor<string, Set<string>>,
-  saved?: SavedCache<string, Set<string>>)
-  : CacheablePromisor<string, Set<string>> & { saveCache(): SavedCache<string, Set<string>> } {
+  saved?: ImportCacheOptions<string, Set<string>>)
+  : CachedPromisor<string, Set<string>> {
 
   const transformedCache = new Map<string, Set<string>>;
 
   const newfn = _cachePromisor(
     fn,
-    saved ? { isArgument: t.isString(), isResolvesTo: t.isSet(t.isString()), cache: saved } : void 0,
+    saved,
     {
       getCacheKey: (arg: string) =>
         equivalentISBNs(arg)[0],
@@ -107,32 +157,26 @@ interface CachedPromisorOverrides<A, R> {
 // the overridable caching wrapper
 function _cachePromisor<A, R>(
   fn: CacheablePromisor<A, R>,
-  saved?: {
-    isArgument: t.StrictValidator<unknown, A>,
-    isResolvesTo: t.StrictValidator<unknown, R>,
-    cache: SavedCache<A, R>
-  },
+  saved?: ImportCacheOptions<A, R>,
   overrides?: CachedPromisorOverrides<A, R>
-): CacheablePromisor<A, R> & { saveCache(): SavedCache<A, R> } {
+): CachedPromisor<A, R> {
 
   // cache of "raw" argument -> "raw" resolution
   let cache: Map<A, R>;
 
   // restore cache from saved, or start empty
-  if (saved) {
-
-    const validation = t.as(
-      saved.cache,
-      t.isArray(t.isTuple([saved.isArgument, saved.isResolvesTo])),
-      { errors: true });
-
-    if (!validation.errors)
-      cache = new Map(validation.value);
+  if (!saved)
+    cache = new Map;
+  else if ('import' in saved) {
+    if (isRestorableV1(saved.import))
+      cache = new Map(saved.import.flatMap(([arg, res]) => {
+        try { return [[saved.restoreArgument(arg), saved.restoreResolution(res)]] }
+        catch { return [] }
+      }));
     else
-      throw `invalid saved.cache: ${validation.errors.join('; ')}`;
-
+      throw 'saved.import does not match any recognized format';
   }
-  else cache = new Map;
+  else cache = new Map(saved);
 
   // override helpers
   const getCacheKey = (arg: A): A =>
@@ -192,7 +236,21 @@ function _cachePromisor<A, R>(
   };
 
   // export cached calls for possible persistence
-  newfn.saveCache = () => [...cache.entries()];
+  function saveCache<As, Rs>(marshalling?: {
+    saveArgument: (argument: A) => As,
+    saveResolution: (resolution: R) => Rs,
+  }): SavedCache<As, Rs> | SavedCache<A, R> {
+    if (!marshalling)
+      return [...cache.entries()];
+    else
+      return [...cache.entries()].map(([arg, res]) =>
+        [
+          marshalling.saveArgument(arg),
+          marshalling.saveResolution(res)
+        ]);
+  }
+
+  newfn.saveCache = saveCache;
 
   return newfn;
 }

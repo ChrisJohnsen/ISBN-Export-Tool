@@ -153,14 +153,33 @@ describe('cachePromisor', () => {
 
     await expect(cached('sixteen')).resolves.toBe(16);
 
-    const reCached = cachePromisor(fn, {
-      isArgument: t.isString(),
-      isResolvesTo: t.isNumber(),
-      cache: cached.saveCache(),
-    });
+    const reCached = cachePromisor(fn, cached.saveCache());
 
     await expect(cached('sixteen')).resolves.toBe(16);
     await expect(reCached('sixteen')).resolves.toBe(16);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  test('saveCache() marshalling and restore unmarshalling', async () => {
+    const fn = jest.fn<(arg: string) => Promise<number>>()
+      .mockResolvedValueOnce(18)
+      .mockResolvedValueOnce(19);
+
+    const cached = cachePromisor(fn);
+
+    await expect(cached('eighteen')).resolves.toBe(18);
+
+    const reCached = cachePromisor(fn, {
+      restoreArgument: (arg: unknown): string => t.as(arg, t.isString(), { throw: true }).slice(1, -1),
+      restoreResolution: (resolution: unknown): number => parseInt(t.as(resolution, t.isString(), { throw: true })),
+      import: cached.saveCache({
+        saveArgument: (arg: string): string => `X${arg}X`,
+        saveResolution: (resolution: number): string => `${resolution}`,
+      }),
+    });
+
+    await expect(cached('eighteen')).resolves.toBe(18);
+    await expect(reCached('eighteen')).resolves.toBe(18);
     expect(fn).toHaveBeenCalledTimes(1);
   });
 });
