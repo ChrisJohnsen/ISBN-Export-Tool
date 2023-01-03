@@ -75,6 +75,8 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
   }
 }
 
+import * as t from 'typanion';
+
 class WorkIDsResult {
   workIDs: Set<string> = new Set;
   faults: ContentError[] = [];
@@ -94,33 +96,39 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<WorkIDsR
 
   const response = await fetch(`${OlUrlPrefix}${urlTail}`);
 
-  const edition = (() => {
+  const json = (() => {
     try { return JSON.parse(response) } catch (e) {
       throw new ContentError(`${urlTail} response is not parseable as JSON`);
     }
   })();
 
-  if (!isObject(edition))
-    throw new ContentError(`${urlTail} response is not an object`);
-  if (!hasArrayProperty('works', edition))
-    throw new ContentError(`${urlTail} response .works is missing or not an array`);
+  // .works is an array?
+  const hasWorksArray = t.isPartial({ works: t.isArray(t.isUnknown()) });
+  const validation = t.as(json, hasWorksArray, { errors: true });
+  if (validation.errors)
+    throw new ContentError(`${urlTail}: ${validation.errors.join('; ')}`);
+  const edition = validation.value;
+
   if (edition.works.length < 1)
     throw new ContentError(`${urlTail} response .works is empty`);
 
+  // collect workIDs from .works[n].key
   const result = edition.works.reduce(
     (result: WorkIDsResult, workObj, index) => {
 
-      if (!isObject(workObj))
-        return result.addFault(new ContentError(`${urlTail} response .works[${index}] is missing or not an object`));
-      if (!hasStringProperty('key', workObj))
-        return result.addFault(new ContentError(`${urlTail} response .works[${index}].key is missing or not a string`));
+      // .works[n].key is a string?
+      const hasKey = t.isPartial({ key: t.isString() });
+      const validation = t.as(workObj, hasKey, { errors: true });
+      if (validation.errors)
+        return result.addFault(new ContentError(`${urlTail}.works[${index}] malformed?: ${validation.errors.join('; ')}`));
+      const workKey: string = validation.value.key;
 
-      const workKey: string = workObj.key;
+      // workID has /works/ prefix?
       const prefix = '/works/';
-
       if (!workKey.startsWith(prefix))
         return result.addFault(new ContentError(`${urlTail} response .works[${index}].key (${workKey}) does not start with ${prefix}`));
 
+      // strip /works/ prefix
       return result.addWorkID(workKey.slice(prefix.length));
     },
     new WorkIDsResult);
@@ -190,94 +198,46 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
 
   const urlTail = url.startsWith(OlUrlPrefix) ? url.slice(OlUrlPrefix.length) : url;
 
-  const editions = (() => {
+  // parse JSON
+  const json = (() => {
     try { return JSON.parse(response) } catch (e) {
       throw new ContentError(`${urlTail} response is not parseable as JSON`);
     }
   })();
-  if (!isObject(editions))
-    throw new ContentError(`${urlTail} response is not an object`);
 
   const result = new EditionsResult;
 
-  if (hasObjectProperty('links', editions) && hasProperty('next', editions.links)) {
-    if (!isString(editions.links.next))
-      result.addFault(new ContentError(`${urlTail} .entires.links.next is present but not a string`));
-    else {
-      result.next = editions.links.next;
-    }
-  }
+  // if there is a next page (.links.next) capture it right away
+  if (t.isPartial({ links: t.isPartial({ next: t.isString() }) })(json))
+    result.next = json.links.next;
 
-  if (!hasArrayProperty('entries', editions))
-    return result.throwOrAddFault(new ContentError(`${urlTail} response .entries is missing or not an array`));
+  // has .entries[n].isbn_{10,13}[n]?
+  const isEditions = t.isPartial({
+    entries: t.isArray(t.isPartial({
+      isbn_10: t.isOptional(t.isArray(t.isString())),
+      isbn_13: t.isOptional(t.isArray(t.isString())),
+    })),
+  });
+  const validation = t.as(json, isEditions, { errors: true });
+  if (validation.errors)
+    return result.addFault(new ContentError(`${urlTail} malformed?: ${validation.errors.join('; ')}`));
+  const editions = validation.value;
 
+  // collect ISBNs from .entries[n].isbn_{10,13}[n]
   return editions.entries.reduce(
     (result: EditionsResult, entry, index) => {
 
-      const entryResult = ['isbn_10', 'isbn_13'].reduce(
-        (entryResult, k) => processEditionsEntry(entryResult, entry, k),
-        new EditionsResult);
+      const entryResult = new EditionsResult;
+
+      [...entry.isbn_10 ?? [], ...entry.isbn_13 ?? []]
+        .forEach(isbn => entryResult.addISBN(normalizeISBN(isbn)));
 
       if (entryResult.isbns.size < 1)
         entryResult.addFault(new ContentError(`${urlTail} .entries[${index}] has no ISBNs`));
 
       return result.absorb(entryResult);
-
-      function processEditionsEntry(result: EditionsResult, entry: unknown, isbnKey: string): EditionsResult {
-
-        if (isObject(entry) && hasProperty(isbnKey, entry)) {
-
-          const entryArray = entry[isbnKey];
-
-          if (!Array.isArray(entryArray))
-            result.addFault(new ContentError(`${urlTail} .entries[${index}].${isbnKey} is not an array`));
-          else {
-
-            entryArray.forEach((isbn, i) => {
-
-              if (!isString(isbn))
-                result.addFault(new ContentError(`${urlTail} .entries[${index}].${isbnKey}[${i}] is not a string`));
-              else
-                result.addISBN(normalizeISBN(isbn));
-
-            });
-          }
-        }
-
-        return result;
-      }
     },
     result);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isString(value: any): value is string {
-  return typeof value == 'string';
-}
-
-function hasProperty<K extends string, O extends object, T>
-  (key: K, obj: O): obj is O & { [k in K]: T } {
-  return key in obj;
-}
-
-function hasStringProperty<K extends string, O extends Record<string, unknown>>
-  (keyString: K, obj: O): obj is O & { [k in K]: string } {
-  return keyString in obj && isString(obj[keyString]);
-}
-
-function hasArrayProperty<K extends string, O extends Record<string, unknown>, T>
-  (keyString: K, obj: O): obj is O & { [k in K]: T[] } {
-  return keyString in obj && obj[keyString] && Array.isArray(obj[keyString]);
-}
-
-function hasObjectProperty<K extends string, O extends Record<string, unknown>>
-  (keyString: K, obj: O): obj is O & { [k in K]: Record<PropertyKey, unknown> } {
-  return hasProperty(keyString, obj) && isObject(obj[keyString]);
-}
-
-function isObject<K extends PropertyKey>
-  (maybeObject: any): maybeObject is Record<K, unknown> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return maybeObject && typeof maybeObject == 'object';
 }
 
 // ISBN validation and conversion
