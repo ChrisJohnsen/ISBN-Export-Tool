@@ -10,20 +10,25 @@ export class ContentError {
 
 export interface EditionsISBNResults {
   isbns?: Set<string>,
-  workFaults: ContentError[],
-  editionsFaults: ContentError[],
+  warnings: ContentError[],
+  temporaryFaults: ContentError[],
 }
 
 /**
  * Fetch from Open Library (openlibrary.org) the ISBNs of all editions of the
  * given ISBN.
  *
+ * This implementation makes multiple requests of Open Library:
+ * 1. data about the ISBN, so we can find the Open Library work identifier
+ * 2. data about the editions of the work (this may be multiple requests since
+ *    the data can be paginated).
+ *
  * The result ISBNs are not validated (e.g. with validateISBN), but they are
  * de-duplicated since they are returned in a Set<string>.
  *
- * Errors encountered while fetching or processing the initial ISBN-based query
- * are reported in `workFaults`. Errors encountered while fetching or processing
- * editions pages are reported in `editionsFaults`.
+ * Errors are reported in two properties:
+ * - `temporaryFaults` for problems fetching or parsing the data, and
+ * - `warnings` for small glitches that did not impede overall progress.
  */
 export function otherEditionsOfISBN(fetch: Fetcher, isbn: string): Promise<EditionsISBNResults>;
 export function otherEditionsOfISBN(fetch: Fetcher): (isbn: string) => Promise<EditionsISBNResults>;
@@ -37,25 +42,25 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
 
   async function otherEditionsOf_ISBN(isbn: string): Promise<EditionsISBNResults> {
 
-    const { data: workIDs, faults: workFaults } = await getWorkIDsForISBN(fetch, isbn);
+    const workIDs = await getWorkIDsForISBN(fetch, isbn);
 
-    if (workIDs.size < 1) return { workFaults, editionsFaults: [] };
+    if (workIDs.set.size < 1) return workIDs.asEditionsISBNResults();
 
-    const { data: isbns, faults: editionsFaults } =
-      (await Promise.allSettled(Array.from(workIDs).map(
+    const isbns =
+      (await Promise.allSettled(Array.from(workIDs.set).map(
         async workID => processAllEditionsPages(fetch, editionsURL(workID)))))
         .reduce(absorbSettledResult, new EditionsResult);
 
-    if (isbns.size < 1) {
+    isbns.absorbFaults(workIDs); // XXX this puts workID faults last...
+
+    if (isbns.set.size < 1) {
 
       const newFault = new ContentError(`no valid ISBNs among all editions.jsons for all ${isbn} works`);
 
-      return {
-        workFaults,
-        editionsFaults: editionsFaults.concat([newFault])
-      };
+      return isbns.addTemporaryFault(newFault).asEditionsISBNResults();
+
     }
-    return { isbns, workFaults, editionsFaults };
+    return isbns.asEditionsISBNResults(true);
 
     function editionsURL(workID: string) {
       return `${OlUrlPrefix}/works/${workID}/editions.json`;
@@ -65,7 +70,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
       if (settled.status == 'fulfilled')
         return result.absorb(settled.value);
       else
-        return result.addError(settled.reason);
+        return result.addTemporaryFault(settled.reason.toString());
     }
   }
 }
@@ -73,23 +78,38 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
 import * as t from 'typanion';
 
 class StringsAndFaults {
-  data: Set<string> = new Set;
-  faults: ContentError[] = [];
+  set: Set<string> = new Set;
+  warnings: ContentError[] = [];
+  temporaryFaults: ContentError[] = [];
   constructor(fault?: string | ContentError) {
-    fault && this.addError(fault);
+    fault && this.addTemporaryFault(fault);
   }
   addString(datum: string) {
-    this.data.add(datum);
+    this.set.add(datum);
     return this;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  addError(err: any) {
+  private addError(err: any, arr: ContentError[]) {
     const fault = err instanceof ContentError ? err : new ContentError(err.toString());
-    this.faults.push(fault);
+    arr.push(fault);
     return this;
   }
-  addFault(fault: string | ContentError) {
-    return this.addError(fault);
+  asEditionsISBNResults(withISBNs?: boolean): EditionsISBNResults {
+    const { warnings, temporaryFaults } = this;
+    const result = { isbns: this.set, warnings, temporaryFaults } as EditionsISBNResults;
+    if (!withISBNs) delete result.isbns;
+    return result;
+  }
+  absorbFaults(other: StringsAndFaults) {
+    this.warnings = this.warnings.concat(other.warnings);
+    this.temporaryFaults = this.temporaryFaults.concat(other.temporaryFaults);
+    return this;
+  }
+  addWarning(fault: string | ContentError) {
+    return this.addError(fault, this.warnings);
+  }
+  addTemporaryFault(fault: string | ContentError) {
+    return this.addError(fault, this.temporaryFaults);
   }
 }
 
@@ -110,7 +130,7 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsA
   const hasWorksArray = t.isPartial({ works: t.isArray(t.isUnknown()) });
   const validation = t.as(json, hasWorksArray, { errors: true });
   if (validation.errors)
-    return new StringsAndFaults(`${urlTail}: ${validation.errors.join('; ')}`);
+    return new StringsAndFaults(`${urlTail} malformed?: ${validation.errors.join('; ')}`);
   const edition = validation.value;
 
   if (edition.works.length < 1)
@@ -124,21 +144,21 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsA
       const hasKey = t.isPartial({ key: t.isString() });
       const validation = t.as(workObj, hasKey, { errors: true });
       if (validation.errors)
-        return result.addFault(`${urlTail}.works[${index}] malformed?: ${validation.errors.join('; ')}`);
+        return result.addWarning(`${urlTail}.works[${index}] malformed?: ${validation.errors.join('; ')}`);
       const workKey: string = validation.value.key;
 
       // workID has /works/ prefix?
       const prefix = '/works/';
       if (!workKey.startsWith(prefix))
-        return result.addFault(`${urlTail} response .works[${index}].key (${workKey}) does not start with ${prefix}`);
+        return result.addWarning(`${urlTail} response .works[${index}].key (${workKey}) does not start with ${prefix}`);
 
       // strip /works/ prefix
       return result.addString(workKey.slice(prefix.length));
     },
     new StringsAndFaults);
 
-  if (result.data.size < 1)
-    return result.addFault(`${urlTail} has no valid workIDs`);
+  if (result.set.size < 1)
+    return result.addTemporaryFault(`${urlTail} has no valid workIDs`);
 
   return result;
 }
@@ -148,9 +168,9 @@ class EditionsResult extends StringsAndFaults {
   setNext(next: string) {
     this.next = next;
   }
-  absorb(other: StringsAndFaults) {
-    other.data.forEach(datum => this.data.add(datum));
-    other.faults.forEach(fault => this.faults.push(fault));
+  absorb(other: EditionsResult) {
+    other.set.forEach(datum => this.set.add(datum));
+    this.absorbFaults(other);
     return this;
   }
 }
@@ -165,12 +185,12 @@ async function processAllEditionsPages(fetch: Fetcher, url: string): Promise<Edi
 
         .then(
           nextResults => results.absorb(nextResults),
-          err => results.addError(err)
+          err => results.addTemporaryFault(err.toString())
         )
 
       : results,
 
-    err => { throw err });
+    err => { throw err }); // XXX? EditionsResult.t(err.toString())
 }
 
 async function processEditionsURL(fetch: Fetcher, url: string): Promise<EditionsResult> {
@@ -202,7 +222,7 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
   });
   const validation = t.as(json, isEditions, { errors: true });
   if (validation.errors)
-    return result.addFault(`${urlTail} malformed?: ${validation.errors.join('; ')}`);
+    return result.addTemporaryFault(`${urlTail} malformed?: ${validation.errors.join('; ')}`);
   const editions = validation.value;
 
   // collect ISBNs from .entries[n].isbn_{10,13}[n]
@@ -214,8 +234,8 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
       [...entry.isbn_10 ?? [], ...entry.isbn_13 ?? []]
         .forEach(isbn => entryResult.addString(normalizeISBN(isbn)));
 
-      if (entryResult.data.size < 1)
-        entryResult.addFault(`${urlTail} .entries[${index}] has no ISBNs`);
+      if (entryResult.set.size < 1)
+        entryResult.addWarning(`${urlTail} .entries[${index}] has no ISBNs`);
 
       return result.absorb(entryResult);
     },
