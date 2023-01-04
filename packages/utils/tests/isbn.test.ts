@@ -28,7 +28,10 @@ describe('work response faults', () => {
     const fetcher = jest.fn<Fetcher>()
       .mockResolvedValueOnce('just plain text, not JSON');
 
-    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveReturnedTimes(1);
@@ -40,7 +43,10 @@ describe('work response faults', () => {
     const fetcher = jest.fn<Fetcher>()
       .mockResolvedValueOnce(toJ(1));
 
-    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveReturnedTimes(1);
@@ -52,7 +58,10 @@ describe('work response faults', () => {
     const fetcher = jest.fn<Fetcher>()
       .mockResolvedValueOnce(toJ({}));
 
-    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveReturnedTimes(1);
@@ -64,7 +73,10 @@ describe('work response faults', () => {
     const fetcher = jest.fn<Fetcher>()
       .mockResolvedValueOnce(toJ({ works: [] }));
 
-    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, isbn);
+
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveReturnedTimes(1);
@@ -100,8 +112,10 @@ describe('work response faults', () => {
     const fetcher = jest.fn<Fetcher>()
       .mockResolvedValueOnce(toJ({ works: [{ key: 'blah1' },] }));
 
-    await expect(() => otherEditionsOfISBN(fetcher, isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, isbn);
 
+    expect(result.isbns).toBeUndefined();
+    expect(result.workFaults).toHaveLength(2);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveReturnedTimes(1);
@@ -301,15 +315,12 @@ describe('editions response faults', () => {
     const fetcher = jest.fn<Fetcher>().mockImplementation(data
       .editEditions((...[, , replace]) => replace(new Rejection(err)))
       .fetcher());
-    const resultPromise = otherEditionsOfISBN(fetcher, data.isbn);
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
-    await expect(resultPromise).rejects.toBeInstanceOf(ContentError);
-    await expect(resultPromise).rejects.toEqual(expect.objectContaining({ description: err }));
+    expect(result.editionsFaults).toHaveLength(2);
+    expect(result.editionsFaults[0]).toEqual(expect.objectContaining({ description: err }));
 
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher).toHaveBeenNthCalledWith(1, data.isbnURL());
-    expect(fetcher).toHaveBeenNthCalledWith(2, data.editionsPageURLs()[0]);
-    expect(fetcher).toHaveReturnedTimes(2);
+    data.makeAssertions(fetcher, result);
   });
 
   test('not JSON', async () => {
@@ -320,12 +331,11 @@ describe('editions response faults', () => {
       .editEditions((...[, , replace]) => replace(new Literal('just plain text, not JSON')))
       .fetcher());
 
-    await expect(otherEditionsOfISBN(fetcher, data.isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher).toHaveBeenNthCalledWith(1, data.isbnURL());
-    expect(fetcher).toHaveBeenNthCalledWith(2, data.editionsPageURLs()[0]);
-    expect(fetcher).toHaveReturnedTimes(2);
+    expect(result.editionsFaults).toHaveLength(2);
+
+    data.makeAssertions(fetcher, result);
   });
 
   test('not an object', async () => {
@@ -336,7 +346,9 @@ describe('editions response faults', () => {
       .editEditions((editions, info, replace) => replace(123))
       .fetcher());
 
-    await expect(otherEditionsOfISBN(fetcher, data.isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    expect(result.editionsFaults).toHaveLength(2);
 
     data.makeAssertions(fetcher);
   });
@@ -349,7 +361,9 @@ describe('editions response faults', () => {
       .editEditions((editions, info, replace) => replace({ count: 1 }))
       .fetcher());
 
-    await expect(otherEditionsOfISBN(fetcher, data.isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    expect(result.editionsFaults).toHaveLength(2);
 
     data.makeAssertions(fetcher);
   });
@@ -360,7 +374,9 @@ describe('editions response faults', () => {
     });
     const fetcher = jest.fn<Fetcher>().mockImplementation(data.fetcher());
 
-    await expect(otherEditionsOfISBN(fetcher, data.isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    expect(result.editionsFaults).toHaveLength(1);
 
     data.makeAssertions(fetcher);
   });
@@ -373,7 +389,9 @@ describe('editions response faults', () => {
       .editEditions((editions) => editions.entries = [{ no_isbn: true }])
       .fetcher());
 
-    await expect(otherEditionsOfISBN(fetcher, data.isbn)).rejects.toBeInstanceOf(ContentError);
+    const result = await otherEditionsOfISBN(fetcher, data.isbn);
+
+    expect(result.editionsFaults).toHaveLength(2);
 
     data.makeAssertions(fetcher);
   });
