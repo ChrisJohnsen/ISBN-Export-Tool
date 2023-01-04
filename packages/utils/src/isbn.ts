@@ -37,11 +37,11 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
 
   async function otherEditionsOf_ISBN(isbn: string): Promise<EditionsISBNResults> {
 
-    const { workIDs, faults: workFaults } = await getWorkIDsForISBN(fetch, isbn);
+    const { data: workIDs, faults: workFaults } = await getWorkIDsForISBN(fetch, isbn);
 
     if (workIDs.size < 1) return { workFaults, editionsFaults: [] };
 
-    const { isbns, faults: editionsFaults } =
+    const { data: isbns, faults: editionsFaults } =
       (await Promise.allSettled(Array.from(workIDs).map(
         async workID => processAllEditionsPages(fetch, editionsURL(workID)))))
         .reduce(absorbSettledResult, new EditionsResult);
@@ -77,11 +77,11 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
 
 import * as t from 'typanion';
 
-class WorkIDsResult {
-  workIDs: Set<string> = new Set;
+class StringsAndFaults {
+  data: Set<string> = new Set;
   faults: ContentError[] = [];
-  addWorkID(workID: string) {
-    this.workIDs?.add(workID);
+  addString(datum: string) {
+    this.data.add(datum);
     return this;
   }
   addFault(fault: ContentError) {
@@ -90,7 +90,7 @@ class WorkIDsResult {
   }
 }
 
-async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<WorkIDsResult> {
+async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsAndFaults> {
 
   const urlTail = `/isbn/${isbn}.json`;
 
@@ -114,7 +114,7 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<WorkIDsR
 
   // collect workIDs from .works[n].key
   const result = edition.works.reduce(
-    (result: WorkIDsResult, workObj, index) => {
+    (result: StringsAndFaults, workObj, index) => {
 
       // .works[n].key is a string?
       const hasKey = t.isPartial({ key: t.isString() });
@@ -129,11 +129,11 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<WorkIDsR
         return result.addFault(new ContentError(`${urlTail} response .works[${index}].key (${workKey}) does not start with ${prefix}`));
 
       // strip /works/ prefix
-      return result.addWorkID(workKey.slice(prefix.length));
+      return result.addString(workKey.slice(prefix.length));
     },
-    new WorkIDsResult);
+    new StringsAndFaults);
 
-  if (result.workIDs.size < 1) {
+  if (result.data.size < 1) {
 
     const newFault = new ContentError(`${urlTail} has no valid workIDs`);
 
@@ -146,29 +146,18 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<WorkIDsR
   return result;
 }
 
-class EditionsResult {
-  isbns: Set<string> = new Set();
-  faults: ContentError[] = [];
+class EditionsResult extends StringsAndFaults {
   next?: string;
-  addISBN(isbn: string) {
-    this.isbns.add(isbn);
+  setNext(next: string) {
+    this.next = next;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addError(err: any) {
     const fault = err instanceof ContentError ? err : new ContentError(err.toString());
     return this.addFault(fault);
   }
-  addFault(fault: ContentError) {
-    this.faults.push(fault);
-    return this;
-  }
-  throwOrAddFault(fault: ContentError) {
-    if (this.faults.length < 1 && !this.next) throw fault;
-    this.addFault(fault);
-    return this;
-  }
-  absorb(other: EditionsResult) {
-    other.isbns.forEach(isbn => this.isbns.add(isbn));
+  absorb(other: StringsAndFaults) {
+    other.data.forEach(datum => this.data.add(datum));
     other.faults.forEach(fault => this.faults.push(fault));
     return this;
   }
@@ -230,9 +219,9 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
       const entryResult = new EditionsResult;
 
       [...entry.isbn_10 ?? [], ...entry.isbn_13 ?? []]
-        .forEach(isbn => entryResult.addISBN(normalizeISBN(isbn)));
+        .forEach(isbn => entryResult.addString(normalizeISBN(isbn)));
 
-      if (entryResult.isbns.size < 1)
+      if (entryResult.data.size < 1)
         entryResult.addFault(new ContentError(`${urlTail} .entries[${index}] has no ISBNs`));
 
       return result.absorb(entryResult);
