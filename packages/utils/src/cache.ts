@@ -68,9 +68,12 @@ export type ImportCacheOptions<A, R> = SavedCache<A, R> | {
  *
  * The cache is a `Map` keyed with the argument, so "the same argument value"
  * means whatever `Map` considers to be the same key value (basically `===`).
+ *
+ * If the function returns `CacheControl` instances, they will control whether
+ * the resolutions are cached. Otherwise, all resolutions will be cached.
  */
 export function cachePromisor<A, R>(
-  fn: CacheablePromisor<A, R>,
+  fn: CacheablePromisor<A, R> | CacheablePromisor<A, CacheControl<R>>,
   saved?: ImportCacheOptions<A, R>
 ): CachedPromisor<A, R> {
 
@@ -93,9 +96,11 @@ export function cachePromisor<A, R>(
  *   combined together so that the "editions of" relation is transitive.
  * - the combined result is cached under each ISBN so that the "editions of"
  *   relation is symmetric.
+ *
+ * See `cachePromisor` for more details.
  */
 export function cacheEditionsPromisor(
-  fn: CacheablePromisor<string, Set<string>>,
+  fn: CacheablePromisor<string, Set<string>> | CacheablePromisor<string, CacheControl<Set<string>>>,
   saved?: ImportCacheOptions<string, Set<string>>)
   : CachedPromisor<string, Set<string>> {
 
@@ -122,6 +127,10 @@ export function cacheEditionsPromisor(
         resolution.forEach(isbn => transformedCache.set(isbn, resolution)),
     });
   return newfn;
+}
+
+export class CacheControl<T> {
+  constructor(public value: T, public disposition: 'cache' | 'do not cache') { }
 }
 
 // cache lookup helpers
@@ -156,7 +165,7 @@ interface CachedPromisorOverrides<A, R> {
 
 // the overridable caching wrapper
 function _cachePromisor<A, R>(
-  fn: CacheablePromisor<A, R>,
+  fn: CacheablePromisor<A, R> | CacheablePromisor<A, CacheControl<R>>,
   saved?: ImportCacheOptions<A, R>,
   overrides?: CachedPromisorOverrides<A, R>
 ): CachedPromisor<A, R> {
@@ -216,13 +225,22 @@ function _cachePromisor<A, R>(
 
     // call the wrapped function
     const promise = fn(argument)
-      .then(resolution => {
-        // cache the "raw" call result
-        cache.set(argument, resolution);
+      .then(cacheControlOrResolution => {
 
-        // let the override transform and cache the result
+        const { resolution, shouldCache } = ((ccOrR) =>
+          ccOrR instanceof CacheControl
+            ? { resolution: ccOrR.value, shouldCache: ccOrR.disposition === 'cache' }
+            : { resolution: ccOrR, shouldCache: true }
+        )(cacheControlOrResolution);
+
+        // cache the "raw" call result
+        if (shouldCache) cache.set(argument, resolution);
+
+        // let the override transform
         const transformed = transformResolution(cacheKey, resolution);
-        cacheResolution(cacheKey, transformed);
+
+        // let override cache the result
+        if (shouldCache) cacheResolution(cacheKey, transformed);
 
         // give the transformed value as the result of the overall cache call
         return transformed;

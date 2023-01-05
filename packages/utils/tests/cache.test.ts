@@ -1,5 +1,5 @@
 import { describe, test, expect, jest } from '@jest/globals';
-import { cacheEditionsPromisor, cachePromisor } from 'utils';
+import { CacheControl, cacheEditionsPromisor, cachePromisor } from 'utils';
 import * as t from 'typanion';
 
 describe('cachePromisor', () => {
@@ -181,6 +181,21 @@ describe('cachePromisor', () => {
     await expect(cached('eighteen')).resolves.toBe(18);
     await expect(reCached('eighteen')).resolves.toBe(18);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  test('cache control', async () => {
+    const fn = jest.fn<(arg: string) => Promise<CacheControl<number>>>()
+      .mockResolvedValueOnce(new CacheControl(20, 'do not cache'))
+      .mockResolvedValueOnce(new CacheControl(20.5, 'cache'))
+      .mockResolvedValueOnce(new CacheControl(21, 'do not cache'));
+
+    const cached = cachePromisor(fn);
+
+    await expect(cached('twenty')).resolves.toBe(20);
+    expect(fn).toHaveBeenCalledTimes(1);
+    await expect(cached('twenty')).resolves.toBe(20.5);
+    await expect(cached('twenty')).resolves.toBe(20.5);
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 });
 
