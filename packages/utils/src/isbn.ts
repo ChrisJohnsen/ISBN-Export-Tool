@@ -213,13 +213,8 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
   if (t.isPartial({ links: t.isPartial({ next: t.isString() }) })(json))
     result.next = json.links.next;
 
-  // has .entries[n].isbn_{10,13}[n]?
-  const isEditions = t.isPartial({
-    entries: t.isArray(t.isPartial({
-      isbn_10: t.isOptional(t.isArray(t.isString())),
-      isbn_13: t.isOptional(t.isArray(t.isString())),
-    })),
-  });
+  // has .entries[n]?
+  const isEditions = t.isPartial({ entries: t.isArray(t.isUnknown()) });
   const validation = t.as(json, isEditions, { errors: true });
   if (validation.errors)
     return result.addTemporaryFault(`${urlTail} malformed?: ${validation.errors.join('; ')}`);
@@ -227,7 +222,16 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
 
   // collect ISBNs from .entries[n].isbn_{10,13}[n]
   return editions.entries.reduce(
-    (result: EditionsResult, entry, index) => {
+    (result: EditionsResult, unknownEntry, index) => {
+
+      // .entries[n] has .isbn_{10,13}[n]?
+      const validation = t.as(unknownEntry, t.isPartial({
+        isbn_10: t.isOptional(t.isArray(t.isString())),
+        isbn_13: t.isOptional(t.isArray(t.isString())),
+      }), { errors: true });
+      if (validation.errors)
+        return result.addWarning(`${urlTail} .entries[${index}] malformed?: ${validation.errors.join('; ')}`);
+      const entry = validation.value;
 
       const entryResult = new EditionsResult;
 
