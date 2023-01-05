@@ -30,7 +30,7 @@ describe('work response faults', () => {
 
     const result = await otherEditionsOfISBN(fetcher, isbn);
 
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -48,7 +48,7 @@ describe('work response faults', () => {
 
     const result = await otherEditionsOfISBN(fetcher, isbn);
 
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -66,7 +66,7 @@ describe('work response faults', () => {
 
     const result = await otherEditionsOfISBN(fetcher, isbn);
 
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -84,7 +84,7 @@ describe('work response faults', () => {
 
     const result = await otherEditionsOfISBN(fetcher, isbn);
 
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -111,7 +111,7 @@ describe('work response faults', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveReturnedTimes(1);
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(3);
     expect(result.temporaryFaults).toHaveLength(1);
 
@@ -127,7 +127,7 @@ describe('work response faults', () => {
 
     const result = await otherEditionsOfISBN(fetcher, isbn);
 
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(1);
     expect(result.temporaryFaults).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -155,7 +155,7 @@ describe('work response faults', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenNthCalledWith(1, isbnURL(isbn));
     expect(fetcher).toHaveReturnedTimes(1);
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(3);
     expect(result.temporaryFaults).toHaveLength(1);
 
@@ -434,7 +434,7 @@ describe('editions response faults', () => {
 
     data.makeAssertions(fetcher, result);
 
-    expect(result.isbns).toBeUndefined();
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(3);
     expect(result.temporaryFaults).toHaveLength(1);
   });
@@ -620,10 +620,7 @@ describe('full isbn & editions tests', () => {
     result.warnings.forEach(f => expect(f).toBeInstanceOf(ContentError));
     result.temporaryFaults.forEach(f => expect(f).toBeInstanceOf(ContentError));
 
-    expect(result.isbns).toBeDefined();
-
-    if (!result.isbns) throw 'isbns missing from result'; // let TS know isbns is not undefined
-
+    expect(result.isbns).toBeInstanceOf(Set);
     expect(Array.from(result.isbns)).toStrictEqual(['153842424X',
       '9781538424247',
       '9781786693044',

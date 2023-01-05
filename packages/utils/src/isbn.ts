@@ -9,7 +9,7 @@ export class ContentError {
 }
 
 export interface EditionsISBNResults {
-  isbns?: Set<string>,
+  isbns: Set<string>,
   warnings: ContentError[],
   temporaryFaults: ContentError[],
 }
@@ -96,9 +96,8 @@ class StringsAndFaults {
   }
   asEditionsISBNResults(withISBNs?: boolean): EditionsISBNResults {
     const { warnings, temporaryFaults } = this;
-    const result = { isbns: this.set, warnings, temporaryFaults } as EditionsISBNResults;
-    if (!withISBNs) delete result.isbns;
-    return result;
+    const isbns = withISBNs ? this.set : new Set<string>;
+    return { isbns, warnings, temporaryFaults };
   }
   absorbFaults(other: StringsAndFaults) {
     this.warnings = this.warnings.concat(other.warnings);
