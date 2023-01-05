@@ -21,12 +21,12 @@
     "@jest/globals": "^29.3.1",
     "@rollup/plugin-commonjs": "^24.0.0",
     "@rollup/plugin-node-resolve": "^15.0.1",
-    "@types/papaparse": "^5.3.5",
+    "@types/papaparse": "^5.3.7",
     "outdent": "^0.8.0",
     "rollup-plugin-ts": "^3.0.2"
   },
   "dependencies": {
-    "isbn3": "^1.1.29",
+    "isbn3": "^1.1.30",
     "papaparse": "^5.3.2",
     "typanion": "^3.12.1"
   }
