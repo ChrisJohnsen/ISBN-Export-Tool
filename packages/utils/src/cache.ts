@@ -1,8 +1,8 @@
 import * as t from 'typanion';
 import { equivalentISBNs } from './isbn.js';
 
-export type CacheablePromisor<A, R> = (arg: A) => Promise<R>;
-export type CachedPromisor<A, R> = ((arg: A) => Promise<R>) & {
+export type CacheablePromisor<A, R> = (argument: A) => Promise<R>;
+export type CachedPromisor<A, R> = ((argument: A) => Promise<R>) & {
   /**
    * Export the cached calls (for later import into another cache).
    *
@@ -105,8 +105,8 @@ export function cacheEditionsPromisor(
     fn,
     saved,
     {
-      getCacheKey: (arg: string) =>
-        equivalentISBNs(arg)[0],
+      getCacheKey: (argument: string) =>
+        equivalentISBNs(argument)[0],
       getCachedResolution: (cacheKey: string) =>
         getCached(cacheKey, transformedCache),
       transformResolution: (cacheKey: string, resolution: Set<string>): Set<string> => {
@@ -148,7 +148,7 @@ function getCached<K, T>(key: K, cache: Map<K, T>): CacheCheck<T> {
 // calls with the "raw" resolution).
 //
 interface CachedPromisorOverrides<A, R> {
-  getCacheKey?(arg: A): A
+  getCacheKey?(argument: A): A
   getCachedResolution(cachedKey: A): CacheCheck<R>,
   transformResolution(cacheKey: A, resolution: R): R
   cacheResolution(cacheKey: A, resolution: R): void,
@@ -179,9 +179,9 @@ function _cachePromisor<A, R>(
   else cache = new Map(saved);
 
   // override helpers
-  const getCacheKey = (arg: A): A =>
-    overrides?.getCacheKey?.(arg) ?? arg;
-  const getCachedResolution = (arg: A, cacheKey: A): CacheCheck<R> =>
+  const getCacheKey = (argument: A): A =>
+    overrides?.getCacheKey?.(argument) ?? argument;
+  const getCachedResolution = (argument: A, cacheKey: A): CacheCheck<R> =>
     overrides?.getCachedResolution(cacheKey) ?? miss();
   const transformResolution = (cacheKey: A, resolution: R): R =>
     overrides?.transformResolution(cacheKey, resolution) ?? resolution;
@@ -199,26 +199,26 @@ function _cachePromisor<A, R>(
   const pending: Map<A, Promise<R>> = new Map;
 
   // the caching wrapper function
-  const newfn = (arg: A): Promise<R> => {
+  const newfn = (argument: A): Promise<R> => {
 
-    const cacheKey = getCacheKey(arg);
+    const cacheKey = getCacheKey(argument);
 
     // check the pending cache, the override's cache, and the "raw" cache
     {
       const pendingPromise = getCached(cacheKey, pending);
       if (pendingPromise.hit) return pendingPromise.value;
       let cached: CacheCheck<R>;
-      cached = getCachedResolution(arg, cacheKey);
+      cached = getCachedResolution(argument, cacheKey);
       if (cached.hit) return Promise.resolve(cached.value);
-      cached = getCached(arg, cache);
+      cached = getCached(argument, cache);
       if (cached.hit) return Promise.resolve(cached.value);
     }
 
     // call the wrapped function
-    const promise = fn(arg)
+    const promise = fn(argument)
       .then(resolution => {
         // cache the "raw" call result
-        cache.set(arg, resolution);
+        cache.set(argument, resolution);
 
         // let the override transform and cache the result
         const transformed = transformResolution(cacheKey, resolution);
