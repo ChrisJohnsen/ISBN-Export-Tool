@@ -77,12 +77,16 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
 
 import * as t from 'typanion';
 
+type InitialFault<T> = { warning: T } | { temporary: T };
+
 class StringsAndFaults {
   set: Set<string> = new Set;
   warnings: ContentError[] = [];
   temporaryFaults: ContentError[] = [];
-  constructor(fault?: string | ContentError) {
-    fault && this.addTemporaryFault(fault);
+  constructor(fault?: InitialFault<string | ContentError>) {
+    if (!fault) return;
+    if ('warning' in fault) this.addWarning(fault.warning);
+    if ('temporary' in fault) this.addTemporaryFault(fault.temporary);
   }
   addString(datum: string) {
     this.set.add(datum);
@@ -122,18 +126,18 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsA
   try {
     json = JSON.parse(response);
   } catch {
-    return new StringsAndFaults(`${urlTail} response is not parseable as JSON`);
+    return new StringsAndFaults({ temporary: `${urlTail} response is not parseable as JSON` });
   }
 
   // .works is an array?
   const hasWorksArray = t.isPartial({ works: t.isArray(t.isUnknown()) });
   const validation = t.as(json, hasWorksArray, { errors: true });
   if (validation.errors)
-    return new StringsAndFaults(`${urlTail} malformed?: ${validation.errors.join('; ')}`);
+    return new StringsAndFaults({ temporary: `${urlTail} malformed?: ${validation.errors.join('; ')}` });
   const edition = validation.value;
 
   if (edition.works.length < 1)
-    return new StringsAndFaults(`${urlTail} response .works is empty`);
+    return new StringsAndFaults({ temporary: `${urlTail} response .works is empty` });
 
   // collect workIDs from .works[n].key
   const result = edition.works.reduce(
@@ -203,7 +207,7 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
   try {
     json = JSON.parse(response);
   } catch {
-    return new EditionsResult(`${urlTail} response is not parseable as JSON`);
+    return new EditionsResult({ temporary: `${urlTail} response is not parseable as JSON` });
   }
 
   const result = new EditionsResult;
