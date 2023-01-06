@@ -73,7 +73,7 @@ export type ImportCacheOptions<A, R> = SavedCache<A, R> | {
  * the resolutions are cached. Otherwise, all resolutions will be cached.
  */
 export function cachePromisor<A, R>(
-  fn: CacheablePromisor<A, R> | CacheablePromisor<A, CacheControl<R>>,
+  fn: CacheablePromisor<A, R | CacheControl<R>>,
   saved?: ImportCacheOptions<A, R>
 ): CachedPromisor<A, R> {
 
@@ -100,7 +100,7 @@ export function cachePromisor<A, R>(
  * See `cachePromisor` for more details.
  */
 export function cacheEditionsPromisor(
-  fn: CacheablePromisor<string, Set<string>> | CacheablePromisor<string, CacheControl<Set<string>>>,
+  fn: CacheablePromisor<string, Set<string> | CacheControl<Set<string>>>,
   saved?: ImportCacheOptions<string, Set<string>>)
   : CachedPromisor<string, Set<string>> {
 
@@ -165,7 +165,7 @@ interface CachedPromisorOverrides<A, R> {
 
 // the overridable caching wrapper
 function _cachePromisor<A, R>(
-  fn: CacheablePromisor<A, R> | CacheablePromisor<A, CacheControl<R>>,
+  fn: CacheablePromisor<A, R | CacheControl<R>>,
   saved?: ImportCacheOptions<A, R>,
   overrides?: CachedPromisorOverrides<A, R>
 ): CachedPromisor<A, R> {
