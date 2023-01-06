@@ -2,7 +2,8 @@
 
 const OlUrlPrefix = 'https://openlibrary.org';
 
-export type Fetcher = (url: string) => Promise<string>;
+export type FetchResult = string | { status: number, statusText: string };
+export type Fetcher = (url: string) => Promise<FetchResult>;
 
 export class ContentError {
   constructor(public description: string) { }
@@ -116,11 +117,34 @@ class StringsAndFaults {
   }
 }
 
+function fetcherResponseOrFault(urlTail: string, response: FetchResult): string | InitialFault<string> {
+  if (typeof response == 'string')
+    return response;
+  const status = response.status;
+  const statusStr = `${status}${response.statusText ? ` ${response.statusText}` : ''}`;
+  const blurb = (status => {
+    if (500 <= status && status < 600)
+      return 'server error:';
+    if (400 <= status && status < 500)
+      return 'client error:';
+    if (300 <= status && status < 400)
+      return 'unfinished redirect:';
+    if (200 <= status && status < 300)
+      return 'OK as error!?:';
+    if (100 <= status && status < 200)
+      return 'interim as final!?:';
+    return 'bad(?)';
+  })(status);
+  return { temporary: `${urlTail} ${blurb} HTTP status ${statusStr}` };
+}
+
 async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsAndFaults> {
 
   const urlTail = `/isbn/${isbn}.json`;
 
-  const response = await fetch(`${OlUrlPrefix}${urlTail}`);
+  const response = fetcherResponseOrFault(urlTail, await fetch(`${OlUrlPrefix}${urlTail}`));
+
+  if (typeof response != 'string') return new StringsAndFaults(response);
 
   let json;
   try {
@@ -198,9 +222,11 @@ async function processAllEditionsPages(fetch: Fetcher, url: string): Promise<Edi
 
 async function processEditionsURL(fetch: Fetcher, url: string): Promise<EditionsResult> {
 
-  const response = await fetch(url);
-
   const urlTail = url.startsWith(OlUrlPrefix) ? url.slice(OlUrlPrefix.length) : url;
+
+  const response = fetcherResponseOrFault(urlTail, await fetch(url));
+
+  if (typeof response != 'string') return new EditionsResult(response);
 
   // parse JSON
   let json;
