@@ -1,5 +1,9 @@
 import { describe, test, expect, jest } from '@jest/globals';
-import { ContentError, EditionsISBNResults, normalizeISBN, otherEditionsOfISBN, type Fetcher } from 'utils';
+import {
+  normalizeISBN,
+  type Fetcher, ContentError, EditionsISBNResults,
+  otherEditionsOfISBN__OpenLibrary_WorkEditions as otherEditionsOfISBN,
+} from 'utils';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 
