@@ -337,6 +337,7 @@ describe('editions response faults', () => {
       .fetcher());
     const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(2);
     expect(result.temporaryFaults[0]).toEqual(expect.objectContaining({ description: err }));
@@ -354,6 +355,7 @@ describe('editions response faults', () => {
 
     const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(2);
 
@@ -365,15 +367,16 @@ describe('editions response faults', () => {
       isbn: '9876543210', works: { 'OL123456789W': [] },
     });
     const fetcher = jest.fn<Fetcher>().mockImplementation(data
-      .editEditions((editions, info, replace) => replace(123))
+      .editEditions((...[, , replace]) => replace(123))
       .fetcher());
 
     const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(2);
 
-    data.makeAssertions(fetcher);
+    data.makeAssertions(fetcher, result);
   });
 
   test('missing .entries', async () => {
@@ -381,15 +384,16 @@ describe('editions response faults', () => {
       isbn: '9876543210', works: { 'OL123456789W': [] },
     });
     const fetcher = jest.fn<Fetcher>().mockImplementation(data
-      .editEditions((editions, info, replace) => replace({ count: 1 }))
+      .editEditions((...[, , replace]) => replace({ count: 1 }))
       .fetcher());
 
     const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(2);
 
-    data.makeAssertions(fetcher);
+    data.makeAssertions(fetcher, result);
   });
 
   test('.entries is empty', async () => {
@@ -400,10 +404,11 @@ describe('editions response faults', () => {
 
     const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(0);
     expect(result.temporaryFaults).toHaveLength(1);
 
-    data.makeAssertions(fetcher);
+    data.makeAssertions(fetcher, result);
   });
 
   test('.entries[0]: (only one) invalid', async () => {
@@ -411,15 +416,16 @@ describe('editions response faults', () => {
       isbn: '9876543210', works: { 'OL123456789W': [] },
     });
     const fetcher = jest.fn<Fetcher>().mockImplementation(data
-      .editEditions((editions) => editions.entries = [{ no_isbn: true }])
+      .editEditions(editions => editions.entries = [{ no_isbn: true }])
       .fetcher());
 
     const result = await otherEditionsOfISBN(fetcher, data.isbn);
 
+    expect(result.isbns).toHaveProperty('size', 0);
     expect(result.warnings).toHaveLength(1);
     expect(result.temporaryFaults).toHaveLength(1);
 
-    data.makeAssertions(fetcher);
+    data.makeAssertions(fetcher, result);
   });
 
   test('.entries[n]: multiple without .isbn_10 or .isbn_13', async () => {
