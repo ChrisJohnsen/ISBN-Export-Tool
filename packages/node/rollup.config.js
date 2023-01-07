@@ -23,5 +23,9 @@ export default [
     ],
     external: [],
     plugins: externalPlugins,
+    watch: {
+      clearScreen: false,
+      buildDelay: 50, // helps prevent immediate rebuild
+    },
   },
 ];

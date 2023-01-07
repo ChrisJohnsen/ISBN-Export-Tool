@@ -16,5 +16,9 @@ export default [
     ],
     external: ['papaparse', 'isbn3', 'typanion'],
     plugins: externalPlugins,
+    watch: {
+      clearScreen: false,
+      buildDelay: 50, // helps prevent immediate rebuild
+    },
   },
 ];
