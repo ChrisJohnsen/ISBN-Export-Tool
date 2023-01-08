@@ -1,8 +1,6 @@
 // some internal-only helpers that "editions of" functions can use
 
-import { FetchResult } from "./editions-common.js";
-
-// the rest are more internal
+import { ContentError, EditionsISBNResults, FetchResult } from "./editions-common.js";
 
 export type InitialFault<T> = { warning: T; } | { temporary: T; };
 
@@ -25,4 +23,55 @@ export function fetcherResponseOrFault(identifier: string, response: FetchResult
     return 'bad(?)';
   })(status);
   return { temporary: `${identifier} ${blurb} HTTP status ${statusStr}` };
+}
+
+// some helper classes for accumulating results and errors
+
+export class StringsAndFaults {
+  set: Set<string> = new Set;
+  warnings: ContentError[] = [];
+  temporaryFaults: ContentError[] = [];
+  constructor(fault?: InitialFault<string | ContentError>) {
+    if (!fault) return;
+    if ('warning' in fault) this.addWarning(fault.warning);
+    if ('temporary' in fault) this.addTemporaryFault(fault.temporary);
+  }
+  addString(datum: string) {
+    this.set.add(datum);
+    return this;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private addError(err: any, arr: ContentError[]) {
+    const fault = err instanceof ContentError ? err : new ContentError(err.toString());
+    arr.push(fault);
+    return this;
+  }
+  asEditionsISBNResults(withISBNs?: boolean): EditionsISBNResults {
+    const { warnings, temporaryFaults } = this;
+    const isbns = withISBNs ? this.set : new Set<string>;
+    return { isbns, warnings, temporaryFaults };
+  }
+  absorbFaults(other: StringsAndFaults) {
+    this.warnings = this.warnings.concat(other.warnings);
+    this.temporaryFaults = this.temporaryFaults.concat(other.temporaryFaults);
+    return this;
+  }
+  addWarning(fault: string | ContentError) {
+    return this.addError(fault, this.warnings);
+  }
+  addTemporaryFault(fault: string | ContentError) {
+    return this.addError(fault, this.temporaryFaults);
+  }
+}
+
+export class EditionsResult extends StringsAndFaults {
+  next?: string;
+  setNext(next: string) {
+    this.next = next;
+  }
+  absorb(other: EditionsResult) {
+    other.set.forEach(datum => this.set.add(datum));
+    this.absorbFaults(other);
+    return this;
+  }
 }

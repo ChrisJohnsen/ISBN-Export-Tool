@@ -1,5 +1,5 @@
 import { Fetcher, EditionsISBNResults, ContentError } from './editions-common.js';
-import { InitialFault, fetcherResponseOrFault } from "./editions-internal.js";
+import { fetcherResponseOrFault, EditionsResult, StringsAndFaults } from "./editions-internal.js";
 import * as t from 'typanion';
 import { normalizeISBN } from './isbn.js';
 
@@ -74,43 +74,6 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
   }
 }
 
-class StringsAndFaults {
-  set: Set<string> = new Set;
-  warnings: ContentError[] = [];
-  temporaryFaults: ContentError[] = [];
-  constructor(fault?: InitialFault<string | ContentError>) {
-    if (!fault) return;
-    if ('warning' in fault) this.addWarning(fault.warning);
-    if ('temporary' in fault) this.addTemporaryFault(fault.temporary);
-  }
-  addString(datum: string) {
-    this.set.add(datum);
-    return this;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private addError(err: any, arr: ContentError[]) {
-    const fault = err instanceof ContentError ? err : new ContentError(err.toString());
-    arr.push(fault);
-    return this;
-  }
-  asEditionsISBNResults(withISBNs?: boolean): EditionsISBNResults {
-    const { warnings, temporaryFaults } = this;
-    const isbns = withISBNs ? this.set : new Set<string>;
-    return { isbns, warnings, temporaryFaults };
-  }
-  absorbFaults(other: StringsAndFaults) {
-    this.warnings = this.warnings.concat(other.warnings);
-    this.temporaryFaults = this.temporaryFaults.concat(other.temporaryFaults);
-    return this;
-  }
-  addWarning(fault: string | ContentError) {
-    return this.addError(fault, this.warnings);
-  }
-  addTemporaryFault(fault: string | ContentError) {
-    return this.addError(fault, this.temporaryFaults);
-  }
-}
-
 async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsAndFaults> {
 
   const urlTail = `/isbn/${isbn}.json`;
@@ -161,18 +124,6 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsA
     return result.addTemporaryFault(`${urlTail} has no valid workIDs`);
 
   return result;
-}
-
-class EditionsResult extends StringsAndFaults {
-  next?: string;
-  setNext(next: string) {
-    this.next = next;
-  }
-  absorb(other: EditionsResult) {
-    other.set.forEach(datum => this.set.add(datum));
-    this.absorbFaults(other);
-    return this;
-  }
 }
 
 async function processAllEditionsPages(fetch: Fetcher, url: string): Promise<EditionsResult> {
