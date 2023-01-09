@@ -53,7 +53,7 @@ export const isRestorable = t.isOneOf([isRestorableV1]); // update SavedCache be
  * for the `restoreArgument` and `restoreResolution` properties.
  */
 export type ImportCacheOptions<A, R> = SavedCache<A, R> | {
-  import: t.InferType<typeof isRestorable>,
+  import?: unknown,
   restoreArgument: (savedArgument: unknown) => A,
   restoreResolution: (savedResolution: unknown) => R,
 };
@@ -176,8 +176,10 @@ function _cachePromisor<A, R>(
   // restore cache from saved, or start empty
   if (!saved)
     cache = new Map;
-  else if ('import' in saved) {
-    if (isRestorableV1(saved.import))
+  else if ('restoreArgument' in saved) {
+    if (!saved.import)
+      cache = new Map;
+    else if (isRestorableV1(saved.import))
       cache = new Map(saved.import.flatMap(([arg, res]) => {
         try { return [[saved.restoreArgument(arg), saved.restoreResolution(res)]] }
         catch { return [] }
