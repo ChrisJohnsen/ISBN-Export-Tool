@@ -14,11 +14,13 @@ export default [
       {
         file: 'dist/goodreads-tool-bundled.mjs',
         inlineDynamicImports: true,
+        sourcemap: true,
       },
       {
         file: 'dist/goodreads-tool-bundled.cjs',
         format: 'cjs',
         inlineDynamicImports: true,
+        sourcemap: true,
       },
     ],
     external: [],

@@ -51,29 +51,41 @@ class GetISBNs extends Command {
     examples: [
       ['Get ISBNs for items shelved as `to-read`.',
         '$0 getISBNs path/to/export.csv to-read'],
-      ['Get `to-read` ISBNs in both ISBN-10 and ISBN-13 versions (when available).',
+      ['Get `to-read` ISBNs in both ISBN-13 and ISBN-10 (when available) versions.',
         '$0 getISBNs --both path/to/export.csv to-read'],
     ]
   });
   static paths = [['get-ISBNs'], ['isbns']];
   bothISBNs = Option.Boolean('--both', {
     description: `
-      Produce both ISBN-10 and ISBN-13 for any shelved ISBN that has equivalent versions (i.e. 978-prefixed ISBN-13s).
-    ` });
+      Produce both ISBN-13 and ISBN-10 for any output ISBN that has equivalent versions (i.e. 978-prefixed ISBN-13s).
+  ` });
   csvPath = Option.String();
   shelf = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
     function unique<T>(things: Iterable<T>): T[] { return Array.from(new Set(things)) }
-    const isbns = unique(await reduceCSV(csv, collect(
+    const csvISBNs = unique(await reduceCSV(csv, collect(
       row => row['Exclusive Shelf'] == this.shelf
         ? (['ISBN13', 'ISBN'] as const)
           .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
           .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
           .filter(isbn => isbn != '')
-          .flatMap(isbn => this.bothISBNs ? equivalentISBNs(isbn) : [isbn])
+          .slice(0, 1)
         : []
     )));
+
+    const bothISBNs =
+      !this.bothISBNs
+        ? csvISBNs
+        : (() => {
+          const bothISBNs = new Set<string>;
+          csvISBNs.forEach(isbn => equivalentISBNs(isbn).forEach(isbn => bothISBNs.add(isbn)));
+          return bothISBNs;
+        })();
+
+    const isbns = Array.from(bothISBNs);
+
     this.context.stdout.write(isbns.join('\n'));
     this.context.stdout.write('\n');
     this.context.stderr.write(isbns.length.toString());
