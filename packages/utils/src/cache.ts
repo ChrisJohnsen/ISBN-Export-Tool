@@ -27,6 +27,15 @@ export type CachedPromisor<A, R> = ((argument: A) => Promise<R>) & {
     saveArgument: (argument: A) => As,
     saveResolution: (resolution: R) => Rs,
   }): SavedCache<As, Rs>,
+  /**
+   * Check for a previously cached resolution.
+   *
+   * Note: Unlike normal calls through the cache, this function is synchronous
+   * and does not check for "in flight" calls (those that have started, but not
+   * yet resolved).
+   *
+   */
+  checkCache(argument: A): CacheCheck<R>,
 };
 
 export type SavedCache<A, R> = [argument: A, resolution: R][];
@@ -134,7 +143,7 @@ export class CacheControl<T> {
 }
 
 // cache lookup helpers
-type CacheCheck<T> = { hit: true, value: T } | { hit: false, value: undefined };
+export type CacheCheck<T> = { hit: true, value: T } | { hit: false, value: undefined };
 function hit<T>(value: T): CacheCheck<T> { return { hit: true, value } }
 function miss<T>(): CacheCheck<T> { return { hit: false, value: void 0 } }
 function getCached<K, T>(key: K, cache: Map<K, T>): CacheCheck<T> {
@@ -198,6 +207,13 @@ function _cachePromisor<A, R>(
     overrides?.transformResolution(cacheKey, resolution) ?? resolution;
   const cacheResolution = (cacheKey: A, resolution: R): void =>
     overrides?.cacheResolution(cacheKey, resolution);
+  function checkCachedResolution(argument: A, cacheKey: A): CacheCheck<R> {
+    let cached = getCachedResolution(argument, cacheKey);
+    if (cached.hit) return cached;
+    cached = getCached(argument, cache);
+    if (cached.hit) return cached;
+    return miss();
+  }
 
   // let override rebuild its own cache from the "raw" one
   cache.forEach((resolution, arg) => {
@@ -218,10 +234,7 @@ function _cachePromisor<A, R>(
     {
       const pendingPromise = getCached(cacheKey, pending);
       if (pendingPromise.hit) return pendingPromise.value;
-      let cached: CacheCheck<R>;
-      cached = getCachedResolution(argument, cacheKey);
-      if (cached.hit) return Promise.resolve(cached.value);
-      cached = getCached(argument, cache);
+      const cached = checkCachedResolution(argument, cacheKey);
       if (cached.hit) return Promise.resolve(cached.value);
     }
 
@@ -270,7 +283,13 @@ function _cachePromisor<A, R>(
         ]);
   }
 
+  // check for cached resolution
+  function checkCache(argument: A): CacheCheck<R> {
+    return checkCachedResolution(argument, getCacheKey(argument));
+  }
+
   newfn.saveCache = saveCache;
+  newfn.checkCache = checkCache;
 
   return newfn;
 }

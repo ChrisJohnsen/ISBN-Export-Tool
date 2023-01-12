@@ -197,6 +197,25 @@ describe('cachePromisor', () => {
     await expect(cached('twenty')).resolves.toBe(20.5);
     expect(fn).toHaveBeenCalledTimes(2);
   });
+
+  test('checkCache', async () => {
+    const fn = jest.fn<(arg: string) => Promise<CacheControl<number>>>()
+      .mockResolvedValueOnce(new CacheControl(22, 'do not cache'))
+      .mockResolvedValueOnce(new CacheControl(22.5, 'cache'))
+      .mockResolvedValueOnce(new CacheControl(23, 'do not cache'));
+
+    const cached = cachePromisor(fn);
+
+    expect(cached.checkCache('twenty two')).toHaveProperty('hit', false);
+    await expect(cached('twenty two')).resolves.toBe(22);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(cached.checkCache('twenty two')).toHaveProperty('hit', false);
+
+    await expect(cached('twenty two')).resolves.toBe(22.5);
+    expect(cached.checkCache('twenty two')).toStrictEqual({ hit: true, value: 22.5 });
+    await expect(cached('twenty two')).resolves.toBe(22.5);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('cacheEditionsPromisor', () => {
