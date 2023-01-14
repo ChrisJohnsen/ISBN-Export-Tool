@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Builtins, Cli, Command, Option } from 'clipanion';
-import { collect, pipe, flatPipe, filter, prop, eq, map, pick, equivalentISBNs } from 'utils';
-import { reduceCSV, toCSV } from 'utils';
+import { pick, toCSV } from 'utils';
+import { missingISBNs, getISBNs } from './tool-core.js';
 
 class MissingISBNs extends Command {
   static usage = Command.Usage({
@@ -24,18 +24,12 @@ class MissingISBNs extends Command {
   csvPath = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    const noISBNs = await reduceCSV(csv, collect(
-      pipe(
-        flatPipe(
-          filter(pipe(prop('ISBN13'), eq('=""'))),
-          filter(pipe(prop('Exclusive Shelf'), eq('to-read'))),
-        ),
-        map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])),
-      )));
-    const csvOut = toCSV(noISBNs);
+    const noISBNRows = await missingISBNs(csv, 'to-read');
+    const someFields = noISBNRows.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']));
+    const csvOut = toCSV(someFields);
     this.context.stdout.write(csvOut);
     this.context.stdout.write('\n');
-    this.context.stderr.write(noISBNs.length.toString());
+    this.context.stderr.write(someFields.length.toString());
     this.context.stderr.write('\n');
   }
 }
@@ -63,28 +57,15 @@ class GetISBNs extends Command {
   csvPath = Option.String();
   shelf = Option.String();
   async execute() {
+
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    function unique<T>(things: Iterable<T>): T[] { return Array.from(new Set(things)) }
-    const csvISBNs = unique(await reduceCSV(csv, collect(
-      row => row['Exclusive Shelf'] == this.shelf
-        ? (['ISBN13', 'ISBN'] as const)
-          .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
-          .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
-          .filter(isbn => isbn != '')
-          .slice(0, 1)
-        : []
-    )));
 
-    const bothISBNs =
-      !this.bothISBNs
-        ? csvISBNs
-        : (() => {
-          const bothISBNs = new Set<string>;
-          csvISBNs.forEach(isbn => equivalentISBNs(isbn).forEach(isbn => bothISBNs.add(isbn)));
-          return bothISBNs;
-        })();
 
-    const isbns = Array.from(bothISBNs);
+    const isbns = Array.from(await getISBNs(
+      csv,
+      this.shelf,
+      { bothISBNs: !!this.bothISBNs },
+    ));
 
     this.context.stdout.write(isbns.join('\n'));
     this.context.stdout.write('\n');
@@ -93,9 +74,10 @@ class GetISBNs extends Command {
   }
 }
 
-Cli.from([
+const cli: Cli = Cli.from([
   Builtins.HelpCommand, Builtins.VersionCommand,
   MissingISBNs,
   GetISBNs,
-], { binaryName: 'goodreads-tool', binaryLabel: 'Goodreads export tools', binaryVersion: '0.1' })
-  .runExit(process.argv.slice(2), {});
+], { binaryName: 'goodreads-tool', binaryLabel: 'Goodreads export tools', binaryVersion: '0.1' });
+
+cli.runExit(process.argv.slice(2));
