@@ -5,7 +5,7 @@ export async function missingISBNs(csv: string, shelf: string): Promise<Row[]> {
   return await reduceCSV(csv, collect(
     flatPipe(
       filter(pipe(prop('ISBN13'), eq('=""'))),
-      filter(pipe(prop('Exclusive Shelf'), eq(shelf))),
+      filter(onShelf(shelf)),
     )));
 }
 
@@ -17,7 +17,7 @@ export async function getISBNs(
 ): Promise<Set<string>> {
 
   const csvISBNs = new Set(await reduceCSV(csv, collect(
-    row => row['Exclusive Shelf'] == shelf
+    row => onShelf(shelf, row)
       ? (['ISBN13', 'ISBN'] as const)
         .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
         .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
@@ -36,4 +36,19 @@ export async function getISBNs(
       })();
 
   return allISBNs;
+}
+
+function onShelf(shelf: string, row: Row): boolean;
+function onShelf(shelf: string): (row: Row) => boolean;
+function onShelf(shelf: string, row?: Row): ((row: Row) => boolean) | boolean {
+
+  const _onShelf = (row: Row) => row
+    .Bookshelves
+    .split(/\s*,\s*/)
+    .includes(shelf);
+
+  if (typeof row == 'undefined')
+    return _onShelf;
+  else
+    return _onShelf(row);
 }
