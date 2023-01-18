@@ -3,7 +3,7 @@
 import { transformSync } from 'esbuild';
 
 const defaultOptions = {
-  format: 'cjs',
+  format: 'esm',
   sourcemap: 'external',
   target: `node${process.versions.node}`,
   loader: 'ts',

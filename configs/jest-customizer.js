@@ -13,6 +13,7 @@ export default function customizeConfig(preset = {}) {
     clearMocks: true,
     moduleFileExtensions: Array.from(new Set(
       ['ts', 'js', 'cjs', ...(preset.moduleFileExtensions ?? jestDefaults.moduleFileExtensions)])),
+    extensionsToTreatAsEsm: ['.ts'],
     testMatch: [
       '**/tests/**/*.@(ts|js|cjs)'
     ],

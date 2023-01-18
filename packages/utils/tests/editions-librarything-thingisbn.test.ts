@@ -211,7 +211,7 @@ describe('full ThingISBN tests', () => {
 
   test('real (saved) data', async () => {
     const furl = (file: string) => {
-      if (__dirname)
+      if (typeof __dirname == 'string')
         return join(__dirname, file);
       else
         return new URL(file, import.meta.url);
