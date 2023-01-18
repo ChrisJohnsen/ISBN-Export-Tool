@@ -38,13 +38,16 @@ export type CachedPromisor<A, R> = ((argument: A) => Promise<R>) & {
   checkCache(argument: A): CacheCheck<R>,
 };
 
-export type SavedCache<A, R> = [argument: A, resolution: R][];
+export type SavedCache<A, R> = { version: 2, data: [argument: A, resolution: R, expiration: number][] };
 
 const taggedV1 = <A, R>(t: [A, R]): [argument: A, resolution: R] => t;
-const v1 = <A, R>(a: t.StrictValidator<unknown, A>, r: t.StrictValidator<unknown, R>) => t.isArray(t.isTuple(taggedV1([a, r])));
-const isRestorableV1 = v1(t.isUnknown(), t.isUnknown());
+const isRestorableV1 = t.isArray(t.isTuple(taggedV1([t.isUnknown(), t.isUnknown()])));
 
-export const isRestorable = t.isOneOf([isRestorableV1]); // update SavedCache be non-unknown formulation of latest version's type!
+const taggedV2 = <A, R, E>(t: [A, R, E]): [argument: A, resolution: R, expiration: E] => t;
+const isRestorableV2 = t.isObject({
+  version: t.isLiteral(2),
+  data: t.isArray(t.isTuple(taggedV2([t.isUnknown(), t.isUnknown(), t.isNumber()]))),
+});
 
 /**
  * These options control how the provided data is imported to populate the new
@@ -82,7 +85,7 @@ export type ImportCacheOptions<A, R> = SavedCache<A, R> | {
  * the resolutions are cached. Otherwise, all resolutions will be cached.
  */
 export function cachePromisor<A, R>(
-  fn: CacheablePromisor<A, R | CacheControl<R>>,
+  fn: CacheablePromisor<A, CacheControl<R>> | { fn: CacheablePromisor<A, R>, cacheForMillis: number },
   saved?: ImportCacheOptions<A, R>
 ): CachedPromisor<A, R> {
 
@@ -109,11 +112,14 @@ export function cachePromisor<A, R>(
  * See `cachePromisor` for more details.
  */
 export function cacheEditionsPromisor(
-  fn: CacheablePromisor<string, Set<string> | CacheControl<Set<string>>>,
+  fn: CacheablePromisor<string, CacheControl<Set<string>>> | { fn: CacheablePromisor<string, Set<string>>, cacheForMillis: number },
   saved?: ImportCacheOptions<string, Set<string>>)
   : CachedPromisor<string, Set<string>> {
 
-  const transformedCache = new Map<string, Set<string>>;
+  // contributorsOf: key->values entry means each of values lists key in its "raw" resolution
+  const contributorsOf = new Map<string, Set<string>>;
+  // transformedCache: cache of (possibly) merged resolutions; if merged, expiration is the earliest of contributing resolutions
+  const transformedCache = new Map<string, { resolution: Set<string>, expiration: number }>;
 
   const newfn = _cachePromisor(
     fn,
@@ -121,25 +127,77 @@ export function cacheEditionsPromisor(
     {
       getCacheKey: (argument: string) =>
         equivalentISBNs(argument)[0],
-      getCachedResolution: (cacheKey: string) =>
-        getCached(cacheKey, transformedCache),
-      transformResolution: (cacheKey: string, resolution: Set<string>): Set<string> => {
-        const normalized = Array.from(resolution, isbn => equivalentISBNs(isbn)[0]);
-        normalized.push(cacheKey);
-        const isbns = new Set(normalized.reduce(
-          (isbns, isbn) => isbns.concat(Array.from(transformedCache.get(isbn) ?? [])),
-          Array.from(normalized))
-          .sort());
-        return isbns;
+      getCachedResolution: (cacheKey: string) => {
+        const cached = getCached(cacheKey, transformedCache);
+        if (cached.hit && Date.now() < cached.value.expiration)
+          return hit(cached.value.resolution);
+        return miss();
       },
-      cacheResolution: (cacheKey: string, resolution: Set<string>) =>
-        resolution.forEach(isbn => transformedCache.set(isbn, resolution)),
+      transformResolution: (cacheKey: string, resolution: Set<string>, expiration: number, getCachedWithExpiration): { resolution: Set<string>, expiration: number } => {
+        // remove cacheKey from contributorsOf
+        {
+          // prevents other queries merging this cacheKey's new resolution due
+          // to some old value that this cacheKey no longer includes
+          (() => {
+            const previousCached = getCachedWithExpiration(cacheKey);
+            if (previousCached.hit)
+              return normalize(cacheKey, previousCached.value.resolution);
+            return [];
+          })().forEach(isbn => contributorsOf.get(isbn)?.delete(cacheKey));
+        }
+
+        // normalize the new resolution values
+        const normalized = new Set(normalize(cacheKey, resolution));
+
+        // add cacheKey as contributor to each of normalized
+        // also, collect other contributors to each of normalized
+        const contributors = new Set<string>;
+        normalized.forEach(isbn => {
+          const otherContributors = contributorsOf.get(isbn);
+          if (otherContributors) {
+            otherContributors.add(cacheKey);
+            otherContributors.forEach(c => contributors.add(c));
+          } else {
+            const newContributors = new Set([cacheKey]);
+            contributorsOf.set(isbn, newContributors);
+            contributors.add(cacheKey);
+          }
+        });
+        // skip the current cacheKey, since we will being with its contribution
+        contributors.delete(cacheKey);
+
+        const now = Date.now();
+        return Array.from(contributors).reduce(({ resolution, expiration }, contributor) => {
+          const cached = getCachedWithExpiration(contributor);
+          if (cached.hit)
+            if (now < cached.value.expiration) {
+              normalize(contributor, cached.value.resolution).forEach(isbn => resolution.add(isbn));
+              return { resolution, expiration: Math.min(expiration, cached.value.expiration) };
+            }
+          return { resolution, expiration };
+        }, { resolution: normalized, expiration });
+
+        function normalize(cacheKey: string, resolution: Iterable<string>): string[] {
+          const normalized = Array.from(resolution, isbn => equivalentISBNs(isbn)[0]);
+          normalized.push(cacheKey);
+          return normalized;
+        }
+      },
+      cacheResolution: (cacheKey: string, { resolution, expiration }: { resolution: Set<string>, expiration: number }) =>
+        resolution.forEach(isbn => transformedCache.set(isbn, { resolution, expiration })),
     });
   return newfn;
 }
 
 export class CacheControl<T> {
-  constructor(public value: T, public disposition: 'cache' | 'do not cache') { }
+  public expiration = 0; // already expired; surely?
+  constructor(public value: T, disposition: { forMillis: number } | { until: Date } | 'do not cache') {
+    if (typeof disposition == 'object')
+      if ('until' in disposition)
+        this.expiration = disposition.until.valueOf();
+      else if ('forMillis' in disposition)
+        this.expiration = Date.now() + disposition.forMillis;
+  }
 }
 
 // cache lookup helpers
@@ -154,33 +212,38 @@ function getCached<K, T>(key: K, cache: Map<K, T>): CacheCheck<T> {
 
 // Overrides for the cache
 //
-// `getCacheKey` is optional, but it is only ever used in conjunction with the
-// other override functions, so it does not make sense to use it by itself (the
-// base cache only deals with the "raw" argument, so it would not affect
-// anything).
+// If `getCacheKey` is given, its return value is used as the key in all the
+// internal caches (pending and resolved, the later of which is accessible
+// through `getCachedWithExpiration` in `transformResolution`).
 //
-// If you want to `transformResolution`, then you really need to
-// `getCachedResolution` and `cacheResolution`, too. If the override does not
-// cache its own transformed resolutions, then the only the initial "cache miss"
-// result will be transformed (the base cache will answer subsequent "cache hit"
-// calls with the "raw" resolution).
+// `getCachedResolution` is necessary if you want to be able to answer for
+// arguments (transformed into `cacheKey`) that have not previously been
+// processed by the wrapped function. In that case, you will probably also need
+// `cacheResolution` (the internal cache only records the "raw" resolution under
+// the `cacheKey`).
+//
+// In `transformResolution`, `getCachedWithExpiration` can be used to access the
+// internal cache of "raw" resolutions (including the previous resolution of the
+// current `cacheKey`).
 //
 interface CachedPromisorOverrides<A, R> {
   getCacheKey?(argument: A): A
-  getCachedResolution(cachedKey: A): CacheCheck<R>,
-  transformResolution(cacheKey: A, resolution: R): R
-  cacheResolution(cacheKey: A, resolution: R): void,
+  getCachedResolution?(cachedKey: A): CacheCheck<R>,
+  transformResolution?(cacheKey: A, resolution: R, expiration: number, getCachedWithExpiration: (argument: A) => CacheCheck<{ resolution: R, expiration: number }>): { resolution: R, expiration: number }
+  cacheResolution?(cacheKey: A, transformed: { resolution: R, expiration: number }): void,
 }
 
 // the overridable caching wrapper
 function _cachePromisor<A, R>(
-  fn: CacheablePromisor<A, R | CacheControl<R>>,
+  fn: CacheablePromisor<A, CacheControl<R>> | { fn: CacheablePromisor<A, R>, cacheForMillis: number },
   saved?: ImportCacheOptions<A, R>,
   overrides?: CachedPromisorOverrides<A, R>
 ): CachedPromisor<A, R> {
 
-  // cache of "raw" argument -> "raw" resolution
-  let cache: Map<A, R>;
+  const defaultCacheDuration = 30 * 24 * 60 * 60 * 1000;
+
+  // cache of cacheKey (possibly transformed argument) -> "raw" resolution
+  let cache: Map<A, { resolution: R, expiration: number }>;
 
   // restore cache from saved, or start empty
   if (!saved)
@@ -189,41 +252,65 @@ function _cachePromisor<A, R>(
     if (!saved.import)
       cache = new Map;
     else if (isRestorableV1(saved.import))
-      cache = new Map(saved.import.flatMap(([arg, res]) => {
+      cache = new Map(saved.import.flatMap(([arg, res]): [A, R][] => {
         try { return [[saved.restoreArgument(arg), saved.restoreResolution(res)]] }
+        catch { return [] }
+      }).map(([arg, res]) => [arg, { resolution: res, expiration: Date.now() + defaultCacheDuration }]));
+    else if (isRestorableV2(saved.import))
+      cache = new Map(saved.import.data.flatMap(([arg, res, exp]) => {
+        try { return [[saved.restoreArgument(arg), { resolution: saved.restoreResolution(res), expiration: exp }]] }
         catch { return [] }
       }));
     else
       throw 'saved.import does not match any recognized format';
   }
-  else cache = new Map(saved);
+  else cache = new Map(saved.data.map(([arg, res, exp]) => [arg, { resolution: res, expiration: exp }]));
 
   // override helpers
-  const getCacheKey = (argument: A): A =>
+  const getCacheKey = (argument: A) =>
     overrides?.getCacheKey?.(argument) ?? argument;
-  const getCachedResolution = (argument: A, cacheKey: A): CacheCheck<R> =>
-    overrides?.getCachedResolution(cacheKey) ?? miss();
-  const transformResolution = (cacheKey: A, resolution: R): R =>
-    overrides?.transformResolution(cacheKey, resolution) ?? resolution;
-  const cacheResolution = (cacheKey: A, resolution: R): void =>
-    overrides?.cacheResolution(cacheKey, resolution);
-  function checkCachedResolution(argument: A, cacheKey: A): CacheCheck<R> {
-    let cached = getCachedResolution(argument, cacheKey);
-    if (cached.hit) return cached;
-    cached = getCached(argument, cache);
-    if (cached.hit) return cached;
+  const getCachedResolution = (cacheKey: A) =>
+    overrides?.getCachedResolution?.(cacheKey) ?? miss();
+  const transformResolution = (cacheKey: A, resolution: R, expiration: number) =>
+    overrides?.transformResolution?.(cacheKey, resolution, expiration, (cacheKey: A) => getCached(cacheKey, cache)) ?? { resolution, expiration };
+  const cacheResolution = (cacheKey: A, transformed: { resolution: R, expiration: number }) =>
+    overrides?.cacheResolution?.(cacheKey, transformed);
+  function checkCachedResolution(cacheKey: A): CacheCheck<R> {
+    {
+      const cached = getCachedResolution(cacheKey);
+      if (cached.hit) return cached;
+    }
+    {
+      const cached = getCached(cacheKey, cache);
+      const now = Date.now();
+      if (cached.hit && now < cached.value.expiration) {
+        const transformed = transformResolution(cacheKey, cached.value.resolution, cached.value.expiration);
+        if (now < transformed.expiration) {
+          cacheResolution(cacheKey, transformed);
+          return hit(transformed.resolution);
+        }
+      }
+    }
     return miss();
   }
 
+  // delete expired entries
   // let override rebuild its own cache from the "raw" one
-  cache.forEach((resolution, arg) => {
-    const cacheKey = getCacheKey(arg);
-    cacheResolution(cacheKey, transformResolution(cacheKey, resolution));
+  const now = Date.now();
+  cache.forEach(({ resolution, expiration }, cacheKey) => {
+    if (now < expiration)
+      cacheResolution(cacheKey, transformResolution(cacheKey, resolution, expiration));
+    else
+      cache.delete(cacheKey);
   });
 
   // cache of cacheKey -> unsettled Promise
-  // keyed by the cacheKey since there is no override for the pending cache
   const pending: Map<A, Promise<R>> = new Map;
+
+  const ccfn = 'cacheForMillis' in fn
+    ? (argument: A): Promise<CacheControl<R>> =>
+      fn.fn(argument).then(resolution => new CacheControl(resolution, { forMillis: fn.cacheForMillis }))
+    : fn;
 
   // the caching wrapper function
   const newfn = (argument: A): Promise<R> => {
@@ -234,31 +321,27 @@ function _cachePromisor<A, R>(
     {
       const pendingPromise = getCached(cacheKey, pending);
       if (pendingPromise.hit) return pendingPromise.value;
-      const cached = checkCachedResolution(argument, cacheKey);
+      const cached = checkCachedResolution(cacheKey);
       if (cached.hit) return Promise.resolve(cached.value);
     }
 
     // call the wrapped function
-    const promise = fn(argument)
-      .then(cacheControlOrResolution => {
+    const promise = ccfn(argument)
+      .then(({ value: resolution, expiration }) => {
 
-        const { resolution, shouldCache } = ((ccOrR) =>
-          ccOrR instanceof CacheControl
-            ? { resolution: ccOrR.value, shouldCache: ccOrR.disposition === 'cache' }
-            : { resolution: ccOrR, shouldCache: true }
-        )(cacheControlOrResolution);
-
-        // cache the "raw" call result
-        if (shouldCache) cache.set(argument, resolution);
+        const shouldCache = Date.now() < expiration;
 
         // let the override transform
-        const transformed = transformResolution(cacheKey, resolution);
+        const transformed = transformResolution(cacheKey, resolution, expiration);
+
+        // cache the "raw" call result
+        if (shouldCache) cache.set(cacheKey, { resolution, expiration });
 
         // let override cache the result
         if (shouldCache) cacheResolution(cacheKey, transformed);
 
         // give the transformed value as the result of the overall cache call
-        return transformed;
+        return transformed.resolution;
       });
 
     // give the unsettled Promise to subsequent callers until it settles
@@ -274,18 +357,25 @@ function _cachePromisor<A, R>(
     saveResolution: (resolution: R) => Rs,
   }): SavedCache<As, Rs> | SavedCache<A, R> {
     if (!marshalling)
-      return [...cache.entries()];
+      return {
+        version: 2,
+        data: Array.from(cache.entries()).map(([arg, { resolution: res, expiration: exp }]) =>
+          [arg, res, exp])
+      };
     else
-      return [...cache.entries()].map(([arg, res]) =>
-        [
+      return {
+        version: 2,
+        data: Array.from(cache.entries()).map(([arg, { resolution: res, expiration: exp }]) => [
           marshalling.saveArgument(arg),
-          marshalling.saveResolution(res)
-        ]);
+          marshalling.saveResolution(res),
+          exp,
+        ])
+      };
   }
 
   // check for cached resolution
   function checkCache(argument: A): CacheCheck<R> {
-    return checkCachedResolution(argument, getCacheKey(argument));
+    return checkCachedResolution(getCacheKey(argument));
   }
 
   newfn.saveCache = saveCache;
