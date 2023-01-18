@@ -1,5 +1,6 @@
-import { collect, pipe, flatPipe, filter, prop, eq, equivalentISBNs } from 'utils';
-import { reduceCSV, Row } from 'utils';
+import { collect, pipe, flatPipe, filter, prop, eq } from './functional.js';
+import { equivalentISBNs } from './isbn.js';
+import { reduceCSV, Row } from './csv.js';
 
 export async function missingISBNs(csv: string, shelf: string): Promise<Row[]> {
   return await reduceCSV(csv, collect(

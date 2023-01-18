@@ -6,3 +6,4 @@ export { otherEditionsOfISBN as otherEditionsOfISBN__OpenLibrary_WorkEditions } 
 export { otherEditionsOfISBN as otherEditionsOfISBN__OpenLibrary_Search } from './editions-openlibrary-search.js';
 export { otherEditionsOfISBN as otherEditionsOfISBN__LibraryThing_ThingISBN } from './editions-librarything-thingisbn.js';
 export * from './cache.js';
+export * from './tool-core.js';

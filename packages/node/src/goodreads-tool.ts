@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Builtins, Cli, Command, Option } from 'clipanion';
 import { pick, toCSV } from 'utils';
-import { missingISBNs, getISBNs } from './tool-core.js';
+import { missingISBNs, getISBNs } from 'utils';
 
 class MissingISBNs extends Command {
   static usage = Command.Usage({
