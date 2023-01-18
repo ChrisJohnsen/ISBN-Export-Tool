@@ -27,6 +27,8 @@
   },
   "dependencies": {
     "isbn3": "^1.1.30",
+    "p-limit": "^4.0.0",
+    "p-throttle": "^5.0.0",
     "papaparse": "^5.3.2",
     "typanion": "^3.12.1"
   }

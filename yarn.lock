@@ -4033,6 +4033,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"p-limit@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "p-limit@npm:4.0.0"
+  dependencies:
+    yocto-queue: "npm:^1.0.0"
+  checksum: ca073ed51f443fbc8346494b72190944decaeee6f020a977e3370b8072553172cccf5cde2531f3719a82b98eb03abd29111a053c40e57573f3396262e2383997
+  languageName: node
+  linkType: hard
+
 "p-locate@npm:^4.1.0":
   version: 4.1.0
   resolution: "p-locate@npm:4.1.0"
@@ -4057,6 +4066,13 @@ __metadata:
   dependencies:
     aggregate-error: "npm:^3.0.0"
   checksum: 619df8954fe81933903bc760e9884d85540ef7e8f6c24c4e28e2c8f0ad14d480bb7d4541787eee2e2d61aa0fae8b54abc42f7afc35db457884e589386e78a922
+  languageName: node
+  linkType: hard
+
+"p-throttle@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "p-throttle@npm:5.0.0"
+  checksum: 7ed7b6fdb51654ea2f66152f2e6c58b116f1f9e048681728a35fa6cdff7ecbb112a24ac2ef471fe146785181b3c2ddca0853bad9157c519ea988802bac11d599
   languageName: node
   linkType: hard
 
@@ -4869,6 +4885,8 @@ __metadata:
     "@types/papaparse": "npm:^5.3.7"
     isbn3: "npm:^1.1.30"
     outdent: "npm:^0.8.0"
+    p-limit: "npm:^4.0.0"
+    p-throttle: "npm:^5.0.0"
     papaparse: "npm:^5.3.2"
     rollup-plugin-ts: "npm:^3.1.1"
     typanion: "npm:^3.12.1"
@@ -4990,5 +5008,12 @@ __metadata:
   version: 0.1.0
   resolution: "yocto-queue@npm:0.1.0"
   checksum: 63eceacd482622afd71290541a9823a0e5eed88a6b58a5d136a5fb8151ed4d1549c80f28d74d4ad351582f9890635d49e6cf70f8d3cc64948640f839f6a37c70
+  languageName: node
+  linkType: hard
+
+"yocto-queue@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "yocto-queue@npm:1.0.0"
+  checksum: 4522405d36a190a188112c3bc9ae84ac5eeafee637417ec127c6defc28a75b745a6139f9178107389e5ae57c3a5523b0016aec5a1f23b228c7b17ca8b2869a9c
   languageName: node
   linkType: hard

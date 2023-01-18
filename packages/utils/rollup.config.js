@@ -14,7 +14,7 @@ export default [
       { file: 'dist/index.js' },
       { file: 'dist/index.cjs', format: 'cjs' },
     ],
-    external: [/* 'papaparse', */ 'isbn3', 'typanion'],
+    external: [/* 'papaparse', */ 'isbn3', 'typanion', 'p-throttle', 'p-limit'],
     plugins: externalPlugins,
     watch: {
       clearScreen: false,
