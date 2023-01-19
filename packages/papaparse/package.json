@@ -1,5 +1,5 @@
 {
-  "name": "utils",
+  "name": "papaparse_rebundled",
   "private": true,
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -18,17 +18,12 @@
     }
   },
   "devDependencies": {
-    "@jest/globals": "^29.3.1",
     "@rollup/plugin-commonjs": "^24.0.0",
     "@rollup/plugin-node-resolve": "^15.0.1",
-    "outdent": "^0.8.0",
+    "@types/papaparse": "^5.3.7",
     "rollup-plugin-ts": "^3.1.1"
   },
   "dependencies": {
-    "isbn3": "^1.1.30",
-    "p-limit": "^4.0.0",
-    "p-throttle": "^5.0.0",
-    "papaparse_rebundled": "workspace:^",
-    "typanion": "^3.12.1"
+    "papaparse": "^5.3.2"
   }
 }

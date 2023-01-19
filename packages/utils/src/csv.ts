@@ -1,5 +1,5 @@
-import { parse, type ParseConfig } from 'papaparse';
-import { unparse } from 'papaparse';
+import { parse, type ParseConfig } from 'papaparse_rebundled';
+import { unparse } from 'papaparse_rebundled';
 
 interface RowInfo {
   offset: number,
