@@ -1,4 +1,4 @@
-import { collect, pipe, flatPipe, filter, prop, eq } from './functional.js';
+import { collect, flatPipe, filter } from './functional.js';
 import { equivalentISBNs } from './isbn.js';
 import { reduceCSV, Row } from './csv.js';
 import {
@@ -17,8 +17,8 @@ import * as t from 'typanion';
 export async function missingISBNs(csv: string, shelf: string): Promise<Row[]> {
   return await reduceCSV(csv, collect(
     flatPipe(
-      filter(pipe(prop('ISBN13'), eq('=""'))),
       filter(onShelf(shelf)),
+      filter(row => rowISBNs(row).length == 0),
     )));
 }
 
@@ -37,11 +37,7 @@ export async function getISBNs(
 
   const csvISBNs = new Set(await reduceCSV(csv, collect(
     row => onShelf(shelf, row)
-      ? (['ISBN13', 'ISBN'] as const)
-        .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
-        .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
-        .filter(isbn => isbn != '')
-        .slice(0, 1)
+      ? rowISBNs(row).slice(0, 1)
       : []
   )));
 
@@ -76,6 +72,13 @@ function onShelf(shelf: string, row?: Row): ((row: Row) => boolean) | boolean {
     return _onShelf;
   else
     return _onShelf(row);
+}
+
+function rowISBNs(row: Row): string[] {
+  return (['ISBN13', 'ISBN'] as const)
+    .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
+    .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
+    .filter(isbn => isbn != '');
 }
 
 export type CacheData = Record<string, unknown | undefined>;
