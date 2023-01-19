@@ -1,6 +1,6 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, jest } from '@jest/globals';
 import { outdent } from 'outdent';
-import { missingISBNs, Row } from 'utils';
+import { equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, Row } from 'utils';
 
 describe('missingISBNs', () => {
 
@@ -154,5 +154,210 @@ describe('missingISBNs', () => {
 
   function ids(rows: Row[]): number[] {
     return rows.map(row => parseInt(row.id));
+  }
+});
+
+describe('getISBNs', () => {
+
+  test('not really CSV', async () => {
+    const csv = outdent`
+      This is just a string. It is
+      not particularly CSV-like, but it
+      might be interpreted like that.
+    `;
+
+    await expect(getISBNs(csv, 'to-read')).rejects.toBeDefined();
+  });
+
+  test('no Bookshelves columns', async () => {
+    const csv = outdent`
+      id,ISBN13
+      100,100000
+    `;
+
+    await expect(getISBNs(csv, 'to-read')).rejects.toBeDefined();
+  });
+
+  test('no ISBN or ISBN13 column', async () => {
+    const csv = outdent`
+      id,Bookshelves
+      200,to-read
+      101,read
+      102,currently-reading
+      103,"read, other"
+      204,"third, to-read"
+      205,to-read
+    `;
+    const result = await getISBNs(csv, 'to-read');
+
+    // missing column is same as empty
+    expect(result).toStrictEqual(new Set);
+  });
+
+  test('no options: first of ISBN13 or ISBN', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+    `;
+    const result = await getISBNs(csv, 'to-read');
+
+    expect(result).toStrictEqual(new Set(['0000002003', '9780000002044', '9780000002051']));
+  });
+
+  test('no options: first of ISBN13 or ISBN (other shelf)', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      100,to-read,"=""0000001007""",
+      101,read,,
+      102,currently-reading,,
+      203,"read, other","=""0000002038""",9780000002037
+      104,"third, to-read","=""""","=""9780000001047"""
+      105,to-read,"=""0000001058""",9780000001054
+    `;
+    const result = await getISBNs(csv, 'other');
+
+    expect(result).toStrictEqual(new Set(['9780000002037']));
+  });
+
+  test('{bothISBNs:true}: ISBN-13 and ISBN-10 of first of ISBN13 or ISBN', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+      206,to-read,000000206Y,9780000002068
+    `;
+    // 206 ISBN is bogus, but it is ignored since it also has ISBN13
+
+    const result = await getISBNs(csv, 'to-read', { bothISBNs: true });
+
+    // 206's ISBN-10 will be derived from its ISBN13
+    expect(result).toStrictEqual(new Set([
+      '0000002003', '9780000002006',
+      '0000002046', '9780000002044',
+      '0000002054', '9780000002051',
+      '0000002062', '9780000002068',
+    ]));
+  });
+
+  test('{otherEditions:{fetcher:<resolves to empty string>}}', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+      206,to-read,000000206Y,9780000002068
+    `;
+    // 206 ISBN is bogus, but it is ignored since it also has ISBN13
+
+    const fetcher = jest.fn<Fetcher>().mockResolvedValue('');
+    const result = await getISBNs(csv, 'to-read', { otherEditions: { fetcher } });
+
+    // ISBN-13 version of first of ISBN13 or ISBN
+    expect(result).toStrictEqual(new Set([
+      '9780000002006',
+      '9780000002044',
+      '9780000002051',
+      '9780000002068',
+    ]));
+  });
+
+  test('{otherEditions:{fetcher:<simulates each service>}}', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+      206,to-read,000000206Y,9780000002068
+    `;
+
+    const fetcher = makeFakeFetcher({
+      '9780000002006': ['0-00-010200-8'],
+      '9780000002044': ['978-0-00-010204-1', '0000202045'],
+      '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
+      '9780000002068': [],
+    });
+    const result = await getISBNs(csv, 'to-read', { otherEditions: { fetcher } });
+
+    // ISBN-13 version of "editions of" first of ISBN13 or ISBN
+    expect(result).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+      '9780000002068',
+    ]));
+  });
+
+  test('{bothISBNs:true,otherEditions:{fetcher:<simulates each service>}}', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+      206,to-read,000000206Y,9780000002068
+    `;
+
+    const fetcher = makeFakeFetcher({
+      '9780000002006': ['0-00-010200-8'],
+      '9780000002044': ['978-0-00-010204-1', '0000202045'],
+      '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
+      '9780000002068': [],
+    });
+    const result = await getISBNs(csv, 'to-read', { bothISBNs: true, otherEditions: { fetcher } });
+
+    // ISBN-13 and ISBN-10 versions of "editions of" first of ISBN13 or ISBN
+    expect(result).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '0000002003', '0000102008',
+
+      '9780000002044', '9780000102041', '9780000202048',
+      '0000002046', '0000102040', '0000202045',
+
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+      '0000002054', '0000102059', '0000202053', '0000302058',
+
+      '9780000002068',
+      '0000002062',
+    ]));
+  });
+
+  function makeFakeFetcher(data: Record<string, string[]>): Fetcher {
+    return async url => {
+      let match;
+
+      match = url.match(RegExp('^https://openlibrary\\.org/isbn/([\\dXx -]+)\\.json$'));
+      if (match)
+        return JSON.stringify({ works: [{ key: `/works/OL${match[1]}W` }] }); // fake work ID
+      match = url.match(RegExp('^https://openlibrary\\.org/works/OL([\\dXx -]+)W/editions\\.json$'));
+      if (match)
+        return JSON.stringify({ entries: (data[equivalentISBNs(match[1])[0]] ?? []).map(isbn => normalizeISBN(isbn).length == 13 ? { isbn_13: [isbn] } : { isbn_10: [isbn] }) });
+
+      match = url.match(RegExp('^https://openlibrary\\.org/search\\.json\\?q=([\\dXx -]+)&fields=isbn$'));
+      if (match)
+        return JSON.stringify({ docs: [{ isbn: (data[equivalentISBNs(match[1])[0]] ?? []) }] });
+
+      match = url.match(RegExp('^https://www\\.librarything\\.com/api/thingISBN/([\\dXx -]+)$'));
+      if (match)
+        return `<idlist>${(data[equivalentISBNs(match[1])[0]] ?? []).map(isbn => `<isbn>${isbn}</isbn>`).join('')}</idlist>`;
+
+      throw 'nope: ' + url;
+    };
   }
 });
