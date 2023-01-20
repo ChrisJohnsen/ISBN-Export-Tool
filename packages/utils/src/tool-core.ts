@@ -29,6 +29,7 @@ export async function getISBNs(
     bothISBNs?: boolean,
     otherEditions?: {
       fetcher: Fetcher
+      services?: EditionsServices,
       cacheData?: CacheData,
       reporter?: ProgressReporter,
     } | false,
@@ -45,7 +46,7 @@ export async function getISBNs(
     !otherEditions
       ? csvISBNs
       : await fetchOtherEditionISBNs(csvISBNs, otherEditions.fetcher,
-        otherEditions.cacheData, otherEditions.reporter);
+        otherEditions.services, otherEditions.cacheData, otherEditions.reporter);
 
   const allISBNs =
     !bothISBNs
@@ -86,6 +87,7 @@ export type CacheData = Record<string, unknown | undefined>;
 async function fetchOtherEditionISBNs(
   isbnsIterable: Iterable<string>,
   fetcher: Fetcher,
+  services?: EditionsServices,
   cacheData?: CacheData,
   reporter?: ProgressReporter,
 ): Promise<Set<string>> {
@@ -93,7 +95,7 @@ async function fetchOtherEditionISBNs(
   // gather the ISBNs
   const isbns = Array.from(isbnsIterable);
 
-  const editionsOfs = editionsOfServices(10, fetcher, cacheData, reporter);
+  const editionsOfs = editionsOfServices(10, fetcher, services, cacheData, reporter);
 
   const oneOf = <T>(arr: T[]) => arr[Math.trunc(Math.random() * arr.length)];
 
@@ -118,7 +120,7 @@ async function fetchOtherEditionISBNs(
 
   // report the assignments
   try {
-    const map = new Map<string, Set<string>>;
+    const map = new Map<EditionsService, Set<string>>;
     const set = <K, V>(map: Map<K, Set<V>>, k: K) => {
       {
         const s = map.get(k);
@@ -131,7 +133,7 @@ async function fetchOtherEditionISBNs(
     uncachedAssignments.forEach(({ isbn, editionsOf: { serviceName } }) => { set(map, serviceName).add(isbn) });
     reporter?.({
       event: 'query plan',
-      plan: Object.fromEntries(map.entries())
+      plan: map
     });
   } catch { /* ignore */ }
 
@@ -179,13 +181,26 @@ const reportBeforeAndAfter = <A extends unknown[], R>(
     )
     : wrappee;
 
+export type EditionsService =
+  | 'Open Library WorkEditions'
+  | 'Open Library Search'
+  | 'LibraryThing ThingISBN'
+  | never;
+export type EditionsServices = Set<EditionsService>;
+export const AllEditionsServices: Readonly<EditionsServices> = Object.freeze(new Set<EditionsService>([
+  'Open Library WorkEditions',
+  'Open Library Search',
+  'LibraryThing ThingISBN',
+]));
+
 function editionsOfServices(
   limitn: number,
   fetcher: Fetcher,
+  services?: EditionsServices,
   cacheData?: CacheData,
   reporter?: ProgressReporter,
 ): {
-  serviceName: string,
+  serviceName: EditionsService,
   checkCache: (isbn: string) => CacheCheck<Set<string>>,
   query: (isbn: string) => Promise<Set<string>>,
   saveCache: () => void,
@@ -202,7 +217,7 @@ function editionsOfServices(
 
   // "editions of" functions, where we store their cached data, and the throttles to apply to their fetches
   const editionsOfSetups: [
-    serviceName: string,
+    serviceName: EditionsService,
     editionsOf: (f: Fetcher) => (i: string) => Promise<EditionsISBNResults>,
     throttler: (fetcher: Fetcher) => Fetcher,
   ][] = [
@@ -210,6 +225,12 @@ function editionsOfServices(
       ['Open Library Search', otherEditionsOfISBN__OpenLibrary_Search, olThrottle],
       ['LibraryThing ThingISBN', otherEditionsOfISBN__LibraryThing_ThingISBN, ltThrottle],
     ];
+
+  // use all the services if none specified, or just the enabled ones
+  const enabledEditionsOfSetups =
+    !services
+      ? editionsOfSetups
+      : editionsOfSetups.filter(([serviceName]) => services.has(serviceName));
 
   // how to save and restore (as JSON) the argument and resolution values
   const savers = {
@@ -222,7 +243,7 @@ function editionsOfServices(
   };
 
   // package up all the limiting, progress capture, caching (and restoring/saving), throttling, and error handling around each "editions of" service
-  return editionsOfSetups.map(([serviceName, editionsOf, throttle]) => {
+  return enabledEditionsOfSetups.map(([serviceName, editionsOf, throttle]) => {
 
     // throttle and report on fetcher
     const throttledFetcher = throttle(
@@ -274,11 +295,11 @@ function editionsOfServices(
 }
 
 export type ProgressReport =
-  | { event: 'service cache hit', service: string, isbn: string }
-  | { event: 'query plan', plan: Record<string, Set<string>> }
-  | { event: 'service query started', service: string, isbn: string }
-  | { event: 'service query finished', service: string, isbn: string, isbns: Set<string>, warnings: ContentError[], faults: ContentError[] }
+  | { event: 'service cache hit', service: EditionsService, isbn: string }
+  | { event: 'query plan', plan: Map<EditionsService, Set<string>> }
+  | { event: 'service query started', service: EditionsService, isbn: string }
+  | { event: 'service query finished', service: EditionsService, isbn: string, isbns: Set<string>, warnings: ContentError[], faults: ContentError[] }
   | { event: 'rejection', reason: any } // eslint-disable-line @typescript-eslint/no-explicit-any
-  | { event: 'fetch started', service: string, url: string }
-  | { event: 'fetch finished', service: string, url: string, elapsed: number };
+  | { event: 'fetch started', service: EditionsService, url: string }
+  | { event: 'fetch finished', service: EditionsService, url: string, elapsed: number };
 export type ProgressReporter = (report: ProgressReport) => void;

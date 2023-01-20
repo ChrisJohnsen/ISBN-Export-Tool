@@ -1,6 +1,6 @@
 import { describe, test, expect, jest } from '@jest/globals';
 import { outdent } from 'outdent';
-import { equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, Row } from 'utils';
+import { AllEditionsServices, equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, ProgressReport, Row } from 'utils';
 
 describe('missingISBNs', () => {
 
@@ -302,7 +302,7 @@ describe('getISBNs', () => {
     ]));
   });
 
-  test('{bothISBNs:true,otherEditions:{fetcher:<simulates each service>}}', async () => {
+  test('{bothISBNs:true,otherEditions:{fetcher:<simulates all services>}}', async () => {
     const csv = outdent`
       id,Bookshelves,ISBN,ISBN13
       200,to-read,"=""0000002003""",
@@ -336,6 +336,56 @@ describe('getISBNs', () => {
       '9780000002068',
       '0000002062',
     ]));
+  });
+
+  test.each(Array.from(AllEditionsServices))('{otherEditions:{services:{%s},fetcher:<simulates all services>}}', async service => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+      206,to-read,000000206Y,9780000002068
+    `;
+
+    const fetcher = makeFakeFetcher({
+      '9780000002006': ['0-00-010200-8'],
+      '9780000002044': ['978-0-00-010204-1', '0000202045'],
+      '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
+      '9780000002068': [],
+    });
+    const serviceSpy = jest.fn();
+    const result = await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        services: new Set([service]),
+        fetcher,
+        reporter,
+      }
+    });
+
+    // ISBN-13 version of "editions of" first of ISBN13 or ISBN
+    expect(result).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+      '9780000002068',
+    ]));
+
+    expect(serviceSpy.mock.calls).toEqual(Array(9).fill([service]));
+
+    function reporter(report: ProgressReport) {
+      const event = report.event;
+      if (event == 'query plan')
+        Array.from(report.plan.keys()).forEach(service => serviceSpy(service));
+      if (event == 'service cache hit')
+        serviceSpy(report.service);
+      if (event == 'service query started')
+        serviceSpy(report.service);
+      if (event == 'service query finished')
+        serviceSpy(report.service);
+    }
   });
 
   function makeFakeFetcher(data: Record<string, string[]>): Fetcher {
