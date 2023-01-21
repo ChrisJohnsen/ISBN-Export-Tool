@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "clipanion": "^3.2.0-rc.14",
+    "lowdb": "^5.0.5",
     "utils": "workspace:^"
   }
 }

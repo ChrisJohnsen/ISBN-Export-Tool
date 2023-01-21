@@ -29,5 +29,13 @@ export default [
       clearScreen: false,
       buildDelay: 50, // helps prevent immediate rebuild
     },
+    moduleContext(moduleId) {
+      if (/\.zip[/\\]node_modules[/\\](lowdb|steno)[/\\]/.test(moduleId)) {
+        // lowdb and steno include TS-generated private accessor helper functions that harmlessly use global this
+        // silence THIS_IS_UNDEFINED by providing an alternate spelling of undefined for their use as this
+        return '(void 0)';
+      }
+      return 'undefined';
+    },
   },
 ];
