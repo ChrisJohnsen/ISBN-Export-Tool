@@ -110,6 +110,7 @@ async function fetchOtherEditionISBNs(
       if (cacheTry.hit) {
         try { reporter?.({ event: 'service cache hit', service: assignment.editionsOf.serviceName, isbn }) } catch { /* ignore */ }
         cacheTry.value.forEach(isbn => r.cachedISBNs.add(isbn));
+        mergeOtherCaches(editionsOf.serviceName, isbn, r.cachedISBNs);
       }
       else
         r.uncachedAssignments.push(assignment);
@@ -139,7 +140,8 @@ async function fetchOtherEditionISBNs(
 
   // start an "editions of" query for each un-cached ISBN
   const isbnFetches = await Promise.allSettled(
-    uncachedAssignments.map(({ isbn, editionsOf }) => editionsOf.query(isbn)));
+    uncachedAssignments.map(async ({ isbn, editionsOf }) =>
+      mergeOtherCaches(editionsOf.serviceName, isbn, await editionsOf.query(isbn))));
 
   // cache the results
   editionsOfs.forEach(cached => cached.saveCache());
@@ -153,6 +155,17 @@ async function fetchOtherEditionISBNs(
     }
     return set;
   }, cachedISBNs);
+
+  function mergeOtherCaches(serviceName: EditionsService, isbn: string, isbns: Set<string>) {
+    editionsOfs.forEach(otherEditionsOf => {
+      if (otherEditionsOf.serviceName != serviceName) {
+        const cacheTry = otherEditionsOf.checkCache(isbn);
+        if (cacheTry.hit)
+          cacheTry.value.forEach(isbn => isbns.add(isbn));
+      }
+    });
+    return isbns;
+  }
 }
 
 const beforeAndAfter = <A extends unknown[], R>(

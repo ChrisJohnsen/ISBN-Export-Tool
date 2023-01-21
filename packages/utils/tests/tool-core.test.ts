@@ -388,6 +388,137 @@ describe('getISBNs', () => {
     }
   });
 
+  test('{otherEditions:{services:{multiple},fetcher:<simulates all services>}} merges result across services', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+      206,to-read,000000206Y,9780000002068
+    `;
+    const serviceSpy = jest.fn();
+    const cacheData: Record<string, unknown> = {};
+
+    // fetch some "editions of" ISBNs with one service
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        services: new Set(['Open Library WorkEditions']),
+        fetcher: makeFakeFetcher({
+          '9780000002006': ['0-00-010200-8'],
+          '9780000002044': ['978-0-00-010204-1'],
+          '9780000002051': ['9780000102058', '9780000202055'],
+          '9780000002068': [],
+        }),
+        cacheData,
+        reporter,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041',
+      '9780000002051', '9780000102058', '9780000202055',
+      '9780000002068',
+    ]));
+    expect(serviceSpy.mock.calls).toEqual(Array(9).fill(['Open Library WorkEditions']));
+
+    serviceSpy.mockClear();
+
+    // fetch some slightly different "editions of" ISBNs with another service
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        services: new Set(['LibraryThing ThingISBN']),
+        fetcher: makeFakeFetcher({
+          '9780000002006': [],
+          '9780000002044': ['0000202045'],
+          '9780000002051': ['9780000102058', '9780000202055'],
+          '9780000002068': ['0-00-010206-7'],
+        }),
+        cacheData,
+        reporter,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006',
+      '9780000002044', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055',
+      '9780000002068', '9780000102065'
+    ]));
+    expect(serviceSpy.mock.calls).toEqual(Array(9).fill(['LibraryThing ThingISBN']));
+
+    serviceSpy.mockClear();
+
+    // now, enable both services and fetch the merged ISBNs
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        services: new Set(['Open Library WorkEditions', 'LibraryThing ThingISBN']),
+        fetcher: () => { throw 'everything should have been cached!' },
+        cacheData,
+        reporter,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055',
+      '9780000002068', '9780000102065'
+    ]));
+    expect(serviceSpy).toHaveBeenCalledTimes(4); // 4 cache hits, probably both services
+
+    serviceSpy.mockClear();
+
+    const primedCacheData = JSON.stringify(cacheData);
+
+    // also merge after a live query, not just cache hits on assigned services
+
+    // this is pretty ugly... ISBNs are randomly assigned to services, so we
+    // can't guarantee that the target ISBN will be processed by the pristine
+    // service. Try a bunch of times and hope we get the desired assignment
+    // eventually
+    let valid = false;
+    for (let i = 0; i < 30; i++) {
+      const result = await getISBNs(csv, 'to-read', {
+        otherEditions: {
+          services: AllEditionsServices,
+          fetcher: makeFakeFetcher({
+            '9780000002006': [],
+            '9780000002044': [],
+            '9780000002051': ['978-0 00-030205 2'],
+            '9780000002068': [],
+          }),
+          cacheData: JSON.parse(primedCacheData),
+          reporter: report => {
+            if (report.event == 'service query started' && report.service == 'Open Library Search' && report.isbn == '9780000002051')
+              valid = true;
+          },
+        }
+      });
+      if (!valid) continue;
+
+      expect(result).toStrictEqual(new Set([
+        '9780000002006', '9780000102003',
+        '9780000002044', '9780000102041', '9780000202048',
+        '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+        '9780000002068', '9780000102065'
+      ]));
+
+      break;
+    }
+
+    expect(valid).toBeTruthy();
+
+    function reporter(report: ProgressReport) {
+      const event = report.event;
+      if (event == 'query plan')
+        Array.from(report.plan.keys()).forEach(service => serviceSpy(service));
+      if (event == 'service cache hit')
+        serviceSpy(report.service);
+      if (event == 'service query started')
+        serviceSpy(report.service);
+      if (event == 'service query finished')
+        serviceSpy(report.service);
+    }
+  });
+
   function makeFakeFetcher(data: Record<string, string[]>): Fetcher {
     return async url => {
       let match;
