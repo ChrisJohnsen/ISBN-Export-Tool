@@ -262,7 +262,7 @@ describe('getISBNs', () => {
     // 206 ISBN is bogus, but it is ignored since it also has ISBN13
 
     const fetcher = jest.fn<Fetcher>().mockResolvedValue('');
-    const result = await getISBNs(csv, 'to-read', { otherEditions: { fetcher } });
+    const result = await getISBNs(csv, 'to-read', { otherEditions: { fetcher, throttle: false } });
 
     // ISBN-13 version of first of ISBN13 or ISBN
     expect(result).toStrictEqual(new Set([
@@ -291,7 +291,7 @@ describe('getISBNs', () => {
       '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
       '9780000002068': [],
     });
-    const result = await getISBNs(csv, 'to-read', { otherEditions: { fetcher } });
+    const result = await getISBNs(csv, 'to-read', { otherEditions: { fetcher, throttle: false } });
 
     // ISBN-13 version of "editions of" first of ISBN13 or ISBN
     expect(result).toStrictEqual(new Set([
@@ -320,7 +320,7 @@ describe('getISBNs', () => {
       '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
       '9780000002068': [],
     });
-    const result = await getISBNs(csv, 'to-read', { bothISBNs: true, otherEditions: { fetcher } });
+    const result = await getISBNs(csv, 'to-read', { bothISBNs: true, otherEditions: { fetcher, throttle: false } });
 
     // ISBN-13 and ISBN-10 versions of "editions of" first of ISBN13 or ISBN
     expect(result).toStrictEqual(new Set([
@@ -362,6 +362,7 @@ describe('getISBNs', () => {
         services: new Set([service]),
         fetcher,
         reporter,
+        throttle: false,
       }
     });
 
@@ -414,6 +415,7 @@ describe('getISBNs', () => {
         }),
         cacheData,
         reporter,
+        throttle: false,
       }
     })).toStrictEqual(new Set([
       '9780000002006', '9780000102003',
@@ -437,6 +439,7 @@ describe('getISBNs', () => {
         }),
         cacheData,
         reporter,
+        throttle: false,
       }
     })).toStrictEqual(new Set([
       '9780000002006',
@@ -490,6 +493,7 @@ describe('getISBNs', () => {
             if (report.event == 'service query started' && report.service == 'Open Library Search' && report.isbn == '9780000002051')
               valid = true;
           },
+          throttle: false,
         }
       });
       if (!valid) continue;

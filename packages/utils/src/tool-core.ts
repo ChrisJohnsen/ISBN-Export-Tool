@@ -32,6 +32,7 @@ export async function getISBNs(
       services?: EditionsServices,
       cacheData?: CacheData,
       reporter?: ProgressReporter,
+      throttle?: boolean,
     } | false,
   } = {},
 ): Promise<Set<string>> {
@@ -46,7 +47,7 @@ export async function getISBNs(
     !otherEditions
       ? csvISBNs
       : await fetchOtherEditionISBNs(csvISBNs, otherEditions.fetcher,
-        otherEditions.services, otherEditions.cacheData, otherEditions.reporter);
+        otherEditions.throttle ?? true, otherEditions.services, otherEditions.cacheData, otherEditions.reporter);
 
   const allISBNs =
     !bothISBNs
@@ -87,6 +88,7 @@ export type CacheData = Record<string, unknown | undefined>;
 async function fetchOtherEditionISBNs(
   isbnsIterable: Iterable<string>,
   fetcher: Fetcher,
+  throttle: boolean,
   services?: EditionsServices,
   cacheData?: CacheData,
   reporter?: ProgressReporter,
@@ -95,7 +97,7 @@ async function fetchOtherEditionISBNs(
   // gather the ISBNs
   const isbns = Array.from(isbnsIterable);
 
-  const editionsOfs = editionsOfServices(10, fetcher, services, cacheData, reporter);
+  const editionsOfs = editionsOfServices(10, fetcher, throttle, services, cacheData, reporter);
 
   const oneOf = <T>(arr: T[]) => arr[Math.trunc(Math.random() * arr.length)];
 
@@ -209,6 +211,7 @@ export const AllEditionsServices: Readonly<EditionsServices> = Object.freeze(new
 function editionsOfServices(
   limitn: number,
   fetcher: Fetcher,
+  throttle: boolean,
   services?: EditionsServices,
   cacheData?: CacheData,
   reporter?: ProgressReporter,
@@ -224,9 +227,9 @@ function editionsOfServices(
 
   // separate throttles to be applied to fetches from different services
   const olThrottle = (fetcher: Fetcher) =>
-    pThrottle({ limit: 1, interval: 100, strict: true })(fetcher);  // XXX 1/1000?
+    pThrottle({ limit: 1, interval: 1000, strict: true })(fetcher);
   const ltThrottle = (fetcher: Fetcher) =>
-    pThrottle({ limit: 1, interval: 100, strict: true })(fetcher);  // XXX 1/1000
+    pThrottle({ limit: 1, interval: 1000, strict: true })(fetcher);
 
   // "editions of" functions, where we store their cached data, and the throttles to apply to their fetches
   const editionsOfSetups: [
@@ -256,15 +259,17 @@ function editionsOfServices(
   };
 
   // package up all the limiting, progress capture, caching (and restoring/saving), throttling, and error handling around each "editions of" service
-  return enabledEditionsOfSetups.map(([serviceName, editionsOf, throttle]) => {
+  return enabledEditionsOfSetups.map(([serviceName, editionsOf, throttler]) => {
 
-    // throttle and report on fetcher
-    const throttledFetcher = throttle(
-      reportBeforeAndAfter(
-        ([url]) => ({ event: 'fetch started', service: serviceName, url }),
-        fetcher,
-        ([url], _, elapsed) => ({ event: 'fetch finished', service: serviceName, url, elapsed }),
-        reporter));
+    // report on fetcher
+    const reportingFetcher = reportBeforeAndAfter(
+      ([url]) => ({ event: 'fetch started', service: serviceName, url }),
+      fetcher,
+      ([url], _, elapsed) => ({ event: 'fetch finished', service: serviceName, url, elapsed }),
+      reporter);
+
+    // throttle fetcher
+    const throttledFetcher = throttle ? throttler(reportingFetcher) : reportingFetcher;
 
     // report on editions of
     const trackedEditionsOf = reportBeforeAndAfter(
