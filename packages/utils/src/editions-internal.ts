@@ -1,12 +1,14 @@
 // some internal-only helpers that "editions of" functions can use
 
+import { CacheControl } from "./cache.js";
 import { ContentError, EditionsISBNResults, FetchResult } from "./editions-common.js";
 
-export type InitialFault<T> = { warning: T; } | { temporary: T; };
+export type InitialFault<T> = ({ warning: T } | { temporary: T }) & { cacheUntil?: number };
 
-export function fetcherResponseOrFault(identifier: string, response: FetchResult): string | InitialFault<string> {
-  if (typeof response == 'string')
-    return response;
+export function fetcherResponseOrFault(identifier: string, ccResponse: FetchResult): string | InitialFault<string> {
+  if (typeof ccResponse == 'string')
+    return ccResponse;
+  const response = ccResponse instanceof CacheControl ? ccResponse.value : ccResponse;
   const status = response.status;
   const statusStr = `${status}${response.statusText ? ` ${response.statusText}` : ''}`;
   const blurb = (status => {
@@ -22,7 +24,12 @@ export function fetcherResponseOrFault(identifier: string, response: FetchResult
       return 'interim as final!?:';
     return 'bad(?)';
   })(status);
-  return { temporary: `${identifier} ${blurb} HTTP status ${statusStr}` };
+  return maybeCacheUntil({ temporary: `${identifier} ${blurb} HTTP status ${statusStr}` });
+  function maybeCacheUntil<T>(i: InitialFault<T>) {
+    if (ccResponse instanceof CacheControl)
+      return { ...i, cacheUntil: ccResponse.expiration };
+    else return i;
+  }
 }
 
 // some helper classes for accumulating results and errors
@@ -31,8 +38,10 @@ export class StringsAndFaults {
   set: Set<string> = new Set;
   warnings: ContentError[] = [];
   temporaryFaults: ContentError[] = [];
+  cacheUntil?: number;
   constructor(fault?: InitialFault<string | ContentError>) {
     if (!fault) return;
+    this.cacheUntil = fault.cacheUntil;
     if ('warning' in fault) this.addWarning(fault.warning);
     if ('temporary' in fault) this.addTemporaryFault(fault.temporary);
   }
@@ -49,7 +58,7 @@ export class StringsAndFaults {
   asEditionsISBNResults(withISBNs?: boolean): EditionsISBNResults {
     const { warnings, temporaryFaults } = this;
     const isbns = withISBNs ? this.set : new Set<string>;
-    return { isbns, warnings, temporaryFaults };
+    return { isbns, warnings, temporaryFaults, cacheUntil: this.cacheUntil };
   }
   absorbFaults(other: StringsAndFaults) {
     this.warnings = this.warnings.concat(other.warnings);

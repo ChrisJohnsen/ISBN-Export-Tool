@@ -1,12 +1,13 @@
 // Common definitions for all "editions of" retrievers
 
 import { version } from './version.js';
+import { CacheControl } from './cache.js';
 
 // types for simplified data retrieval
 
 export type Fetcher = (url: string) => Promise<FetchResult>;
 
-export type FetchResult = string | { status: number; statusText: string; };
+export type FetchResult = string | { status: number, statusText: string } | CacheControl<{ status: number, statusText: string }>;
 
 export function fetcherUserAgent(platform?: string) {
   return `GoodreadsTool/${version} (${platform ? platform + '; ' : ''}+mailto:seventh_winsome.0u@icloud.com)`;
@@ -38,9 +39,10 @@ function serverOf(url: string) {
 // result types for "editions of" functions
 
 export interface EditionsISBNResults {
-  isbns: Set<string>;
-  warnings: ContentError[];
-  temporaryFaults: ContentError[];
+  isbns: Set<string>,
+  warnings: ContentError[],
+  temporaryFaults: ContentError[],
+  cacheUntil?: number,
 }
 
 export class ContentError {

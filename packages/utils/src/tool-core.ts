@@ -281,14 +281,17 @@ function editionsOfServices(
       }),
       reporter);
 
-    // simplify to just he ISBNs (warnings and faults already reported)
+    // simplify to just the ISBNs and cache duration (warnings and faults already reported)
     const justISBNs = async (isbn: string): Promise<CacheControl<Set<string>>> => {
       const result = await trackedEditionsOf(isbn);
       const short = { forMillis: 24 * 60 * 60 * 1000 };
       const normal = { forMillis: 30 * 24 * 60 * 60 * 1000 };
-      if (result.temporaryFaults.length > 1)
-        return new CacheControl(result.isbns, short);
-      return new CacheControl(result.isbns, normal);
+      const cacheTime = typeof result.cacheUntil == 'number'
+        ? { until: new Date(result.cacheUntil) }
+        : result.temporaryFaults.length > 1
+          ? short
+          : normal;
+      return new CacheControl(result.isbns, cacheTime);
     };
 
     // cache the isbn -> isbns result

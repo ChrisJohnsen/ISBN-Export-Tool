@@ -1,6 +1,6 @@
-import { describe, test, expect, jest } from '@jest/globals';
+import { describe, test, expect, jest, afterEach } from '@jest/globals';
 import { outdent } from 'outdent';
-import { AllEditionsServices, equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, ProgressReport, Row } from 'utils';
+import { AllEditionsServices, CacheControl, EditionsService, equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, ProgressReport, Row } from 'utils';
 
 describe('missingISBNs', () => {
 
@@ -522,27 +522,119 @@ describe('getISBNs', () => {
         serviceSpy(report.service);
     }
   });
-
-  function makeFakeFetcher(data: Record<string, string[]>): Fetcher {
-    return async url => {
-      let match;
-
-      match = url.match(RegExp('^https://openlibrary\\.org/isbn/([\\dXx -]+)\\.json$'));
-      if (match)
-        return JSON.stringify({ works: [{ key: `/works/OL${match[1]}W` }] }); // fake work ID
-      match = url.match(RegExp('^https://openlibrary\\.org/works/OL([\\dXx -]+)W/editions\\.json$'));
-      if (match)
-        return JSON.stringify({ entries: (data[equivalentISBNs(match[1])[0]] ?? []).map(isbn => normalizeISBN(isbn).length == 13 ? { isbn_13: [isbn] } : { isbn_10: [isbn] }) });
-
-      match = url.match(RegExp('^https://openlibrary\\.org/search\\.json\\?q=([\\dXx -]+)&fields=isbn$'));
-      if (match)
-        return JSON.stringify({ docs: [{ isbn: (data[equivalentISBNs(match[1])[0]] ?? []) }] });
-
-      match = url.match(RegExp('^https://www\\.librarything\\.com/api/thingISBN/([\\dXx -]+)$'));
-      if (match)
-        return `<idlist>${(data[equivalentISBNs(match[1])[0]] ?? []).map(isbn => `<isbn>${isbn}</isbn>`).join('')}</idlist>`;
-
-      throw 'nope: ' + url;
-    };
-  }
 });
+
+describe('getISBNs fake timers', () => {
+  afterEach(() => void jest.useRealTimers());
+
+  test('fetcher can specify cache duration for not-ok results', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN,ISBN13
+      200,to-read,"=""0000002003""",
+      101,read,,
+      102,currently-reading,,
+      103,"read, other",,
+      204,"third, to-read","=""""","=""9780000002044"""
+      205,to-read,0000002054,9780000002051
+      206,to-read,000000206Y,9780000002068
+    `;
+
+    const baseFetcher = makeFakeFetcher({
+      '9780000002006': ['0-00-010200-8'],
+      '9780000002044': ['978-0-00-010204-1', '0000202045'],
+      '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
+      '9780000002068': [],
+    });
+
+    jest.useFakeTimers();
+    const okAfter = Date.now() + 60 * 60 * 1000;
+    const fetcher: Fetcher = url => {
+      if (Date.now() > okAfter)
+        return baseFetcher(url);
+      return Promise.resolve(new CacheControl({ status: 503, statusText: 'plz wait' }, { until: new Date(okAfter) }));
+    };
+    const cacheData: Record<string, unknown> = {};
+    const services = new Set<EditionsService>(['LibraryThing ThingISBN']);
+    const serviceSpy = jest.fn();
+
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, cacheData, reporter,
+        throttle: false,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006',
+      '9780000002044',
+      '9780000002051',
+      '9780000002068',
+    ]));
+    expect(serviceSpy).toHaveBeenCalledTimes(9); // plan + 4 * (start + finish)
+
+    jest.setSystemTime(okAfter - 1000);
+    serviceSpy.mockClear();
+
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, cacheData, reporter,
+        throttle: false,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006',
+      '9780000002044',
+      '9780000002051',
+      '9780000002068',
+    ]));
+    expect(serviceSpy).toHaveBeenCalledTimes(4); // 4 * cache hit
+
+    jest.setSystemTime(okAfter + 1000);
+    serviceSpy.mockClear();
+
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, cacheData, reporter,
+        throttle: false,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+      '9780000002068',
+    ]));
+    expect(serviceSpy).toHaveBeenCalledTimes(9); // plan + 4 * (start + finish)
+
+    function reporter(report: ProgressReport) {
+      const event = report.event;
+      if (event == 'query plan')
+        Array.from(report.plan.keys()).forEach(service => serviceSpy(service));
+      if (event == 'service cache hit')
+        serviceSpy(report.service);
+      if (event == 'service query started')
+        serviceSpy(report.service);
+      if (event == 'service query finished')
+        serviceSpy(report.service);
+    }
+  });
+});
+
+function makeFakeFetcher(data: Record<string, string[]>): Fetcher {
+  return async url => {
+    let match;
+
+    match = url.match(RegExp('^https://openlibrary\\.org/isbn/([\\dXx -]+)\\.json$'));
+    if (match)
+      return JSON.stringify({ works: [{ key: `/works/OL${match[1]}W` }] }); // fake work ID
+    match = url.match(RegExp('^https://openlibrary\\.org/works/OL([\\dXx -]+)W/editions\\.json$'));
+    if (match)
+      return JSON.stringify({ entries: (data[equivalentISBNs(match[1])[0]] ?? []).map(isbn => normalizeISBN(isbn).length == 13 ? { isbn_13: [isbn] } : { isbn_10: [isbn] }) });
+
+    match = url.match(RegExp('^https://openlibrary\\.org/search\\.json\\?q=([\\dXx -]+)&fields=isbn$'));
+    if (match)
+      return JSON.stringify({ docs: [{ isbn: (data[equivalentISBNs(match[1])[0]] ?? []) }] });
+
+    match = url.match(RegExp('^https://www\\.librarything\\.com/api/thingISBN/([\\dXx -]+)$'));
+    if (match)
+      return `<idlist>${(data[equivalentISBNs(match[1])[0]] ?? []).map(isbn => `<isbn>${isbn}</isbn>`).join('')}</idlist>`;
+
+    throw 'nope: ' + url;
+  };
+}
