@@ -55,9 +55,9 @@ export class StringsAndFaults {
     arr.push(fault);
     return this;
   }
-  asEditionsISBNResults(withISBNs?: boolean): EditionsISBNResults {
+  asEditionsISBNResults(): EditionsISBNResults {
     const { warnings, temporaryFaults } = this;
-    const isbns = withISBNs ? this.set : new Set<string>;
+    const isbns = this.set;
     return { isbns, warnings, temporaryFaults, cacheUntil: this.cacheUntil };
   }
   absorbFaults(other: StringsAndFaults) {

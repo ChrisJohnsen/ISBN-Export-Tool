@@ -47,7 +47,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
       return isbns.addTemporaryFault(newFault).asEditionsISBNResults();
 
     }
-    return isbns.asEditionsISBNResults(true);
+    return isbns.asEditionsISBNResults();
   }
 }
 

@@ -59,7 +59,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
       return isbns.addTemporaryFault(newFault).asEditionsISBNResults();
 
     }
-    return isbns.asEditionsISBNResults(true);
+    return isbns.asEditionsISBNResults();
 
     function editionsURL(workID: string) {
       return `${OlUrlPrefix}/works/${workID}/editions.json`;
