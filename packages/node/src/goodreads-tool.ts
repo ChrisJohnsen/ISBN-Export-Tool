@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { type BaseContext, Builtins, Cli, Command, Option, UsageError } from 'clipanion';
-import { pick, toCSV } from 'utils';
+import { Fetcher, pick, toCSV } from 'utils';
 import { missingISBNs } from 'utils';
 import { AllEditionsServices, CacheControl, type EditionsService, type EditionsServices, getISBNs, type CacheData, type ProgressReporter } from 'utils';
 import { version, ServerThrottle } from 'utils';
@@ -51,11 +51,6 @@ const acceptableEditionsServiceSpecs = (): string[] =>
     `${pad(specMaxLength, spec)} for ${service}`);
 
 class GetISBNs extends Command<CacheContext> {
-  testMode = Option.Boolean('--test', true, {
-    hidden: true,
-    description: `
-      When active, --editions uses alternate cache storage and uses faked service responses.
-  `});
   static usage = Command.Usage({
     description: 'Extract ISBNs from items on specified shelf',
     details: `
@@ -106,7 +101,7 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
 
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
 
-    const db = new Low<CacheData>(new JSONFile(this.testMode ? this.context.testCachePath : this.context.cachePath));
+    const db = new Low<CacheData>(new JSONFile(this.context.cachePath));
     await db.read().catch(() => void 0);
 
     const pw = new ProgressWriter(this.context.stderr as WriteStream);
@@ -142,7 +137,7 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
       this.shelf,
       {
         otherEditions: !!this.otherEditions && {
-          fetcher: this.testMode ? fakeFetcher : fetcher,
+          fetcher: this.context.fetcher,
           services: editionsServices,
           cacheData: ensureCacheData(db),
           reporter,
@@ -166,11 +161,6 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
 }
 
 class CacheClear extends Command<CacheContext> {
-  testMode = Option.Boolean('--test', true, {
-    hidden: true,
-    description: `
-      When active, --editions uses alternate cache storage and uses faked service responses.
-  `});
   static usage = Command.Usage({
     description: 'Clear remote data from the local cache',
     details: `
@@ -190,7 +180,7 @@ class CacheClear extends Command<CacheContext> {
   });
   static paths = [['cache', 'clear']];
   async execute() {
-    const path = this.testMode ? this.context.testCachePath : this.context.cachePath;
+    const path = this.context.cachePath;
     const db = new Low<CacheData>(new JSONFile(path));
     db.data = null;
     ensureCacheData(db);
@@ -200,8 +190,8 @@ class CacheClear extends Command<CacheContext> {
 }
 
 type CacheContext = BaseContext & {
-  testCachePath: string,
   cachePath: string,
+  fetcher: Fetcher,
 };
 
 const cli: Cli<CacheContext> = Cli.from([
@@ -218,7 +208,7 @@ import fetch from 'node-fetch';
 
 const serverThrottle = new ServerThrottle;
 
-async function fetcher(url: string): Promise<FetchResult> {
+async function realFetcher(url: string): Promise<FetchResult> {
   const waitUntil = serverThrottle.shouldThrottle(url);
   if (waitUntil != false)
     return { status: 429, statusText: 'server requested throttling until ' + waitUntil.toUTCString() };
@@ -462,7 +452,24 @@ function getTempPath(filename: string): string {
   return path.join(dirPath, filename);
 }
 
-cli.runExit(process.argv.slice(2), {
-  testCachePath: getTempPath(`${cli.binaryName} test cache.json`),
+const args = process.argv.slice(2); // skip node and program file
+
+let testMode = true;
+
+if (args.length > 0) {
+  const firstArg = args[0];
+  if (firstArg == '--test' || firstArg == '--no-test') {
+    args.shift();
+    testMode = firstArg == '--test';
+  }
+}
+
+const context = testMode ? {
+  cachePath: getTempPath(`${cli.binaryName} test cache.json`),
+  fetcher: fakeFetcher,
+} : {
   cachePath: getTempPath(`${cli.binaryName} cache.json`),
-});
+  fetcher: realFetcher,
+};
+
+cli.runExit(args, context);
