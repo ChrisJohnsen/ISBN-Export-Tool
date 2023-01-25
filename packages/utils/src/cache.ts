@@ -200,6 +200,8 @@ export class CacheControl<T> {
   }
 }
 
+export type MaybeCacheControl<T> = T | CacheControl<T>;
+
 // cache lookup helpers
 export type CacheCheck<T> = { hit: true, value: T } | { hit: false, value: undefined };
 function hit<T>(value: T): CacheCheck<T> { return { hit: true, value } }

@@ -1,14 +1,13 @@
 // some internal-only helpers that "editions of" functions can use
 
 import { CacheControl } from "./cache.js";
-import { ContentError, EditionsISBNResults, FetchResult } from "./editions-common.js";
+import { type BareFetchResult, ContentError, type EditionsISBNResults, type FetchResult } from "./editions-common.js";
 
-export type InitialFault<T> = ({ warning: T } | { temporary: T }) & { cacheUntil?: number };
+export type InitialFault<T> = { warning: T } | { temporary: T };
 
-export function fetcherResponseOrFault(identifier: string, ccResponse: FetchResult): string | InitialFault<string> {
-  if (typeof ccResponse == 'string')
-    return ccResponse;
-  const response = ccResponse instanceof CacheControl ? ccResponse.value : ccResponse;
+function fetcherResponseOrFault(identifier: string, response: BareFetchResult): string | InitialFault<string> {
+  if (typeof response == 'string')
+    return response;
   const status = response.status;
   const statusStr = `${status}${response.statusText ? ` ${response.statusText}` : ''}`;
   const blurb = (status => {
@@ -24,12 +23,25 @@ export function fetcherResponseOrFault(identifier: string, ccResponse: FetchResu
       return 'interim as final!?:';
     return 'bad(?)';
   })(status);
-  return maybeCacheUntil({ temporary: `${identifier} ${blurb} HTTP status ${statusStr}` });
-  function maybeCacheUntil<T>(i: InitialFault<T>) {
-    if (ccResponse instanceof CacheControl)
-      return { ...i, cacheUntil: ccResponse.expiration };
-    else return i;
-  }
+  return { temporary: `${identifier} ${blurb} HTTP status ${statusStr}` };
+}
+
+export async function processFetcherResult<R extends StringsAndFaults>(
+  identifier: string,
+  ccfr: FetchResult,
+  ctor: new (f: InitialFault<string>) => R,
+  fn: (fetched: string) => Promise<R>,
+) {
+  const [cc, fr] = ccfr instanceof CacheControl
+    ? [ccfr, ccfr.value]
+    : [void 0, ccfr];
+
+  const responseOrFault = fetcherResponseOrFault(identifier, fr);
+
+  return (typeof responseOrFault == 'string'
+    ? await fn(responseOrFault)
+    : new ctor(responseOrFault))
+    .expires(cc?.expiration);
 }
 
 // some helper classes for accumulating results and errors
@@ -41,7 +53,6 @@ export class StringsAndFaults {
   cacheUntil?: number;
   constructor(fault?: InitialFault<string | ContentError>) {
     if (!fault) return;
-    this.cacheUntil = fault.cacheUntil;
     if ('warning' in fault) this.addWarning(fault.warning);
     if ('temporary' in fault) this.addTemporaryFault(fault.temporary);
   }
@@ -56,9 +67,9 @@ export class StringsAndFaults {
     return this;
   }
   asEditionsISBNResults(): EditionsISBNResults {
-    const { warnings, temporaryFaults } = this;
+    const { warnings, temporaryFaults, cacheUntil } = this;
     const isbns = this.set;
-    return { isbns, warnings, temporaryFaults, cacheUntil: this.cacheUntil };
+    return { isbns, warnings, temporaryFaults, cacheUntil };
   }
   absorbFaults(other: StringsAndFaults) {
     this.warnings = this.warnings.concat(other.warnings);
@@ -71,6 +82,16 @@ export class StringsAndFaults {
   addTemporaryFault(fault: string | ContentError) {
     return this.addError(fault, this.temporaryFaults);
   }
+  expires(expiration: Date | number | undefined) {
+    if (typeof expiration == 'undefined') return this;
+    if (expiration instanceof Date)
+      expiration = expiration.valueOf();
+    if (typeof this.cacheUntil == 'undefined')
+      this.cacheUntil = expiration;
+    else
+      this.cacheUntil = Math.min(this.cacheUntil, expiration);
+    return this;
+  }
 }
 
 export class EditionsResult extends StringsAndFaults {
@@ -81,6 +102,7 @@ export class EditionsResult extends StringsAndFaults {
   absorb(other: EditionsResult) {
     other.set.forEach(datum => this.set.add(datum));
     this.absorbFaults(other);
+    this.expires(other.cacheUntil);
     return this;
   }
 }

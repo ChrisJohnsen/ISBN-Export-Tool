@@ -1,5 +1,5 @@
-import { Fetcher, EditionsISBNResults, ContentError } from './editions-common.js';
-import { fetcherResponseOrFault, EditionsResult } from "./editions-internal.js";
+import { type Fetcher, type EditionsISBNResults, ContentError } from './editions-common.js';
+import { EditionsResult, processFetcherResult } from "./editions-internal.js";
 import { normalizeISBN } from './isbn.js';
 
 // Parse LibraryThing ThingISBN response to find ISBNs of other editions of given ISBN.
@@ -50,13 +50,18 @@ async function thingISBNsOfISBN(fetch: Fetcher, isbn: string): Promise<EditionsR
 
   const url = `${TIUrlPrefix}${urlTail}`;
 
-  const response = fetcherResponseOrFault(urlTail, await fetch(url));
+  return processFetcherResult(urlTail,
+    await fetch(url),
+    EditionsResult,
+    fetched => _thingISBNsOfISBN(fetched, urlTail),
+  );
+}
 
-  if (typeof response != 'string') return new EditionsResult(response);
+async function _thingISBNsOfISBN(fetched: string, urlTail: string): Promise<EditionsResult> {
 
   // the XML looks like <?xml ...><idlist><isbn>1234</isbn>...more isbn elements...</idlist>
   // extract the ISBNs with a simple matchAll
-  return Array.from(response.matchAll(/<isbn>([^<]*)<\/isbn>/g))
+  return Array.from(fetched.matchAll(/<isbn>([^<]*)<\/isbn>/g))
     .map(match => match[1])
     // process the matches into EditionsResult
     .reduce((result, rawISBN) => {

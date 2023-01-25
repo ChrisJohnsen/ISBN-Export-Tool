@@ -1,13 +1,14 @@
 // Common definitions for all "editions of" retrievers
 
 import { version } from './version.js';
-import { CacheControl } from './cache.js';
+import { type MaybeCacheControl } from './cache.js';
 
 // types for simplified data retrieval
 
 export type Fetcher = (url: string) => Promise<FetchResult>;
 
-export type FetchResult = string | { status: number, statusText: string } | CacheControl<{ status: number, statusText: string }>;
+export type BareFetchResult = string | { status: number, statusText: string };
+export type FetchResult = MaybeCacheControl<BareFetchResult>;
 
 export function fetcherUserAgent(platform?: string) {
   return `GoodreadsTool/${version} (${platform ? platform + '; ' : ''}+mailto:seventh_winsome.0u@icloud.com)`;

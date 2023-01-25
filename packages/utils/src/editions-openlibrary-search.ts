@@ -1,5 +1,5 @@
-import { Fetcher, EditionsISBNResults, ContentError } from './editions-common.js';
-import { fetcherResponseOrFault, EditionsResult } from "./editions-internal.js";
+import { type Fetcher, type EditionsISBNResults, ContentError } from './editions-common.js';
+import { EditionsResult, processFetcherResult } from "./editions-internal.js";
 import * as t from 'typanion';
 import { normalizeISBN } from './isbn.js';
 
@@ -57,14 +57,19 @@ async function searchISBNsOfISBN(fetch: Fetcher, isbn: string): Promise<Editions
 
   const url = `${OlUrlPrefix}${urlTail}`;
 
-  const response = fetcherResponseOrFault(urlTail, await fetch(url));
+  return processFetcherResult(urlTail,
+    await fetch(url),
+    EditionsResult,
+    fetched => _searchISBNsOfISBN(fetched, urlTail),
+  );
+}
 
-  if (typeof response != 'string') return new EditionsResult(response);
+async function _searchISBNsOfISBN(fetched: string, urlTail: string): Promise<EditionsResult> {
 
   // parse JSON
   let json;
   try {
-    json = JSON.parse(response);
+    json = JSON.parse(fetched);
   } catch {
     return new EditionsResult({ temporary: `${urlTail} response is not parseable as JSON` });
   }

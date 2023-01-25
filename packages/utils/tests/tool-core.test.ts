@@ -614,6 +614,108 @@ describe('getISBNs fake timers', () => {
         serviceSpy(report.service);
     }
   });
+
+  test.each(Array.from(AllEditionsServices))('%s fetcher can specify duration for ok results', async service => {
+    const csv = outdent`
+    id,Bookshelves,ISBN,ISBN13
+    200,to-read,"=""0000002003""",
+    101,read,,
+    102,currently-reading,,
+    103,"read, other",,
+    204,"third, to-read","=""""","=""9780000002044"""
+    205,to-read,0000002054,9780000002051
+    206,to-read,000000206Y,9780000002068
+  `;
+
+    const baseFetcher = makeFakeFetcher({
+      '9780000002006': ['0-00-010200-8'],
+      '9780000002044': ['978-0-00-010204-1', '0000202045'],
+      '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
+      '9780000002068': [],
+    });
+
+    jest.useFakeTimers();
+    const earlyExpire = Date.now() + 60 * 60 * 1000;
+    const lateExpire = Date.now() + 2 * 60 * 60 * 1000;
+    const fetcher: Fetcher = async url => {
+      if (/00020[45]\d/.test(url)) {
+        const until = (url => {
+          if (/000204\d/.test(url) && RegExp('/isbn/').test(url))
+            return lateExpire;
+          else if (/000205\d/.test(url) && RegExp('/editions\\.json').test(url))
+            return lateExpire;
+          return earlyExpire;
+        })(url);
+        const response = await baseFetcher(url);
+        if (response instanceof CacheControl)
+          throw 'program error: base fetcher gave a CacheControl response';
+        const r = new CacheControl(response, { until });
+        return r;
+      }
+      else
+        return await baseFetcher(url);
+    };
+    const services = new Set([service]);
+    const cacheData: Record<string, unknown> = {};
+    const serviceSpy = jest.fn();
+
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, cacheData, reporter,
+        throttle: false,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+      '9780000002068',
+    ]));
+    expect(serviceSpy).toHaveBeenCalledTimes(9); // plan + 4 * (start + finish)
+
+    jest.setSystemTime(earlyExpire - 1000);
+    serviceSpy.mockClear();
+
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, cacheData, reporter,
+        throttle: false,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+      '9780000002068',
+    ]));
+    expect(serviceSpy).toHaveBeenCalledTimes(4); // 4 * cache hit
+
+    jest.setSystemTime(earlyExpire + 1000);
+    serviceSpy.mockClear();
+
+    expect(await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, cacheData, reporter,
+        throttle: false,
+      }
+    })).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002044', '9780000102041', '9780000202048',
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+      '9780000002068',
+    ]));
+    expect(serviceSpy).toHaveBeenCalledTimes(7); // 2 * cache hit + plan + 2 * (start + finish)
+
+    function reporter(report: ProgressReport) {
+      const event = report.event;
+      if (event == 'query plan')
+        Array.from(report.plan.keys()).forEach(service => serviceSpy(service));
+      if (event == 'service cache hit')
+        serviceSpy(report.service);
+      if (event == 'service query started')
+        serviceSpy(report.service);
+      if (event == 'service query finished')
+        serviceSpy(report.service);
+    }
+  });
 });
 
 function makeFakeFetcher(data: Record<string, string[]>): Fetcher {

@@ -1,5 +1,5 @@
-import { Fetcher, EditionsISBNResults, ContentError } from './editions-common.js';
-import { fetcherResponseOrFault, EditionsResult, StringsAndFaults } from "./editions-internal.js";
+import { type Fetcher, type EditionsISBNResults, ContentError } from './editions-common.js';
+import { EditionsResult, StringsAndFaults, processFetcherResult } from "./editions-internal.js";
 import * as t from 'typanion';
 import { normalizeISBN } from './isbn.js';
 
@@ -48,7 +48,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
     const isbns =
       (await Promise.allSettled(Array.from(workIDs.set).map(
         async workID => processAllEditionsPages(fetch, editionsURL(workID)))))
-        .reduce(absorbSettledResult, new EditionsResult);
+        .reduce(absorbSettledResult, (new EditionsResult).expires(workIDs.cacheUntil));
 
     isbns.absorbFaults(workIDs); // XXX this puts workID faults last...
 
@@ -78,13 +78,18 @@ async function getWorkIDsForISBN(fetch: Fetcher, isbn: string): Promise<StringsA
 
   const urlTail = `/isbn/${isbn}.json`;
 
-  const response = fetcherResponseOrFault(urlTail, await fetch(`${OlUrlPrefix}${urlTail}`));
+  return processFetcherResult(urlTail,
+    await fetch(`${OlUrlPrefix}${urlTail}`),
+    StringsAndFaults,
+    fetched => _getWorkIDsForISBN(fetched, urlTail),
+  );
+}
 
-  if (typeof response != 'string') return new StringsAndFaults(response);
+async function _getWorkIDsForISBN(fetched: string, urlTail: string): Promise<StringsAndFaults> {
 
   let json;
   try {
-    json = JSON.parse(response);
+    json = JSON.parse(fetched);
   } catch {
     return new StringsAndFaults({ temporary: `${urlTail} response is not parseable as JSON` });
   }
@@ -148,14 +153,19 @@ async function processEditionsURL(fetch: Fetcher, url: string): Promise<Editions
 
   const urlTail = url.startsWith(OlUrlPrefix) ? url.slice(OlUrlPrefix.length) : url;
 
-  const response = fetcherResponseOrFault(urlTail, await fetch(url));
+  return processFetcherResult(urlTail,
+    await fetch(url),
+    EditionsResult,
+    fetched => _processEditionsURL(fetched, urlTail),
+  );
+}
 
-  if (typeof response != 'string') return new EditionsResult(response);
+async function _processEditionsURL(fetched: string, urlTail: string): Promise<EditionsResult> {
 
   // parse JSON
   let json;
   try {
-    json = JSON.parse(response);
+    json = JSON.parse(fetched);
   } catch {
     return new EditionsResult({ temporary: `${urlTail} response is not parseable as JSON` });
   }
