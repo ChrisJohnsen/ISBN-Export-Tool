@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { type BaseContext, Builtins, Cli, Command, Option, UsageError } from 'clipanion';
 import { pick, toCSV } from 'utils';
-import { AllEditionsServices, type EditionsService, type EditionsServices, missingISBNs, getISBNs, type CacheData, type ProgressReporter } from 'utils';
+import { missingISBNs } from 'utils';
+import { AllEditionsServices, CacheControl, type EditionsService, type EditionsServices, getISBNs, type CacheData, type ProgressReporter } from 'utils';
+import { version, ServerThrottle } from 'utils';
 import * as path from 'node:path';
 import { JSONFile } from 'lowdb/node';
 import { Low } from 'lowdb';
@@ -207,15 +209,31 @@ const cli: Cli<CacheContext> = Cli.from([
   MissingISBNs,
   GetISBNs,
   CacheClear,
-], { binaryName: 'goodreads-tool', binaryLabel: 'Goodreads export tools', binaryVersion: '0.1' });
+], { binaryName: 'goodreads-tool', binaryLabel: 'Goodreads export tools', binaryVersion: version });
 
 // "editions of" helpers
 
-import { type FetchResult } from 'utils';
+import { fetcherUserAgent, type FetchResult } from 'utils';
+import fetch from 'node-fetch';
+
+const serverThrottle = new ServerThrottle;
 
 async function fetcher(url: string): Promise<FetchResult> {
-  url; // use it to silence lint
-  throw new Error('real fetcher not yet implemented');
+  const waitUntil = serverThrottle.shouldThrottle(url);
+  if (waitUntil != false)
+    return { status: 429, statusText: 'server requested throttling until ' + waitUntil.toUTCString() };
+  const response = await fetch(url, { headers: [['User-Agent', fetcherUserAgent('Node')]] });
+  const { status, statusText } = response;
+  if (response.ok) return await response.text();
+  if (response.status == 429 || response.status == 503) {
+    const retryAfter = response.headers.get('Retry-After');
+    const date =
+      retryAfter
+        ? serverThrottle.set(url, retryAfter)
+        : serverThrottle.set(url, '600');
+    return new CacheControl({ status, statusText }, { until: date });
+  }
+  return { status, statusText };
 }
 
 import { equivalentISBNs } from 'utils';
@@ -346,6 +364,10 @@ const makeReporter: (pw: ProgressWriter) => ProgressReporter & { summary(): void
         const s = summary(service);
         s.warnings += report.warnings.length;
         s.faults += report.faults.length;
+        if (report.warnings.length > 0)
+          pw.writeLine(`${report.service} ${report.isbn} warning: ${report.warnings.map(w => w.description).join('; ')}`);
+        if (report.faults.length > 0)
+          pw.writeLine(`FAULT processing ${report.service} ${report.isbn}:\n${report.faults.map(f => '  ' + f.description).join('\n')}`);
         s.ended = Date.now();
         return pw.updateProgress(progressBarText(pw.columns, started, ++finished, total));
       }
