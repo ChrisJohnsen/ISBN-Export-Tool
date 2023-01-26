@@ -1735,7 +1735,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chalk@npm:^2.0.0":
+"chalk@npm:^2.0.0, chalk@npm:^2.4.2":
   version: 2.4.2
   resolution: "chalk@npm:2.4.2"
   dependencies:
@@ -2708,6 +2708,7 @@ __metadata:
     eslint-plugin-jest-formatting: "npm:^3.1.0"
     jest: "npm:^29.4.0"
     jest-config: "npm:^29.4.0"
+    jest-watch-suspend: "npm:^1.1.2"
     rollup: "npm:^3.10.1"
     typescript: "npm:^4.9.4"
   languageName: unknown
@@ -3467,6 +3468,18 @@ __metadata:
     leven: "npm:^3.1.0"
     pretty-format: "npm:^29.4.0"
   checksum: a14edfffe4128d996b69d56e1e83640361f42499eb07d40098f53d63bb473aa385facf76edb73d90939c3091b4b340a2322f926f9f90ccd37a8da31cfdfac70a
+  languageName: node
+  linkType: hard
+
+"jest-watch-suspend@npm:^1.1.2":
+  version: 1.1.2
+  resolution: "jest-watch-suspend@npm:1.1.2"
+  dependencies:
+    chalk: "npm:^2.4.2"
+    unpartial: "npm:^0.6.1"
+  peerDependencies:
+    jest: ">=23"
+  checksum: c6e4d56ded2f497c32d83f33bf5350119a718048c2ce0bc2b48e5e99d8d623e0f34f73bc38c1953b8f5a5230d28edaf2ee9c897a80918338e896d99901223a09
   languageName: node
   linkType: hard
 
@@ -4902,6 +4915,13 @@ __metadata:
   dependencies:
     imurmurhash: "npm:^0.1.4"
   checksum: ae31bb1d8126400e512385ec239b3ca40f6a8790af9d6dedb0842b340b3ecc0a7de413ff270f3ea3dae1565c6f745ab6e28363387cd32ecddbe0fc72ee247303
+  languageName: node
+  linkType: hard
+
+"unpartial@npm:^0.6.1":
+  version: 0.6.4
+  resolution: "unpartial@npm:0.6.4"
+  checksum: e380f6752f779c2817a96e20e24dc468cb1c877d8ae53b27f612d0a2e526fe5bdbd53c1f16eaf9a37409f6c4289f1b57cf2ec45c88d7c941748147799d90cace
   languageName: node
   linkType: hard
 

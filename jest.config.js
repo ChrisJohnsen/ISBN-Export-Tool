@@ -10,6 +10,7 @@ const config = {
   displayName: '!!! TOP ???',
   projects: ['<rootDir>/packages/*'],
   testMatch: ['NO TOP-LEVEL TESTS'],
+  watchPlugins: [['jest-watch-suspend', { 'suspend-on-start': true }]],
 };
 
 export default config;
