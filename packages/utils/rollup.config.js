@@ -4,8 +4,10 @@ import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
 import typescript from 'rollup-plugin-ts';
 
-const basePlugins = [typescript()];
-const externalPlugins = [commonjs(), node_resolve(), ...basePlugins];
+import { fileURLToPath, URL } from "node:url";
+const cwd = fileURLToPath(new URL('.', import.meta.url));
+
+const plugins = [node_resolve(), commonjs(), typescript({ tsconfig: `${cwd}/tsconfig.json` })];
 
 export default [
   {
@@ -15,7 +17,7 @@ export default [
       { file: 'dist/index.cjs', format: 'cjs' },
     ],
     external: ['papaparse_rebundled', 'isbn3', 'typanion', 'p-throttle', 'p-limit'],
-    plugins: externalPlugins,
+    plugins,
     watch: {
       clearScreen: false,
       buildDelay: 50, // helps prevent immediate rebuild

@@ -4,8 +4,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
 import esbuild from 'rollup-plugin-esbuild';
 
-const basePlugins = [node_resolve(), esbuild({ target: "es2022" })];
-const externalPlugins = [commonjs(), ...basePlugins];
+const plugins = [node_resolve(), commonjs(), esbuild({ target: "es2022" })];
 
 export default [
   {
@@ -24,7 +23,7 @@ export default [
       },
     ],
     external: [],
-    plugins: externalPlugins,
+    plugins,
     watch: {
       clearScreen: false,
       buildDelay: 50, // helps prevent immediate rebuild

@@ -4,7 +4,10 @@ import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
 import typescript from 'rollup-plugin-ts';
 
-const externalPlugins = [commonjs(), node_resolve(), typescript()];
+import { fileURLToPath, URL } from "node:url";
+const cwd = fileURLToPath(new URL('.', import.meta.url));
+
+const plugins = [node_resolve(), commonjs(), typescript({ tsconfig: `${cwd}/tsconfig.json` })];
 
 export default [
   {
@@ -14,7 +17,7 @@ export default [
       { file: 'dist/index.cjs', format: 'cjs' },
     ],
     external: [],
-    plugins: externalPlugins,
+    plugins,
     watch: {
       clearScreen: false,
       buildDelay: 50, // helps prevent immediate rebuild

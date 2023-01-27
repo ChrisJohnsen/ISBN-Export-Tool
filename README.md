@@ -61,6 +61,8 @@ Note: Files under `tests/` are not included in the package-level
 
 ### Rollup
 
+    yarn rollup -c      # top level config "imports" each package's config
+
     yarn workspace foo run --top-level rollup -c
     packages/foo> yarn run --top-level rollup -c    # cwd in workspace
 
