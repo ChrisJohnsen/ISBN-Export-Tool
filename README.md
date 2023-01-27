@@ -1,23 +1,50 @@
 # Goodreads export tools
 
-Currently under development. Planned features:
+Currently under development. Existing features:
 
-* List `to-read` entries that don't have ISBNs
+* List `to-read` entries that don't have ISBNs.
 
     These can happen when adding a book when its default (most popular?) edition
-    is some non-print version (eBook, audio). Such a list could be used to
-    manaully "fix" the active edition.
+    is some version that does not haven an ISBN (often: eBook, audio). Such a
+    list could be used to manaully "fix" the active edition.
 
-* Extract a list of `to-read` ISBNs.
+        node goodreads-tool.js missing-ISBNS path/to/goodreads-export.csv
+
+* Extract a list of ISBNs from shelved items.
 
     This can be imported by some library interfaces. Doing so can let you review
-    which books in (the exported snapshot of) your Goodreads `to-read` shelf are
-    available through a particular library.
+    which books in (the exported snapshot of) your Goodreads (e.g.) `to-read`
+    shelf are available through a particular library.
 
-  * fancy version: Ask Worldcat for associated ISBNs and include those in the
-    generated list, too. Just in case the library doesn't do something like this
-    automatically (maybe you shelved the paperback edition on Goodreads, the
-    library doesn't have it, but does have a hardback edition).
+        node goodreads-tool.js get-ISBNS path/to/goodreads-export.csv to-read
+
+    If Goodreads supplies an ISBN-13 and ISBN-10, then only the ISBN-13 will be
+    extracted.
+
+    * Optionally include both the ISBN-13 and ISBN-10 of each shelved item:
+
+            node goodreads-tool.js get-ISBNS path/to/goodreads-export.csv to-read --both
+
+        ISBN-10s are a proper subset of ISBN-13s, so there usually isn't a need
+        for both, but maybe the system you want to send the generated list to
+        doesn't know (how) to convert between them.
+
+    * Optionally ask external web services for the ISBNs of other editions of
+      the work that is shelved in Goodreads. The supported web services are Open
+      Library (two methods, probably equivalent), and LibraryThing (one method).
+      Requests are rate limited, so it may take a second or two to retrieve the
+      result ISBNs.
+
+            node goodreads-tool.js get-ISBNS path/to/goodreads-export.csv to-read --editions
+
+        This only produces ISBN-13s, but can be combined with `--both` if you
+        want both of them. The "editions of" relation is cached locally to avoid
+        spamming the web services.
+
+        This can be handy if the system to which you'll be giving the extracted
+        ISBNs does not automatically look for other editions of a particular work
+        (maybe you shelved the paperback edition on Goodreads, the library doesn't
+        have it, but does have a hardback edition).
 
 # Development
 
