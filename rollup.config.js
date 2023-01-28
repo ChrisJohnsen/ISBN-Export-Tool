@@ -6,16 +6,16 @@ const configs = (await Promise.all([
 
   const dir = `packages/${packagesDir}`;
 
-  const config = (await import(`./${dir}/rollup.config.js`)).default;
+  const configFile = `./${dir}/rollup.config.js`;
+  const config = (await import(configFile)).default;
 
-  return modifyConfig(dir, config);
-
+  return modifyConfig(dir, config, configFile);
 }))).flat();
 
-function modifyConfig(pathTo, rawConfig) {
+function modifyConfig(pathTo, rawConfig, configFile) {
 
   if (Array.isArray(rawConfig))
-    return rawConfig.map(config => modifyConfig(pathTo, config));
+    return rawConfig.map(config => modifyConfig(pathTo, config, configFile));
 
   const newConfig = { ...rawConfig };
 
@@ -36,6 +36,17 @@ function modifyConfig(pathTo, rawConfig) {
 
     output.file = modifyPath(output.file);
   });
+
+  if (!Array.isArray(newConfig.plugins)) {
+    console.warn('.plugins is not an array; unable to add watch-included-config plugin');
+  } else {
+    newConfig.plugins.push({
+      name: 'watch-included-config',
+      buildStart(options) {
+        this.addWatchFile(configFile);
+      },
+    });
+  }
 
   return newConfig;
 
