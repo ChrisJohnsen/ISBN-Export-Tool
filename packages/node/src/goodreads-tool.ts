@@ -390,7 +390,7 @@ const makeReporter: (pw: ProgressWriter) => ProgressReporter & { summary(): void
         // per service summaries
         const stats = (durations: number[]) => {
           if (durations.length < 1) return '';
-          const sorted = Array.from(durations).sort();
+          const sorted = Array.from(durations).sort((a, b) => a - b);
           const median = (ns: number[]) => {
             if (ns.length % 2)
               return ns[(ns.length + 1) / 2 - 1];
