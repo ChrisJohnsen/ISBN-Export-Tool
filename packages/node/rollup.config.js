@@ -6,8 +6,8 @@ import esbuild from 'rollup-plugin-esbuild';
 
 const plugins = [node_resolve(), commonjs(), esbuild({ target: "es2022" })];
 
-export default [
-  {
+export default async cliOptions => {
+  const config = {
     input: 'src/goodreads-tool.ts',
     output: [
       {
@@ -36,5 +36,9 @@ export default [
       }
       return 'undefined';
     },
-  },
-];
+  };
+  const terser = await (async use => use ? (await import('@rollup/plugin-terser')).default : void 0)(cliOptions.configTerser);
+  if (terser)
+    config.output.forEach(output => output.plugins = [terser()]);
+  return config;
+};

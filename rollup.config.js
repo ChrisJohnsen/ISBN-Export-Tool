@@ -1,16 +1,21 @@
-const configs = (await Promise.all([
-  'papaparse',
-  'utils',
-  'node',
-].map(async packagesDir => {
+import { loadConfigFile } from 'rollup/loadConfigFile';
 
-  const dir = `packages/${packagesDir}`;
+export default async cliOptions => {
+  return (await Promise.all([
+    'papaparse',
+    'utils',
+    'node',
+  ].map(async packagesDir => {
 
-  const configFile = `./${dir}/rollup.config.js`;
-  const config = (await import(configFile)).default;
+    const dir = `packages/${packagesDir}`;
 
-  return modifyConfig(dir, config, configFile);
-}))).flat();
+    const configFile = `./${dir}/rollup.config.js`;
+    const { options: config, warnings } = await loadConfigFile(configFile, cliOptions);
+    warnings.flush();
+
+    return modifyConfig(dir, config, configFile);
+  }))).flat();
+};
 
 function modifyConfig(pathTo, rawConfig, configFile) {
 
@@ -54,5 +59,3 @@ function modifyConfig(pathTo, rawConfig, configFile) {
     return pathTo + '/' + path;
   }
 }
-
-export default configs;
