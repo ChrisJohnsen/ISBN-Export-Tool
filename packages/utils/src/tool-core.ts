@@ -14,6 +14,22 @@ import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
 import * as t from 'typanion';
 
+export async function shelfInfo(csv: string): Promise<{ shelfCounts: Map<string, number>, exclusive: Set<string> }> {
+  return await reduceCSV(csv, {
+    fn(info, row) {
+      const { exclusive, shelves } = getShelves(row);
+      if (exclusive)
+        info.exclusive.add(exclusive);
+      const update = (shelf: string) => {
+        const count = info.shelfCounts.get(shelf) ?? 0;
+        info.shelfCounts.set(shelf, count + 1);
+      };
+      shelves.forEach(update);
+      return info;
+    }, initial: { shelfCounts: new Map<string, number>, exclusive: new Set<string> }
+  });
+}
+
 export async function missingISBNs(csv: string, shelf: string): Promise<Row[]> {
   return await reduceCSV(csv, collect(
     flatPipe(
@@ -63,7 +79,8 @@ export async function getISBNs(
 
 function getShelves(row: Row): { exclusive?: string, shelves: Set<string> } {
   const exclusive = row['Exclusive Shelf'];
-  const shelves = new Set(row.Bookshelves.split(/\s*,\s*/));
+  const bookshelves = row.Bookshelves == '' ? [] : row.Bookshelves.split(/\s*,\s*/);
+  const shelves = new Set(bookshelves);
   if (exclusive) {
     shelves.add(exclusive);
   }

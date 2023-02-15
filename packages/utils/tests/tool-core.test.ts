@@ -1,6 +1,6 @@
 import { describe, test, expect, jest, afterEach } from '@jest/globals';
 import { outdent } from 'outdent';
-import { AllEditionsServices, CacheControl, EditionsService, equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, ProgressReport, Row } from 'utils';
+import { AllEditionsServices, CacheControl, EditionsService, equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, ProgressReport, Row, shelfInfo } from 'utils';
 
 describe('missingISBNs', () => {
 
@@ -762,3 +762,78 @@ function makeFakeFetcher(data: Record<string, string[]>): Fetcher {
     throw 'nope: ' + url;
   };
 }
+
+describe('shelfInfo', () => {
+
+  test('not really CSV', async () => {
+    const csv = outdent`
+      This is just a string. It is
+      not particularly CSV-like, but it
+      might be interpreted like that.
+    `;
+
+    await expect(shelfInfo(csv)).rejects.toBeDefined();
+  });
+
+  test('no Bookshelves column', async () => {
+    const csv = outdent`
+      id,ISBN13
+      100,100000
+      101,
+      102,"="""""
+      103,103000
+      104,"=""104000"""
+      105,105000
+    `;
+
+    await expect(shelfInfo(csv)).rejects.toBeDefined();
+  });
+
+  test('no Exclusive Shelf column', async () => {
+    const csv = outdent`
+      id,Bookshelves
+      100,to-read
+      101,read
+      102,"did-not-finish, library"
+      103,library
+      104,"kindle,to-read"
+      105,currently-reading
+    `;
+
+    const { exclusive, shelfCounts } = await shelfInfo(csv);
+
+    expect(exclusive).toStrictEqual(new Set);
+    expect(shelfCounts).toStrictEqual(new Map([
+      ['to-read', 2],
+      ['read', 1],
+      ['did-not-finish', 1],
+      ['library', 2],
+      ['kindle', 1],
+      ['currently-reading', 1]
+    ]));
+  });
+
+  test('no read only in Exclusive Shelf columns', async () => {
+    const csv = outdent`
+      id,Bookshelves,Exclusive Shelf
+      100,to-read,to-read
+      101,,read
+      102,"did-not-finish, library",did-not-finish
+      103,library,read
+      104,"kindle,to-read",to-read
+      105,currently-reading,currently-reading
+    `;
+
+    const { exclusive, shelfCounts } = await shelfInfo(csv);
+
+    expect(exclusive).toStrictEqual(new Set(['to-read', 'read', 'did-not-finish', 'currently-reading']));
+    expect(shelfCounts).toStrictEqual(new Map([
+      ['to-read', 2],
+      ['read', 2],
+      ['did-not-finish', 1],
+      ['library', 2],
+      ['kindle', 1],
+      ['currently-reading', 1]
+    ]));
+  });
+});
