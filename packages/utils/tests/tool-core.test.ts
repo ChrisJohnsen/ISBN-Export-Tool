@@ -671,7 +671,7 @@ describe('getISBNs fake timers', () => {
         const response = await baseFetcher(url);
         if (response instanceof CacheControl)
           throw 'program error: base fetcher gave a CacheControl response';
-        const r = new CacheControl(response, { until });
+        const r = new CacheControl(response, { until: new Date(until) });
         return r;
       }
       else
