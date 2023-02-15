@@ -152,6 +152,28 @@ describe('missingISBNs', () => {
     expect(ids(result)).toStrictEqual([206, 207, 208, 209]);
   });
 
+  test('read only in Exclusive Shelf', async () => {
+    // not sure why (brevity?), but Goodreads exports don't include `read` in
+    // Bookshelves, just in Exclusive Shelf
+    const csv = outdent`
+      id,Bookshelves,Exclusive Shelf,ISBN,ISBN13
+      200,,read,,"="""""
+      101,to-read,to-read,"=""""","="""""
+      102,"to-read,other",to-read,"=""""","="""""
+      103,"to-read, other",to-read,"=""""","="""""
+      104,"other,to-read",to-read,"=""""","="""""
+      105,"other, to-read",to-read,"=""""","="""""
+      106,"other,to-read,third",to-read,"=""""","="""""
+      107,"other, to-read, third",to-read,"=""""","="""""
+      108,"other,to-read, third",to-read,"=""""","="""""
+      109,"other, to-read,third",to-read,"=""""","="""""
+      210,,read,"=""""",
+    `;
+    const result = await missingISBNs(csv, 'read');
+
+    expect(ids(result)).toStrictEqual([200, 210]);
+  });
+
   function ids(rows: Row[]): number[] {
     return rows.map(row => parseInt(row.id));
   }

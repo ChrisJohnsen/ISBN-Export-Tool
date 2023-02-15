@@ -61,14 +61,20 @@ export async function getISBNs(
   return allISBNs;
 }
 
+function getShelves(row: Row): { exclusive?: string, shelves: Set<string> } {
+  const exclusive = row['Exclusive Shelf'];
+  const shelves = new Set(row.Bookshelves.split(/\s*,\s*/));
+  if (exclusive) {
+    shelves.add(exclusive);
+  }
+  return { exclusive, shelves };
+}
+
 function onShelf(shelf: string, row: Row): boolean;
 function onShelf(shelf: string): (row: Row) => boolean;
 function onShelf(shelf: string, row?: Row): ((row: Row) => boolean) | boolean {
 
-  const _onShelf = (row: Row) => row
-    .Bookshelves
-    .split(/\s*,\s*/)
-    .includes(shelf);
+  const _onShelf = (row: Row) => getShelves(row).shelves.has(shelf);
 
   if (typeof row == 'undefined')
     return _onShelf;
