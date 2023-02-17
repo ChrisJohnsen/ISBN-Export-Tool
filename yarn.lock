@@ -1031,6 +1031,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@rollup/plugin-virtual@npm:^3.0.1":
+  version: 3.0.1
+  resolution: "@rollup/plugin-virtual@npm:3.0.1"
+  peerDependencies:
+    rollup: ^1.20.0||^2.0.0||^3.0.0
+  peerDependenciesMeta:
+    rollup:
+      optional: true
+  checksum: 3503d7932d828cbb524fa5caf2af084395f84479ad82070d8edb46644afc46977acd8c8f89cf0fecba55ea8bb629020cea48dbd5407970212d13db829340290b
+  languageName: node
+  linkType: hard
+
 "@rollup/pluginutils@npm:^5.0.1, @rollup/pluginutils@npm:^5.0.2":
   version: 5.0.2
   resolution: "@rollup/pluginutils@npm:5.0.2"
@@ -1044,6 +1056,15 @@ __metadata:
     rollup:
       optional: true
   checksum: c8e01caaf5d63c23f82ad6a1402cd8878718b298c29e09e57592dfffa18e01c389242610c41cb608f429828d13ef0848ff83fa474bbfe568966a9a8b2e93d25a
+  languageName: node
+  linkType: hard
+
+"@scriptable-ios/eslint-config@npm:^1.6.5":
+  version: 1.7.0
+  resolution: "@scriptable-ios/eslint-config@npm:1.7.0"
+  peerDependencies:
+    eslint: ">=7.0.0 <9.0.0"
+  checksum: 0c5d540b64bd50aa135aa9170904ed9ae8324baf282408dde858439853f5364b8d5a7a3a5c4d46463b8481b7e1d60aa9a8521798601fd3a0286acaa69282e1a4
   languageName: node
   linkType: hard
 
@@ -1209,6 +1230,13 @@ __metadata:
   version: 1.20.2
   resolution: "@types/resolve@npm:1.20.2"
   checksum: beb29479ff900dc01a007b615c7e179e8ed44ce047176fa9266f9b978d4f40720029159295a569d0ed71676ba1db6086ce86c486c0a3a09b9e1d92d4da5cc8ab
+  languageName: node
+  linkType: hard
+
+"@types/scriptable-ios@npm:^1.6.5":
+  version: 1.7.0
+  resolution: "@types/scriptable-ios@npm:1.7.0"
+  checksum: 9816da9e32565cab75102f479975f49aeabe7e3dfe84debfa3ff71c93408a5038a19c1728c40d5d8e5da36846b12a129aa251ad627b7ac14ab43774726dce83e
   languageName: node
   linkType: hard
 
@@ -4560,6 +4588,22 @@ __metadata:
   checksum: d4199666e9e792968c0b88c2c35dd400f56d3eecb9affbcf5207922822eadf30cc06995bae3c5d0a653851bbd40fc0af578bf046bbf734199ce22433ba4da659
   languageName: node
   linkType: hard
+
+"scriptable@workspace:packages/Scriptable":
+  version: 0.0.0-use.local
+  resolution: "scriptable@workspace:packages/Scriptable"
+  dependencies:
+    "@rollup/plugin-commonjs": "npm:^24.0.1"
+    "@rollup/plugin-node-resolve": "npm:^15.0.1"
+    "@rollup/plugin-terser": "npm:^0.4.0"
+    "@rollup/plugin-virtual": "npm:^3.0.1"
+    "@scriptable-ios/eslint-config": "npm:^1.6.5"
+    "@types/scriptable-ios": "npm:^1.6.5"
+    esbuild: "npm:^0.17.4"
+    rollup-plugin-esbuild: "npm:^5.0.0"
+    utils: "workspace:^"
+  languageName: unknown
+  linkType: soft
 
 "semver@npm:^6.0.0, semver@npm:^6.3.0":
   version: 6.3.0
