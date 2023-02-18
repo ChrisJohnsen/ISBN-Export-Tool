@@ -53,17 +53,19 @@ class SideStore {
 
 // platform independent definitions (maybe UI could be web-based inside a WebView)
 
+import { AllEditionsServices, type EditionsService } from 'utils';
+
 type IO = { type: 'clipboard' } | { type: 'file', displayName: string };
 type Input = IO & { info: { items: number, shelfItems: Record<string, number> } };
 type MissingISBNsSummary = { name: 'MissingISBNs', itemsMissingISBN: number };
 type GetISBNsSummary = {
-  name: 'GetISBNs', editionsInfo?: {
+  name: 'GetISBNs', editionsInfo?: { [k in EditionsService]?: {
     cacheHits: number,
     queries: number,
     fetches: number,
     fetchRate: number,
     fetchStats: { min: number, median: number, max: number }
-  }, totalISBNs: number
+  } }, totalISBNs: number
 };
 type CommandSummary = MissingISBNsSummary | GetISBNsSummary;
 interface UI {
@@ -77,7 +79,7 @@ interface UI {
 
 type RequestedIO = { type: 'clipboard' } | { type: 'file' };
 type MissingISBNs = { name: 'MissingISBNs', shelf: string };
-type GetISBNs = { name: 'GetISBNs', shelf: string, both: boolean, editions: boolean };
+type GetISBNs = { name: 'GetISBNs', shelf: string, both: boolean, editions: EditionsService[] };
 type Command = MissingISBNs | GetISBNs;
 interface UIRequestReceiver {
   requestInput(ui: UI, input: RequestedIO): void,
@@ -312,7 +314,7 @@ class UITableUI implements UI {
 
       this.buildSection(text, this.previousCommand && { onSelect: () => this.previousCommand && this.setCommand(this.previousCommands[this.previousCommand]) });
       this.buildAction('MissingISBNs XXX', () => this.setCommand({ name: 'MissingISBNs' }, true));
-      this.buildAction('GetISBNs XXX', () => this.setCommand({ name: 'GetISBNs', both: false, editions: false }, true));
+      this.buildAction('GetISBNs XXX', () => this.setCommand({ name: 'GetISBNs', both: false, editions: [] }, true));
 
     } else if (this.state.command.name == 'MissingISBNs') {
 
@@ -325,13 +327,27 @@ class UITableUI implements UI {
       this.buildShelf();
 
       const command = this.state.command;
-      const editionsText = command.editions ? 'Get ISBNs of Other Editions' : 'Get Only Listed ISBNs (no other editions)';
-      const editionsToggle = () => this.setCommand({ ...command, editions: !command.editions });
+      const editionsEnabled = command.editions.length != 0;
+      const editionsText = editionsEnabled ? 'Get ISBNs of Other Editions' : 'Get Only Listed ISBNs (no other editions)';
+      const editionsToggle = () => this.setCommand({ ...command, editions: editionsEnabled ? [] : Array.from(AllEditionsServices) });
       const bothText = command.both ? 'Get Both ISBN-10 and -13' : 'Get Only One Of ISBN-13, ISBN-10';
       const bothToggle = () => this.setCommand({ ...command, both: !command.both });
+      const serviceToggle = (service: EditionsService) => {
+        let editions;
+        if (command.editions.includes(service))
+          editions = command.editions.filter(s => s != service);
+        else
+          editions = command.editions.concat([service]);
+        this.setCommand({ ...command, editions });
+      };
 
       this.buildSection('Options');
       this.buildAction(editionsText, editionsToggle);
+      if (editionsEnabled)
+        AllEditionsServices.forEach(service => {
+          const enabled = command.editions.includes(service);
+          return this.buildAction(service + ': ' + (enabled ? 'enabled' : 'disabled'), () => serviceToggle(service as EditionsService));
+        });
       this.buildAction(bothText, bothToggle);
 
     } else assertNever(this.state.command);
@@ -413,22 +429,42 @@ class UITableUI implements UI {
       ([
         [`"${shelf}" Items:`, items],
         ['Final ISBN Count:', summary.totalISBNs],
-        ...summary.editionsInfo
-          ? [
-            [`Cached Queries:`, summary.editionsInfo.cacheHits],
-            [`Queries:`, summary.editionsInfo.queries],
-            [`Fetches:`, summary.editionsInfo.fetches],
-            [`Fetch Rate (/s):`, summary.editionsInfo.fetchRate.toFixed(3)],
-            [`Fastest Fetch (ms):`, summary.editionsInfo.fetchStats.min],
-            [`Median Fetch (ms):`, summary.editionsInfo.fetchStats.median],
-            [`Slowest Fetch (ms):`, summary.editionsInfo.fetchStats.max],
-          ] as const
-          : [],
       ] as const).forEach(([desc, value]) => {
         const row = this.buildAction(desc, void 0, 85);
         const cell = row.addText(String(value));
         cell.widthWeight = 15;
       });
+      const short: Record<EditionsService, string> = {
+        'Open Library WorkEditions': 'OL:WE',
+        'Open Library Search': 'OL:S',
+        'LibraryThing ThingISBN': 'LT:TI',
+      };
+      if (summary.editionsInfo) {
+        const info = summary.editionsInfo;
+        const services = Object.keys(info) as EditionsService[];
+        ([
+          ['', ...services.map(s => short[s as EditionsService])],
+          [`Cached Queries:`, ...services.map(service => info[service]?.cacheHits)],
+          [`Queries:`, ...services.map(service => info[service]?.queries)],
+          [`Fetches:`, ...services.map(service => info[service]?.fetches)],
+          [`Fetch Rate (/s):`, ...services.map(service => info[service]?.fetchRate.toFixed(3))],
+          [`Fastest Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.min)],
+          [`Median Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.median)],
+          [`Slowest Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.max)],
+        ] as const).forEach(([desc, a, b, c]) => {
+          const row = this.buildAction(desc, void 0, 100 - 15 * 3 - 5);
+          const space = row.addText('');
+          space.widthWeight = 5;
+          const cell = (v: number | string) => {
+            const c = row.addText(String(v));
+            c.widthWeight = 15;
+          };
+          cell(a ?? '');
+          cell(b ?? '');
+          cell(c ?? '');
+        });
+      }
+
     } else assertNever(summary);
   }
   private buildOutput() {
@@ -467,7 +503,7 @@ class UITableUI implements UI {
 
 // controller interfaces with tool-core on behalf of a non-specific UI
 
-import { type CacheData, type FetchResult, getISBNs, missingISBNs, shelfInfo, EditionsService } from 'utils';
+import { type CacheData, type FetchResult, getISBNs, missingISBNs, shelfInfo } from 'utils';
 
 class Controller implements UIRequestReceiver {
   private cache: CacheData;
@@ -531,6 +567,7 @@ class Controller implements UIRequestReceiver {
   async requestCommand(ui: UI, command: Command): Promise<void> {
     if (!this.csv) throw 'requested command without first requesting input';
     let summary: CommandSummary;
+    summary_ready:
     if (command.name == 'MissingISBNs') {
 
       const rows = await missingISBNs(this.csv, command.shelf);
@@ -551,8 +588,11 @@ class Controller implements UIRequestReceiver {
         return info;
       };
       const isbns = await getISBNs(this.csv, command.shelf, {
-        otherEditions: command.editions && {
-          fetcher: fakeFetcher, cacheData: this.cache, reporter: report => {
+        otherEditions: command.editions.length != 0 && {
+          services: new Set(command.editions),
+          cacheData: this.cache,
+          fetcher: fakeFetcher,
+          reporter: report => {
             const ev = report.event;
             if (ev == 'rejection') {
               console.error(report.reason);
@@ -579,18 +619,21 @@ class Controller implements UIRequestReceiver {
         },
         bothISBNs: command.both,
       });
-      const cacheHits = Array.from(infos.entries()).reduce((total, [, info]) => total + info.hits, 0);
-      const queries = Array.from(infos.entries()).reduce((total, [, info]) => total + info.queries, 0);
-      const durations = Array.from(infos.entries()).reduce((all, [, info]) => all.concat(info.fetches), new Array<number>);
+      if (command.editions.length == 0) {
+        summary = { name: 'GetISBNs', totalISBNs: isbns.size };
+        break summary_ready;
+      }
+
       const stats = (arr: number[]) => {
         arr.sort((a, b) => a - b);
         const median = arr.length % 2 == 1 ? arr[(arr.length - 1) / 2] : (arr[arr.length / 2 - 1] + arr[arr.length / 2]) / 2;
         return { min: arr[0], max: arr[arr.length - 1], median };
       };
-      const begun = Math.min(...Array.from(infos.entries()).flatMap(([, info]) => info.firstBegan ?? []));
-      const ended = Math.max(...Array.from(infos.entries()).flatMap(([, info]) => info.lastEnded ?? []));
-      const fetchRate = durations.length / ((ended - begun) / 1000);
-      summary = { name: 'GetISBNs', totalISBNs: isbns.size, editionsInfo: command.editions ? { cacheHits, queries, fetches: durations.length, fetchRate, fetchStats: stats(durations) } : void 0 };
+      const editionsInfo = Object.fromEntries(Array.from(infos.entries()).map(([service, info]) => {
+        const fetchRate = info.fetches.length / (((info.lastEnded ?? 0) - (info.firstBegan ?? 0)) / 1000);
+        return [service, { cacheHits: info.hits, queries: info.queries, fetches: info.fetches.length, fetchRate, fetchStats: stats(info.fetches) }];
+      })) as GetISBNsSummary['editionsInfo'];
+      summary = { name: 'GetISBNs', totalISBNs: isbns.size, editionsInfo };
 
     }
     else assertNever(command);
@@ -662,9 +705,12 @@ store.write();
 // (known) BUGS
 
 // TODO
+// with only OLWE enabled, progress appears only sporadically: no apparent progress while (10) queued works finish before editions can be finished and show progress then another delay while a new batch of works is processed before any editions
+//  probably explains the minor progress jitter that I've seen before (the queue get more than a few works queued, and they won't show progress until their editions finish, too)
+//  show finished,active,waiting=total instead of just done/total
+// AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 // warnings and faults from 'service query finished'
 //  log into another (plain text, not JSON?) file
-// editions services selection?
 // during run
 //  make UI non-interactive (except a cancel button?)
 //    no onSelects, no "tap to" hints
