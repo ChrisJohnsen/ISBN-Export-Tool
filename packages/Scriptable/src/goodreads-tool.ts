@@ -112,8 +112,7 @@ type GetISBNsSummary = {
 type CommandSummary = MissingISBNsSummary | GetISBNsSummary;
 interface UI {
   input(input: Input): void,
-  commandProgressTotal(total: number): void,
-  commandProgress(done: number): void,
+  commandProgress(progress: { total: number, started: number, done: number, fetched: number }): void,
   commandSummary(summary: CommandSummary): void,
   // output(output: IO): void,
   getSavableData?(): unknown,
@@ -137,7 +136,7 @@ type Optional<T, OP extends PropertyKey> =
 type PartialMissingISBNs = Optional<MissingISBNs, 'shelf'>;
 type PartialGetISBNs = Optional<GetISBNs, 'shelf'>;
 type PartialCommand = PartialMissingISBNs | PartialGetISBNs;
-type Progress = { total: number, done: number };
+type Progress = { total: number, started: number, done: number, fetched: number };
 type UIState =
   | {
     input?: undefined,
@@ -424,27 +423,27 @@ class UITableUI implements UI {
   }
   private buildProgress() {
     if (!this.state.progress || this.state.summary) return;
+    const { total, started, done, fetched } = this.state.progress;
+    const waiting = total - started;
+    const active = started - done;
     this.buildSection('Progress XXX');
-    this.buildAction(`${this.state.progress.done}/${this.state.progress.total}`);
+    this.buildAction(`${fetched} fetched`);
+    this.buildAction(`${done} done + ${active} active + ${waiting} waiting = ${total}`);
   }
   private setProgress(progress: Progress) {
     this.saveState();
     this.state = this.validateState(this.state.input, false, this.state.command, progress);
     this.build();
   }
-  commandProgressTotal(total: number): void {
-    this.setProgress({ total, done: 0 });
-  }
-  commandProgress(done: number): void {
-    if (!this.state.progress) return;
-    this.setProgress({ ...this.state.progress, done });
+  commandProgress(progress: { total: number, started: number, done: number, fetched: number }): void {
+    this.setProgress(progress);
   }
   commandSummary(summary: CommandSummary) {
     this.setSummary(summary);
   }
   private setSummary(summary: CommandSummary) {
     this.saveState();
-    this.state = this.validateState(this.state.input, false, this.state.command, this.state.progress ?? { total: 0, done: 0 }, summary);
+    this.state = this.validateState(this.state.input, false, this.state.command, this.state.progress ?? { total: 0, started: 0, done: 0, fetched: 0 }, summary);
     this.build();
   }
   private buildSummary() {
@@ -620,7 +619,7 @@ class Controller implements UIRequestReceiver {
     } else if (command.name == 'GetISBNs') {
 
       console.log('get');
-      let isbnsDone = 0;
+      const progress = { total: 0, started: 0, done: 0, fetched: 0 };
       const infos = new Map<EditionsService, { hits: number, queries: number, fetches: number[], firstBegan?: number, lastEnded?: number }>;
       const infoFor = (service: EditionsService): Parameters<typeof infos.set>[1] => {
         {
@@ -643,9 +642,10 @@ class Controller implements UIRequestReceiver {
             } else if (ev == 'service cache hit') {
               infoFor(report.service).hits++;
             } else if (ev == 'query plan') {
-              const count = Array.from(report.plan.values()).reduce((total, isbns) => total + isbns.size, 0);
-              ui.commandProgressTotal(count);
+              progress.total = Array.from(report.plan.values()).reduce((total, isbns) => total + isbns.size, 0);
             } else if (ev == 'service query started') {
+              progress.started++;
+              ui.commandProgress(progress);
               const info = infoFor(report.service);
               if (!info.firstBegan) info.firstBegan = Date.now();
               info.queries++;
@@ -653,9 +653,12 @@ class Controller implements UIRequestReceiver {
               console.log(`started ${report.url}`);
             } else if (ev == 'fetch finished') {
               infoFor(report.service).fetches.push(report.elapsed);
+              progress.fetched++;
+              ui.commandProgress(progress);
             } else if (ev == 'service query finished') {
               infoFor(report.service).lastEnded = Date.now();
-              ui.commandProgress(++isbnsDone);
+              progress.done++;
+              ui.commandProgress(progress);
               report.warnings.forEach(e => {
                 console.warn(e.description);
                 this.log.append(e.description);
@@ -757,9 +760,6 @@ await store.write();
 // (known) BUGS
 
 // TODO
-// with only OLWE enabled, progress appears only sporadically: no apparent progress while (10) queued works finish before editions can be finished and show progress then another delay while a new batch of works is processed before any editions
-//  probably explains the minor progress jitter that I've seen before (the queue get more than a few works queued, and they won't show progress until their editions finish, too)
-//  show finished,active,waiting=total instead of just done/total
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 // during run
 //  make UI non-interactive (except a cancel button?)
