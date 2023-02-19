@@ -15,39 +15,81 @@ function dirname(path: string) {
 }
 
 /**
- * Read from and/or write to a JSON file "next to" the pathname given to the
- * constructor.
+ * Generate a pathname (with the given extension) "next to" the given pathname.
  *
- * The JSON file will will have a `.json` extension and be located in the same
- * directory as the specified pathname. By default it will have the same base
- * name (filename without final extension) as the specified pathname, but a
- * modification function can be given to modify the name used.
+ * The generated pathname will be located in the same directory as the specified
+ * pathname. By default it will have the same base name (filename without final
+ * extension) as the specified pathname, but a modification function can be
+ * given to modify the name used.
  *
- * For example, given a pathname like `foo/bar/Your Program.js`, the default
- * JSON file will be `foo/bar/Your Program.json`, but a filename modification
- * function could add `' log'` to change it to `foo/bar/Your Program log.json`.
+ * For example, given a pathname like `foo/bar/Your Program.js`, and the
+ * extension `json`, the generated pathname will be `foo/bar/Your Program.json`.
+ * A filename modification function could add `' log'` to change it to
+ * `foo/bar/Your Program log.json`.
  */
-class SideStore {
-  private pathname: string;
-  constructor(pathname: string, modifyFilename?: (basename: string) => string) {
-    const lfm = FileManager.local();
+function asidePathname(pathname: string, ext: string, modifyBasename?: (basename: string) => string) {
+  const fm = FileManager.local();
+  const dir = dirname(pathname);
+  const basename = fm.fileName(pathname);
+  const newBasename = modifyBasename?.(basename) ?? basename;
+  return fm.joinPath(dir, newBasename + '.' + ext);
+}
 
-    lfm.isFileStoredIniCloud(pathname);
-    const dir = dirname(pathname);
-    const basename = lfm.fileName(pathname);
-    const newBasename = modifyFilename?.(basename) ?? basename;
-    this.pathname = lfm.joinPath(dir, newBasename + '.json');
+class Store {
+  private rw: ReadWrite;
+  constructor(pathname: string) {
+    this.rw = new ReadWrite(pathname);
   }
   public data: unknown;
-  read(): void {
-    const fm = FileManager.local();
-    if (fm.fileExists(this.pathname))
-      this.data = JSON.parse(fm.readString(this.pathname));
+  async read(): Promise<void> {
+    if (await this.rw.exists())
+      this.data = JSON.parse(await this.rw.readString());
     else
       this.data = null;
   }
-  write(): void {
-    FileManager.local().writeString(this.pathname, JSON.stringify(this.data));
+  async write(): Promise<void> {
+    this.rw.writeString(JSON.stringify(this.data));
+  }
+}
+
+class Log {
+  private rw: ReadWrite;
+  constructor(pathname: string) {
+    this.rw = new ReadWrite(pathname);
+  }
+  private log: string[] = [];
+  append(line: string) {
+    this.log.push(line);
+  }
+  async flush(): Promise<void> {
+    if (this.log.length > 0) {
+      await this.rw.writeString(await this.rw.readString() + this.log.join('\n') + '\n');
+      this.log.splice(0);
+    }
+  }
+}
+
+class ReadWrite {
+  constructor(private pathname: string) { }
+  async exists(): Promise<boolean> {
+    return FileManager.local().fileExists(this.pathname);
+  }
+  async read(): Promise<Data> {
+    const fm = FileManager.local();
+    if (fm.fileExists(this.pathname)) {
+      await fm.downloadFileFromiCloud(this.pathname);
+      return fm.read(this.pathname);
+    }
+    return Data.fromString('');
+  }
+  async write(data: Data): Promise<void> {
+    FileManager.local().write(this.pathname, data);
+  }
+  async readString(): Promise<string> {
+    return (await this.read()).toRawString();
+  }
+  async writeString(str: string) {
+    return this.write(Data.fromString(str));
   }
 }
 
@@ -507,11 +549,13 @@ import { type CacheData, type FetchResult, getISBNs, missingISBNs, shelfInfo } f
 
 class Controller implements UIRequestReceiver {
   private cache: CacheData;
-  constructor(cache: unknown) {
+  private log: Log;
+  constructor(cache: unknown, logPathname: string) {
     if (isStore(cache))
       this.cache = cache;
     else
       this.cache = {};
+    this.log = new Log(logPathname);
   }
   private csv?: string;
   async requestInput(ui: UI, inputReq: RequestedIO): Promise<void> {
@@ -612,8 +656,14 @@ class Controller implements UIRequestReceiver {
             } else if (ev == 'service query finished') {
               infoFor(report.service).lastEnded = Date.now();
               ui.commandProgress(++isbnsDone);
-              report.warnings; // XXX
-              report.faults; // XXX
+              report.warnings.forEach(e => {
+                console.warn(e.description);
+                this.log.append(e.description);
+              });
+              report.faults.forEach(e => {
+                console.warn(e.description);
+                this.log.append(e.description);
+              });
             }
           }
         },
@@ -637,6 +687,8 @@ class Controller implements UIRequestReceiver {
 
     }
     else assertNever(command);
+
+    await this.log.flush();
 
     Timer.schedule(250, false, () => ui.commandSummary(summary));
   }
@@ -689,18 +741,18 @@ globalThis.setTimeout = <A extends unknown[]>(fn: (...args: A) => void, ms: numb
 };
 // globalThis.clearTimeout = (timer: Timer): void => timer.invalidate();
 
-const store = new SideStore(module.filename);
-store.read();
+const store = new Store(asidePathname(module.filename, 'json'));
+await store.read();
 if (!store.data) store.data = {};
 if (!isStore(store.data)) throw 'restored data is not an object?';
 
-const controller = new Controller(store.data.EditionsCache);
+const controller = new Controller(store.data.EditionsCache, asidePathname(module.filename, 'log'));
 const ui = new UITableUI(controller, store.data.UITableUIData);
 
 await ui.present(true);
 store.data.UITableUIData = ui.getSavableData();
 store.data.EditionsCache = controller.getCached();
-store.write();
+await store.write();
 
 // (known) BUGS
 
@@ -709,8 +761,6 @@ store.write();
 //  probably explains the minor progress jitter that I've seen before (the queue get more than a few works queued, and they won't show progress until their editions finish, too)
 //  show finished,active,waiting=total instead of just done/total
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
-// warnings and faults from 'service query finished'
-//  log into another (plain text, not JSON?) file
 // during run
 //  make UI non-interactive (except a cancel button?)
 //    no onSelects, no "tap to" hints
