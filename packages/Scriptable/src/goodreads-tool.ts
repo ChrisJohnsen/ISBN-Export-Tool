@@ -187,8 +187,9 @@ class UITableUI implements UI {
   private table: UITable = new UITable;
   private presented = false;
   private state: UIState = {};
-  constructor(private controller: UIRequestReceiver, restoredData: unknown) {
-    if (typeof restoredData == 'object' && restoredData) {
+  constructor(private controller: UIRequestReceiver, private savedDataObject: unknown) {
+    if (typeof this.savedDataObject == 'object' && this.savedDataObject) {
+      const restoredData = this.savedDataObject;
       /* eslint-disable @typescript-eslint/no-explicit-any */
       // XXX validation typanion?
       if ('command' in restoredData)
@@ -198,13 +199,6 @@ class UITableUI implements UI {
       /* eslint-enable */
     }
     this.build();
-  }
-  getSavableData(): unknown {
-    this.saveState();
-    return {
-      commands: this.previousCommands,
-      command: this.previousCommand,
-    };
   }
   input(input: Input): void {
     this.setInput(input);
@@ -536,9 +530,18 @@ class UITableUI implements UI {
       cell.widthWeight = weight;
     return action;
   }
-  present(...args: Parameters<UITable['present']>): ReturnType<UITable['present']> {
+  async present(...args: Parameters<UITable['present']>): ReturnType<UITable['present']> {
     this.presented = true;
-    return this.table.present(...args);
+    try {
+      return await this.table.present(...args);
+    } finally {
+      this.presented = false;
+      this.saveState();
+      this.savedDataObject = {
+        commands: this.previousCommands,
+        command: this.previousCommand,
+      };
+    }
   }
 }
 
@@ -764,15 +767,11 @@ const controller = new Controller(logPathname, cachePathname);
 const ui = new UITableUI(controller, store.data.UITableUIData);
 await ui.present(true);
 
-store.data.UITableUIData = ui.getSavableData();
 await store.write();
 
 // (known) BUGS
 
 // TODO
-// UITableUI updates its saved data store object when it is dismissed
-//  means we don't need to have to separately call ui.getSavableData()
-//  along with accurate currentlyPresenting
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 // during run
 //  make UI non-interactive (except a cancel button?)
@@ -828,9 +827,6 @@ await store.write();
 //  probably not useful for one-off users, but should be useful for frequent runs while developing
 //  provide a one-tap way to use a previously selected bookmark
 //    avoids the extra step of having to pick a bookmark (or go through DocumentPicker) to use a commonly used file
-// maybe we can accurately track "currentlyPresenting" if we keep the original promise value (and null it out when it resolves)
-//  might be needed if we have to dismiss the UI and re-present it to let the controller do its file prompting?
-//    controller can do DocumentPicker and Alert without dismissing the presented UITable UI
 // collapse input UI after selection, before input() comes back
 //  so UI responds right away, to avoid extra tapping if the response is delayed
 //  make UI non-interactive and provide progress?
