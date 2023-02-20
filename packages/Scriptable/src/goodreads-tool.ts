@@ -547,14 +547,19 @@ class UITableUI implements UI {
 import { type CacheData, type FetchResult, getISBNs, missingISBNs, shelfInfo } from 'utils';
 
 class Controller implements UIRequestReceiver {
-  private cache: CacheData;
   private log: Log;
-  constructor(cache: unknown, logPathname: string) {
-    if (isStore(cache))
-      this.cache = cache;
-    else
-      this.cache = {};
+  private cacheStore: Store;
+  constructor(logPathname: string, cachePathname: string) {
     this.log = new Log(logPathname);
+    this.cacheStore = new Store(cachePathname);
+  }
+  cacheData(): CacheData | undefined {
+    if (!this.cacheStore) return void 0;
+    if (isStore(this.cacheStore.data))
+      return this.cacheStore.data;
+    const data = {};
+    this.cacheStore.data = data;
+    return data;
   }
   private csv?: string;
   async requestInput(ui: UI, inputReq: RequestedIO): Promise<void> {
@@ -618,7 +623,8 @@ class Controller implements UIRequestReceiver {
 
     } else if (command.name == 'GetISBNs') {
 
-      console.log('get');
+      await this.cacheStore.read();
+
       const progress = { total: 0, started: 0, done: 0, fetched: 0 };
       const infos = new Map<EditionsService, { hits: number, queries: number, fetches: number[], firstBegan?: number, lastEnded?: number }>;
       const infoFor = (service: EditionsService): Parameters<typeof infos.set>[1] => {
@@ -630,10 +636,11 @@ class Controller implements UIRequestReceiver {
         infos.set(service, info);
         return info;
       };
+
       const isbns = await getISBNs(this.csv, command.shelf, {
         otherEditions: command.editions.length != 0 && {
           services: new Set(command.editions),
-          cacheData: this.cache,
+          cacheData: this.cacheData(),
           fetcher: fakeFetcher,
           reporter: report => {
             const ev = report.event;
@@ -672,6 +679,9 @@ class Controller implements UIRequestReceiver {
         },
         bothISBNs: command.both,
       });
+
+      await this.cacheStore.write();
+
       if (command.editions.length == 0) {
         summary = { name: 'GetISBNs', totalISBNs: isbns.size };
         break summary_ready;
@@ -694,9 +704,6 @@ class Controller implements UIRequestReceiver {
     await this.log.flush();
 
     Timer.schedule(250, false, () => ui.commandSummary(summary));
-  }
-  getCached(): CacheData {
-    return this.cache;
   }
 }
 
@@ -749,17 +756,23 @@ await store.read();
 if (!store.data) store.data = {};
 if (!isStore(store.data)) throw 'restored data is not an object?';
 
-const controller = new Controller(store.data.EditionsCache, asidePathname(module.filename, 'log'));
-const ui = new UITableUI(controller, store.data.UITableUIData);
+const logPathname = asidePathname(module.filename, 'log');
+const cachePathname = asidePathname(module.filename, 'json', bn => bn + ' cache');
 
+const controller = new Controller(logPathname, cachePathname);
+
+const ui = new UITableUI(controller, store.data.UITableUIData);
 await ui.present(true);
+
 store.data.UITableUIData = ui.getSavableData();
-store.data.EditionsCache = controller.getCached();
 await store.write();
 
 // (known) BUGS
 
 // TODO
+// UITableUI updates its saved data store object when it is dismissed
+//  means we don't need to have to separately call ui.getSavableData()
+//  along with accurate currentlyPresenting
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 // during run
 //  make UI non-interactive (except a cancel button?)
@@ -777,10 +790,6 @@ await store.write();
 //  save to file (DocumentPicker.export)
 //  clipboard (Pasteboard.copyString)
 //  view (quick look?)
-// store cache separately from other saved stuff?
-//  otherwise, hard to clear cache without deleting other saved stuff
-//    nothing too important is saved though, really
-//  test mode will probably force moving cache management into controller...
 // debug tools "screen'
 //  maybe an overlay present()able so we don't have to muck with UI state
 //    would be mostly delegated to controller anyway since that is where this stuff "lives"
