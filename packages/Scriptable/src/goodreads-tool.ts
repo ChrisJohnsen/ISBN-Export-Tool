@@ -547,22 +547,12 @@ class UITableUI implements UI {
 
 // controller interfaces with tool-core on behalf of a non-specific UI
 
-import { type CacheData, type FetchResult, getISBNs, missingISBNs, shelfInfo } from 'utils';
+import { type FetchResult, getISBNs, missingISBNs, shelfInfo } from 'utils';
 
 class Controller implements UIRequestReceiver {
   private log: Log;
-  private cacheStore: Store;
-  constructor(logPathname: string, cachePathname: string) {
+  constructor(logPathname: string, private cachePathname: string, private testCachePathname: string) {
     this.log = new Log(logPathname);
-    this.cacheStore = new Store(cachePathname);
-  }
-  cacheData(): CacheData | undefined {
-    if (!this.cacheStore) return void 0;
-    if (isStore(this.cacheStore.data))
-      return this.cacheStore.data;
-    const data = {};
-    this.cacheStore.data = data;
-    return data;
   }
   private csv?: string;
   async requestInput(ui: UI, inputReq: RequestedIO): Promise<void> {
@@ -626,7 +616,20 @@ class Controller implements UIRequestReceiver {
 
     } else if (command.name == 'GetISBNs') {
 
-      await this.cacheStore.read();
+      const testMode = true;
+
+      const fetcher = testMode ? fakeFetcher : () => { throw 'real fetcher not implemented!' };
+
+      const store = new Store(testMode ? this.testCachePathname : this.cachePathname);
+      await store.read();
+      const cacheData = (store => {
+        if (!store) return void 0;
+        if (isStore(store.data))
+          return store.data;
+        const data = {};
+        store.data = data;
+        return data;
+      })(store);
 
       const progress = { total: 0, started: 0, done: 0, fetched: 0 };
       const infos = new Map<EditionsService, { hits: number, queries: number, fetches: number[], firstBegan?: number, lastEnded?: number }>;
@@ -643,8 +646,8 @@ class Controller implements UIRequestReceiver {
       const isbns = await getISBNs(this.csv, command.shelf, {
         otherEditions: command.editions.length != 0 && {
           services: new Set(command.editions),
-          cacheData: this.cacheData(),
-          fetcher: fakeFetcher,
+          cacheData,
+          fetcher,
           reporter: report => {
             const ev = report.event;
             if (ev == 'rejection') {
@@ -683,7 +686,7 @@ class Controller implements UIRequestReceiver {
         bothISBNs: command.both,
       });
 
-      await this.cacheStore.write();
+      await store.write();
 
       if (command.editions.length == 0) {
         summary = { name: 'GetISBNs', totalISBNs: isbns.size };
@@ -761,8 +764,9 @@ if (!isStore(store.data)) throw 'restored data is not an object?';
 
 const logPathname = asidePathname(module.filename, 'log');
 const cachePathname = asidePathname(module.filename, 'json', bn => bn + ' cache');
+const testCachePathname = asidePathname(module.filename, 'json', bn => bn + ' test cache');
 
-const controller = new Controller(logPathname, cachePathname);
+const controller = new Controller(logPathname, cachePathname, testCachePathname);
 
 const ui = new UITableUI(controller, store.data.UITableUIData);
 await ui.present(true);
@@ -790,38 +794,24 @@ await store.write();
 //  clipboard (Pasteboard.copyString)
 //  view (quick look?)
 // debug tools "screen'
-//  maybe an overlay present()able so we don't have to muck with UI state
-//    would be mostly delegated to controller anyway since that is where this stuff "lives"
-//  clear cache
-//  view cache summary?
-//  view fault log?
-//  test mode toggle here?
-//    (with warning on GetISBNs editions: true run if enabled)
-//      hmm, since debug is controller-based, would need a controller->ui notification which is a new coupling type (existing are all "callbacks": the controller does not know about the UI outside of a UI-initiated request)
-//    could just not have anything in the main UI... maybe a bool in the editionInfo to inform after the fact
-//      controller could pop an Alert with Proceed/Cancel buttons if test mode is "unexpected" (expect false in "production", true in "development")
-// test mode
-//  only GetISBNs editions:true needs it currently, so have it show up as option in only that case?
-//  user-controlled in UI, but effected by controller, but not entirely...
-//    cache location is determined outside controller currently
-//      pass two cache locations (one for test, one for real)?
-//      move cache storage management into controller?
-//        it already does platform specific stuff (IO), not just interfacing with tool-core, so a bit more (through SideStore, or similar) is NBD
-//        it doesn't know when UI is done presenting, but it could save after every command
-//        would naturally force separation of UI saved data and cached data
-//        once entirely managed by controller, test mode can be an option in just GetISBNs (or other commands if anything else eventually needs a test mode)
-//          so UI doesn't have to coordinate switching back and forth based on UI actions, just the effective setting when the command is actually run
-//  switch cache location and fetcher
-//  save its state in the saved data?
-//  really only GetISBNs editions:true uses it, so make it an option for only that case?
-//    maybe only if "hidden" toggle is also enabled?
-//      force it if "hidden" bit is on? or just present it as an option if "hidden" bit is on?
-//  "hidden" part of UI to put it?
-//    table UI
-//      invisible button in the middle of the blank row?
-//        turns visible when enabled, to make it easy to notice and turn off
-//    in navigation controller -style UI
-//      invisible UR corner of Run; visible when enabled
+//  view cache summary? (maybe useful, can view in Files, but not easily summarized)
+//  test mode toggle
+//  overlay present()able so we don't have to muck with main UI state
+//    UI calls controller.debugUI(), controller does new await otherTable.present(), which temporarily overlays main UI
+//    normal trigger (row/button/whatever) in main UI when in development mode
+//    production mode
+//      no trigger at all?
+//      only hidden trigger? (invisible button in middle of blank row?)
+// test mode in UI
+//  main UI does not know about setting, but maybe summary editionsInfo includes a bool about it
+//    development mode: always render as a part of summary
+//    production mode: only render if test mode was active (nothing added if not in test mode)
+//  controller tells UI about test mode via new flows
+//    controller.getTestMode(this)...ui.testMode(true|false)  used during UI startup
+//    controller.debugUI(this)...ui.testMode(true|false)      used to present debug UI
+//    UI can render test mode status (e.g. as a banner in main UI, or just in GetISBNs rendering)
+//  main UI does not know about setting, but controller pops alert if test mode xor production
+//    alert offers Continue/Abort/Switch Modes
 // real fetcher
 // new input type: Scriptable bookmark
 //  probably not useful for one-off users, but should be useful for frequent runs while developing
