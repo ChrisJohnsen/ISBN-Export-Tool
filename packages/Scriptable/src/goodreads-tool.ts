@@ -95,7 +95,7 @@ class ReadWrite {
 
 // platform independent definitions (maybe UI could be web-based inside a WebView)
 
-import { AllEditionsServices, type EditionsService } from 'utils';
+import { AllEditionsServices, type Fetcher, type EditionsService } from 'utils';
 
 type IO = { type: 'clipboard' } | { type: 'file', displayName: string };
 type Input = IO & { info: { items: number, shelfItems: Record<string, number> } };
@@ -605,7 +605,22 @@ class Controller implements UIRequestReceiver {
       return { items, shelfItems };
     }
   }
+  private abortingFetches = false;
+  private commandPromise?: Promise<void>;
   async requestCommand(ui: UI, command: Command): Promise<void> {
+    if (this.commandPromise) {
+      console.error('requested a command while one is already running');
+      return;
+    }
+    try {
+      this.abortingFetches = false;
+      this.commandPromise = this._requestCommand(ui, command);
+      await this.commandPromise;
+    } finally {
+      this.commandPromise = void 0;
+    }
+  }
+  private async _requestCommand(ui: UI, command: Command): Promise<void> {
     if (!this.csv) throw 'requested command without first requesting input';
     let summary: CommandSummary;
     summary_ready:
@@ -618,7 +633,12 @@ class Controller implements UIRequestReceiver {
 
       const testMode = true;
 
-      const fetcher = testMode ? fakeFetcher : () => { throw 'real fetcher not implemented!' };
+      const fetcher: Fetcher = (fetcher => {
+        return url => {
+          if (this.abortingFetches) return Promise.reject(`aborting ${url}`);
+          return fetcher(url);
+        };
+      })(testMode ? fakeFetcher : () => Promise.reject('real fetcher not implemented!'));
 
       const store = new Store(testMode ? this.testCachePathname : this.cachePathname);
       await store.read();
@@ -711,6 +731,10 @@ class Controller implements UIRequestReceiver {
 
     Timer.schedule(250, false, () => ui.commandSummary(summary));
   }
+  async abortIfRunning() {
+    this.abortingFetches = true;
+    await this.commandPromise;
+  }
 }
 
 import { equivalentISBNs } from 'utils';
@@ -770,6 +794,7 @@ const controller = new Controller(logPathname, cachePathname, testCachePathname)
 
 const ui = new UITableUI(controller, store.data.UITableUIData);
 await ui.present(true);
+await controller.abortIfRunning();
 
 await store.write();
 
@@ -781,12 +806,10 @@ await store.write();
 //  make UI non-interactive (except a cancel button?)
 //    no onSelects, no "tap to" hints
 // handle "canceled" operation?
-//  .then (or separate async "thread" await) the actual present() promise
-//  make fetches start rejecting to finish as quickly as possible
-//  replace our present()'s promise to keep it unresolved until getISBNs finishes
-//    otherwise, Scriptable might not know something is still running
-//    return (async ()=>{await this.table.present();await this.finishCommand();})()
-//    return this.table.present().then(()=>this.finishCommand())
+//  aborting pending fetches doesn't help much because all the other fetches are already queued up in the throttle "queue" (pre-scheduled on timers)
+//    so if we wait for getISBNs to complete, we still have to wait for all the throttled fetches to finish...
+//  the throttle library provides an abort function, but we do not currently expose it from the tool-core
+//    suppose we could hang onto it and "export" it through a new report... seems icky though
 // bar graph for progress?
 // output
 //  missing: pick columns, or just use the same set at the node tool?
