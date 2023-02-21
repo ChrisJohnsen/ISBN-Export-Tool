@@ -201,7 +201,9 @@ const beforeAndAfter = <A extends unknown[], R>(
   try { before(args) } catch { /* ignore */ }
   const start = Date.now();
   const result = wrappee(...args);
-  result.then(resolved => after(args, resolved, Date.now() - start)).catch(/* ignore */);
+  (async () => {
+    try { after(args, await result, Date.now() - start) } catch { /* ignore */ }
+  })();
   return result;
 };
 

@@ -544,6 +544,80 @@ describe('getISBNs', () => {
         serviceSpy(report.service);
     }
   });
+
+  test('fetches mostly throw', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN13
+      200,to-read,9780000002006
+      201,to-read,9780000002013
+      202,to-read,9780000002020
+      203,to-read,9780000002037
+      204,to-read,9780000002044
+      205,to-read,9780000002051
+      206,to-read,9780000002068
+      207,to-read,9780000002075
+      208,to-read,9780000002082
+      209,to-read,9780000002099
+      210,to-read,9780000002105
+      211,to-read,9780000002112
+      212,to-read,9780000002129
+      213,to-read,9780000002136
+    `;
+
+    const baseFetcher = makeFakeFetcher({
+      '9780000002006': ['9780000102003'],
+      '9780000002013': ['9780000102010'],
+      '9780000002020': ['9780000102027'],
+      '9780000002037': ['9780000102034'],
+      '9780000002044': ['9780000102041'],
+      '9780000002051': ['9780000102058'],
+      '9780000002068': ['9780000102065'],
+      '9780000002075': ['9780000102072'],
+      '9780000002082': ['9780000102089'],
+      '9780000002099': ['9780000102096'],
+      '9780000002105': ['9780000102102'],
+      '9780000002112': ['9780000102119'],
+      '9780000002129': ['9780000102126'],
+      '9780000002136': ['9780000102133'],
+    });
+
+    let fetchCount = 0;
+    let abortCount = 0;
+    const fetcher: Fetcher = url => {
+      ++fetchCount;
+      if (!(url.includes('9780000002006') || url.includes('9780000002013'))) {
+        ++abortCount;
+        throw `aborted ${abortCount}! fetch ${fetchCount}: ${url.replace(/^.*\//, '')}`;
+      }
+      return baseFetcher(url);
+    };
+    const services = AllEditionsServices;
+    const reporter = (report: ProgressReport) => void report;
+
+    const result = getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, reporter,
+        throttle: false,
+      }
+    });
+
+    await expect(result).resolves.toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+      '9780000002013', '9780000102010',
+      '9780000002020',
+      '9780000002037',
+      '9780000002044',
+      '9780000002051',
+      '9780000002068',
+      '9780000002075',
+      '9780000002082',
+      '9780000002099',
+      '9780000002105',
+      '9780000002112',
+      '9780000002129',
+      '9780000002136',
+    ]));
+  });
 });
 
 describe('getISBNs fake timers', () => {
