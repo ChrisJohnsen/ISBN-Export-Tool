@@ -63,8 +63,8 @@ class Log {
   }
   async flush(): Promise<void> {
     if (this.log.length > 0) {
-      await this.rw.writeString(await this.rw.readString() + this.log.join('\n') + '\n');
-      this.log.splice(0);
+      const logs = this.log.splice(0);
+      await this.rw.writeString(await this.rw.readString() + logs.join('\n') + '\n');
     }
   }
 }
