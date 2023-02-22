@@ -2,7 +2,7 @@
 
 // TypeScript generic stuff
 
-function assertNever(value: never) { void value; throw 'assertNever called' }
+function assertNever(value: never): never { void value; throw 'assertNever called' }
 
 // Scriptable generic stuff
 
@@ -559,7 +559,7 @@ class Controller implements UIRequestReceiver {
 
     const { csv, input } = await getInput();
     this.csv = csv;
-    Timer.schedule(250, false, () => ui.input(input));
+    ui.input(input);
 
     async function getInput(): Promise<{ csv: string, input: Input }> {
       const type = inputReq.type;
@@ -729,11 +729,11 @@ class Controller implements UIRequestReceiver {
       summary = { name: 'GetISBNs', totalISBNs: isbns.size, editionsInfo };
 
     }
-    else assertNever(command);
+    else summary = assertNever(command);
 
     await this.log.flush();
 
-    Timer.schedule(250, false, () => ui.commandSummary(summary));
+    ui.commandSummary(summary);
   }
   async abortIfRunning() {
     this.abortingFetches = true;
