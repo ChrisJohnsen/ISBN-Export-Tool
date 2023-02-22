@@ -618,6 +618,84 @@ describe('getISBNs', () => {
       '9780000002136',
     ]));
   });
+
+  test('editions abort', async () => {
+    const csv = outdent`
+      id,Bookshelves,ISBN13
+      200,to-read,9780000002006
+      201,to-read,9780000002013
+      202,to-read,9780000002020
+      203,to-read,9780000002037
+      204,to-read,9780000002044
+      205,to-read,9780000002051
+      206,to-read,9780000002068
+      207,to-read,9780000002075
+      208,to-read,9780000002082
+      209,to-read,9780000002099
+      210,to-read,9780000002105
+      211,to-read,9780000002112
+      212,to-read,9780000002129
+      213,to-read,9780000002136
+    `;
+
+    const isbns = {
+      '9780000002006': ['9780000102003'],
+      '9780000002013': ['9780000102010'],
+      '9780000002020': ['9780000102027'],
+      '9780000002037': ['9780000102034'],
+      '9780000002044': ['9780000102041'],
+      '9780000002051': ['9780000102058'],
+      '9780000002068': ['9780000102065'],
+      '9780000002075': ['9780000102072'],
+      '9780000002082': ['9780000102089'],
+      '9780000002099': ['9780000102096'],
+      '9780000002105': ['9780000102102'],
+      '9780000002112': ['9780000102119'],
+      '9780000002129': ['9780000102126'],
+      '9780000002136': ['9780000102133'],
+    };
+    const baseFetcher = makeFakeFetcher(isbns);
+
+    let fetchCount = 0;
+    const fetcher: Fetcher = async url => {
+      // add some slight, increasing delays to linearize things a bit
+      // this keeps everything from resolving near-simultaneously before we can abort
+      // we could activate the throttle instead, but that would increase test time significantly (~1s/fetch)
+      await new Promise(r => setTimeout(r, 20 * ++fetchCount));
+      return baseFetcher(url);
+    };
+    const services = AllEditionsServices;
+    const finished = new Array<string>;
+    let abort: () => void;
+    const isbnsBeforeAborting = 10;
+    const reporter = (report: ProgressReport) => {
+      if (report.event == 'abort fn') {
+        abort = report.fn;
+      } else if (report.event == 'service query finished') {
+        finished.push(report.isbn);
+        report.isbns.forEach(isbn => finished.push(isbn));
+        if (finished.length >= isbnsBeforeAborting) {
+          // abort has to happen on a timer to let the current query's Promise chain finish resolving past the abort race
+          setTimeout(abort, 0);
+        }
+      }
+    };
+
+    const result = await getISBNs(csv, 'to-read', {
+      otherEditions: {
+        fetcher, services, reporter,
+        throttle: false,
+      }
+    });
+
+    expect(finished.length).toBeGreaterThanOrEqual(isbnsBeforeAborting);
+    expect(finished.length).toBeLessThan(isbnsBeforeAborting * 1.75); // okay to have a few more that finish before the abort completes, but not too many
+
+    expect(result).toStrictEqual(new Set([
+      ...Object.getOwnPropertyNames(isbns),
+      ...finished,
+    ]));
+  });
 });
 
 describe('getISBNs fake timers', () => {

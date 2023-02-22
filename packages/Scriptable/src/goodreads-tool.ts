@@ -607,6 +607,7 @@ class Controller implements UIRequestReceiver {
   }
   private abortingFetches = false;
   private commandPromise?: Promise<void>;
+  private abortEditions?: () => void;
   async requestCommand(ui: UI, command: Command): Promise<void> {
     if (this.commandPromise) {
       console.error('requested a command while one is already running');
@@ -617,6 +618,7 @@ class Controller implements UIRequestReceiver {
       this.commandPromise = this._requestCommand(ui, command);
       await this.commandPromise;
     } finally {
+      this.abortEditions = void 0;
       this.commandPromise = void 0;
     }
   }
@@ -670,7 +672,9 @@ class Controller implements UIRequestReceiver {
           fetcher,
           reporter: report => {
             const ev = report.event;
-            if (ev == 'rejection') {
+            if (ev == 'abort fn') {
+              this.abortEditions = report.fn;
+            } else if (ev == 'rejection') {
               console.error(report.reason);
             } else if (ev == 'service cache hit') {
               infoFor(report.service).hits++;
@@ -733,6 +737,7 @@ class Controller implements UIRequestReceiver {
   }
   async abortIfRunning() {
     this.abortingFetches = true;
+    this.abortEditions?.();
     await this.commandPromise;
   }
 }
@@ -773,13 +778,13 @@ function isStore(o: unknown): o is Record<string, unknown> {
   return true;
 }
 
-// setTimeout used by throttle
+// setTimeout and clearTimeout used by throttle
 declare const globalThis: Record<PropertyKey, unknown>;
 globalThis.setTimeout = <A extends unknown[]>(fn: (...args: A) => void, ms: number, ...args: A): Timer => {
   if (typeof fn == 'string') throw 'setTimeout with uncompiled code argument not supported';
   return Timer.schedule(ms, false, () => fn(...args));
 };
-// globalThis.clearTimeout = (timer: Timer): void => timer.invalidate();
+globalThis.clearTimeout = (timer: Timer): void => timer.invalidate();
 
 const store = new Store(asidePathname(module.filename, 'json'));
 await store.read();
@@ -805,11 +810,6 @@ await store.write();
 // during run
 //  make UI non-interactive (except a cancel button?)
 //    no onSelects, no "tap to" hints
-// handle "canceled" operation?
-//  aborting pending fetches doesn't help much because all the other fetches are already queued up in the throttle "queue" (pre-scheduled on timers)
-//    so if we wait for getISBNs to complete, we still have to wait for all the throttled fetches to finish...
-//  the throttle library provides an abort function, but we do not currently expose it from the tool-core
-//    suppose we could hang onto it and "export" it through a new report... seems icky though
 // bar graph for progress?
 // output
 //  missing: pick columns, or just use the same set at the node tool?

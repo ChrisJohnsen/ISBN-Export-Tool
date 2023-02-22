@@ -120,7 +120,9 @@ async function fetchOtherEditionISBNs(
   // gather the ISBNs
   const isbns = Array.from(isbnsIterable);
 
-  const editionsOfs = editionsOfServices(10, fetcher, throttle, services, cacheData, reporter);
+  const { editionsOfs, abortAll } = editionsOfServices(10, fetcher, throttle, services, cacheData, reporter);
+
+  try { reporter?.({ event: 'abort fn', fn: abortAll }) } catch { /* ignore */ }
 
   const oneOf = <T>(arr: T[]) => arr[Math.trunc(Math.random() * arr.length)];
 
@@ -167,6 +169,8 @@ async function fetchOtherEditionISBNs(
   const isbnFetches = await Promise.allSettled(
     uncachedAssignments.map(async ({ isbn, editionsOf }) =>
       mergeOtherCaches(editionsOf.serviceName, isbn, await editionsOf.query(isbn))));
+
+  abortAll(); // settle the abort promise
 
   // cache the results
   editionsOfs.forEach(cached => cached.saveCache());
@@ -241,26 +245,31 @@ function editionsOfServices(
   cacheData?: CacheData,
   reporter?: ProgressReporter,
 ): {
-  serviceName: EditionsService,
-  checkCache: (isbn: string) => CacheCheck<Set<string>>,
-  query: (isbn: string) => Promise<Set<string>>,
-  saveCache: () => void,
-}[] {
+    editionsOfs: {
+    serviceName: EditionsService,
+    checkCache: (isbn: string) => CacheCheck<Set<string>>,
+    query: (isbn: string) => Promise<Set<string>>,
+    saveCache: () => void,
+  }[],
+  abortAll: () => void,
+} {
 
   // overall parallelism limit
   const limit = pLimit(limitn);
+  let limitAbort: () => void;
+  // to be raced with limited calls to settle them early if we abort
+  const limitAbortPromise = new Promise<never>((resolve, reject) => limitAbort = () => reject('Limited call aborted'));
+  limitAbortPromise.catch(() => { /* ignore*/ }); // avoid unhandled rejection errors
 
   // separate throttles to be applied to fetches from different services
-  const olThrottle = (fetcher: Fetcher) =>
-    pThrottle({ limit: 1, interval: 1000, strict: true })(fetcher);
-  const ltThrottle = (fetcher: Fetcher) =>
-    pThrottle({ limit: 1, interval: 1000, strict: true })(fetcher);
+  const olThrottle = pThrottle({ limit: 1, interval: 1000, strict: true });
+  const ltThrottle = pThrottle({ limit: 1, interval: 1000, strict: true });
 
   // "editions of" functions, where we store their cached data, and the throttles to apply to their fetches
   const editionsOfSetups: [
     serviceName: EditionsService,
     editionsOf: (f: Fetcher) => (i: string) => Promise<EditionsISBNResults>,
-    throttler: (fetcher: Fetcher) => Fetcher,
+    throttler: typeof olThrottle,
   ][] = [
       ['Open Library WorkEditions', otherEditionsOfISBN__OpenLibrary_WorkEditions, olThrottle],
       ['Open Library Search', otherEditionsOfISBN__OpenLibrary_Search, olThrottle],
@@ -284,7 +293,7 @@ function editionsOfServices(
   };
 
   // package up all the limiting, progress capture, caching (and restoring/saving), throttling, and error handling around each "editions of" service
-  return enabledEditionsOfSetups.map(([serviceName, editionsOf, throttler]) => {
+  const editionsOfs = enabledEditionsOfSetups.map(([serviceName, editionsOf, throttler]) => {
 
     // report on fetcher
     const reportingFetcher = reportBeforeAndAfter(
@@ -325,8 +334,14 @@ function editionsOfServices(
       ...restorers,
     });
 
-    // limit parallelism and report rejections
-    const limited = (isbn: string) => limit(cacher, isbn).catch(rejected => {
+    // limit parallelism
+    const limited = (isbn: string) => limit(cacher, isbn);
+
+    // provide a way to "abort"  calls abandoned via limit.clearQueue()
+    const abortable = (isbn: string) => Promise.race([limited(isbn), limitAbortPromise]);
+
+    // report rejections and default to just the initial ISBN
+    const reported = (isbn: string) => abortable(isbn).catch(rejected => {
       try { reporter?.({ event: 'rejection', reason: rejected }) } catch { /* ignore */ }
       return new Set([isbn]);
     });
@@ -334,10 +349,19 @@ function editionsOfServices(
     return {
       serviceName,
       checkCache: (isbn: string) => cacher.checkCache(isbn),
-      query: limited,
+      query: reported,
       saveCache: () => { if (cacheData) cacheData[serviceName] = cacher.saveCache(savers); },
     };
   });
+  return {
+    editionsOfs,
+    abortAll: () => {
+      limit.clearQueue(); // leaves un-started calls as unsettled Promises
+      limitAbort(); // rejects Promise that is raced against limited Promise (especially those that will remain unsettled)
+      olThrottle(() => void 0).abort();
+      ltThrottle(() => void 0).abort();
+    },
+  };
 }
 
 export type ProgressReport =
@@ -347,5 +371,6 @@ export type ProgressReport =
   | { event: 'service query finished', service: EditionsService, isbn: string, isbns: Set<string>, warnings: ContentError[], faults: ContentError[] }
   | { event: 'rejection', reason: any } // eslint-disable-line @typescript-eslint/no-explicit-any
   | { event: 'fetch started', service: EditionsService, url: string }
-  | { event: 'fetch finished', service: EditionsService, url: string, elapsed: number };
+  | { event: 'fetch finished', service: EditionsService, url: string, elapsed: number }
+  | { event: 'abort fn', fn: () => void };
 export type ProgressReporter = (report: ProgressReport) => void;
