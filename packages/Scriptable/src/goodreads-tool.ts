@@ -128,6 +128,35 @@ interface UIRequestReceiver {
   // requestSaveOutput(output:RequestIO), // calls ui.output()
 }
 
+// helper that builds common patterns of UITable elements
+class UITableBuilder {
+  constructor(private table: UITable) { }
+  private buildRow(onSelect?: () => void) {
+    const row = new UITableRow;
+    if (onSelect) {
+      row.onSelect = onSelect;
+      row.dismissOnSelect = false;
+    }
+    this.table.addRow(row);
+    return row;
+  }
+  addSectionRow(description: string, opts: { onSelect?: () => void, value?: string, hint?: string } = {}): UITableRow {
+    const header = this.buildRow(opts.onSelect);
+    header.addText(description);
+    if (opts.value || opts.hint)
+      header.addText(opts.value ?? ' ', opts.hint).rightAligned();
+    return header;
+  }
+  addActionRow(value: string, onSelect?: () => void, weight?: number): UITableRow {
+    const action = this.buildRow(onSelect);
+    const cell = action.addText(value);
+    cell.rightAligned();
+    if (weight)
+      cell.widthWeight = weight;
+    return action;
+  }
+}
+
 // UITable-based UI uses controller to do the work
 
 type Optional<T, OP extends PropertyKey> =
@@ -185,6 +214,7 @@ type ByNames<T extends { name: PropertyKey }> = { [N in T['name']]: Extract<T, {
 
 class UITableUI implements UI {
   private table: UITable = new UITable;
+  private builder = new UITableBuilder(this.table);
   private presented = false;
   private state: UIState = {};
   constructor(private controller: UIRequestReceiver, private savedDataObject: unknown) {
@@ -318,21 +348,21 @@ class UITableUI implements UI {
     const pickInput = () => this.setInput(void 0);
     if (!this.state.input) {
 
-      this.buildSection(text, this.previousInput && { onSelect: () => this.setInput(this.previousInput) });
-      this.buildAction('the clipboard', () => this.controller.requestInput(this, { type: 'clipboard' }));
-      this.buildAction('a file…', () => this.controller.requestInput(this, { type: 'file' }));
+      this.builder.addSectionRow(text, this.previousInput && { onSelect: () => this.setInput(this.previousInput) });
+      this.builder.addActionRow('the clipboard', () => this.controller.requestInput(this, { type: 'clipboard' }));
+      this.builder.addActionRow('a file…', () => this.controller.requestInput(this, { type: 'file' }));
 
     } else if (this.state.input.type == 'clipboard') {
 
-      this.buildSection(text, { value: 'the clipboard', hint: 'tap to change…', onSelect: pickInput });
+      this.builder.addSectionRow(text, { value: 'the clipboard', hint: 'tap to change…', onSelect: pickInput });
       const info = this.state.input.info;
-      this.buildSection(`${info.items} items`);
+      this.builder.addSectionRow(`${info.items} items`);
 
     } else if (this.state.input.type == 'file') {
 
-      this.buildSection(text, { value: `the file "${this.state.input.displayName}"`, hint: 'tap to change…', onSelect: pickInput });
+      this.builder.addSectionRow(text, { value: `the file "${this.state.input.displayName}"`, hint: 'tap to change…', onSelect: pickInput });
       const info = this.state.input.info;
-      this.buildSection(`${info.items} items`);
+      this.builder.addSectionRow(`${info.items} items`);
 
     } else assertNever(this.state.input);
   }
@@ -347,18 +377,18 @@ class UITableUI implements UI {
     const pickCommand = () => this.setCommand(void 0, false);
     if (!this.state.command) {
 
-      this.buildSection(text, this.previousCommand && { onSelect: () => this.previousCommand && this.setCommand(this.previousCommands[this.previousCommand]) });
-      this.buildAction('MissingISBNs XXX', () => this.setCommand({ name: 'MissingISBNs' }, true));
-      this.buildAction('GetISBNs XXX', () => this.setCommand({ name: 'GetISBNs', both: false, editions: [] }, true));
+      this.builder.addSectionRow(text, this.previousCommand && { onSelect: () => this.previousCommand && this.setCommand(this.previousCommands[this.previousCommand]) });
+      this.builder.addActionRow('MissingISBNs XXX', () => this.setCommand({ name: 'MissingISBNs' }, true));
+      this.builder.addActionRow('GetISBNs XXX', () => this.setCommand({ name: 'GetISBNs', both: false, editions: [] }, true));
 
     } else if (this.state.command.name == 'MissingISBNs') {
 
-      this.buildSection('MissingISBNs XXX', { hint: 'tap to change…', onSelect: pickCommand });
+      this.builder.addSectionRow('MissingISBNs XXX', { hint: 'tap to change…', onSelect: pickCommand });
       this.buildShelf();
 
     } else if (this.state.command.name == 'GetISBNs') {
 
-      this.buildSection('GetISBNs XXX', { hint: 'tap to change…', onSelect: pickCommand });
+      this.builder.addSectionRow('GetISBNs XXX', { hint: 'tap to change…', onSelect: pickCommand });
       this.buildShelf();
 
       const command = this.state.command;
@@ -376,14 +406,14 @@ class UITableUI implements UI {
         this.setCommand({ ...command, editions });
       };
 
-      this.buildSection('Options');
-      this.buildAction(editionsText, editionsToggle);
+      this.builder.addSectionRow('Options');
+      this.builder.addActionRow(editionsText, editionsToggle);
       if (editionsEnabled)
         AllEditionsServices.forEach(service => {
           const enabled = command.editions.includes(service);
-          return this.buildAction(service + ': ' + (enabled ? 'enabled' : 'disabled'), () => serviceToggle(service as EditionsService));
+          return this.builder.addActionRow(service + ': ' + (enabled ? 'enabled' : 'disabled'), () => serviceToggle(service as EditionsService));
         });
-      this.buildAction(bothText, bothToggle);
+      this.builder.addActionRow(bothText, bothToggle);
 
     } else assertNever(this.state.command);
   }
@@ -392,17 +422,17 @@ class UITableUI implements UI {
     if (this.state.command.shelf) {
 
       const noShelf = { ...this.state.command, shelf: void 0 };
-      this.buildSection('Shelf', { value: this.state.command.shelf, hint: 'tap to change…', onSelect: () => this.setCommand(noShelf) });
+      this.builder.addSectionRow('Shelf', { value: this.state.command.shelf, hint: 'tap to change…', onSelect: () => this.setCommand(noShelf) });
 
     } else {
 
       const withPreviousShelf = { ...this.state.command, shelf: this.previousCommands[this.state.command.name]?.shelf };
       const canRevert = typeof withPreviousShelf.shelf != 'undefined' || void 0;
-      this.buildSection('Select a Shelf', canRevert && { onSelect: () => this.setCommand(withPreviousShelf) });
+      this.builder.addSectionRow('Select a Shelf', canRevert && { onSelect: () => this.setCommand(withPreviousShelf) });
       const shelfItems = this.state.input.info.shelfItems;
       Object.getOwnPropertyNames(shelfItems)
         .forEach(shelf => {
-          const row = this.buildAction(shelf, () => this.setCommand({ ...withPreviousShelf, shelf }), 85);
+          const row = this.builder.addActionRow(shelf, () => this.setCommand({ ...withPreviousShelf, shelf }), 85);
           row.cellSpacing = 10;
           const x = row.addText(String(shelfItems[shelf]));
           x.widthWeight = 15;
@@ -413,16 +443,16 @@ class UITableUI implements UI {
   private buildRun() {
     if (!this.state.ready || this.state.progress || this.state.summary) return;
     const command = this.state.command;
-    this.buildSection('Run XXX', { onSelect: () => this.controller.requestCommand(this, command) });
+    this.builder.addSectionRow('Run XXX', { onSelect: () => this.controller.requestCommand(this, command) });
   }
   private buildProgress() {
     if (!this.state.progress || this.state.summary) return;
     const { total, started, done, fetched } = this.state.progress;
     const waiting = total - started;
     const active = started - done;
-    this.buildSection('Progress XXX');
-    this.buildAction(`${fetched} fetched`);
-    this.buildAction(`${done} done + ${active} active + ${waiting} waiting = ${total}`);
+    this.builder.addSectionRow('Progress XXX');
+    this.builder.addActionRow(`${fetched} fetched`);
+    this.builder.addActionRow(`${done} done + ${active} active + ${waiting} waiting = ${total}`);
   }
   private setProgress(progress: Progress) {
     this.saveState();
@@ -443,7 +473,7 @@ class UITableUI implements UI {
   private buildSummary() {
     if (!this.state.summary) return;
 
-    this.buildSection('Summary XXX');
+    this.builder.addSectionRow('Summary XXX');
 
     const summary = this.state.summary;
 
@@ -454,7 +484,7 @@ class UITableUI implements UI {
         [`"${shelf}" Items:`, items],
         ['Items Missing an ISBN:', summary.itemsMissingISBN],
       ] as const).forEach(([desc, value]) => {
-        const row = this.buildAction(desc, void 0, 9);
+        const row = this.builder.addActionRow(desc, void 0, 9);
         const cell = row.addText(String(value));
         cell.widthWeight = 1;
       });
@@ -465,7 +495,7 @@ class UITableUI implements UI {
         [`"${shelf}" Items:`, items],
         ['Final ISBN Count:', summary.totalISBNs],
       ] as const).forEach(([desc, value]) => {
-        const row = this.buildAction(desc, void 0, 85);
+        const row = this.builder.addActionRow(desc, void 0, 85);
         const cell = row.addText(String(value));
         cell.widthWeight = 15;
       });
@@ -487,7 +517,7 @@ class UITableUI implements UI {
           [`Median Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.median)],
           [`Slowest Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.max)],
         ] as const).forEach(([desc, a, b, c]) => {
-          const row = this.buildAction(desc, void 0, 100 - 15 * 3 - 5);
+          const row = this.builder.addActionRow(desc, void 0, 100 - 15 * 3 - 5);
           const space = row.addText('');
           space.widthWeight = 5;
           const cell = (v: number | string) => {
@@ -504,31 +534,7 @@ class UITableUI implements UI {
   }
   private buildOutput() {
     if (!this.state.summary) return;
-    this.buildSection('Output XXX');
-  }
-  private buildRow(onSelect?: () => void) {
-    const row = new UITableRow;
-    if (onSelect) {
-      row.onSelect = onSelect;
-      row.dismissOnSelect = false;
-    }
-    this.table.addRow(row);
-    return row;
-  }
-  private buildSection(description: string, opts: { onSelect?: () => void, value?: string, hint?: string } = {}) {
-    const header = this.buildRow(opts.onSelect);
-    header.addText(description);
-    if (opts.value || opts.hint)
-      header.addText(opts.value ?? ' ', opts.hint).rightAligned();
-    return header;
-  }
-  private buildAction(value: string, onSelect?: () => void, weight?: number) {
-    const action = this.buildRow(onSelect);
-    const cell = action.addText(value);
-    cell.rightAligned();
-    if (weight)
-      cell.widthWeight = weight;
-    return action;
+    this.builder.addSectionRow('Output XXX');
   }
   async present(...args: Parameters<UITable['present']>): ReturnType<UITable['present']> {
     this.presented = true;
