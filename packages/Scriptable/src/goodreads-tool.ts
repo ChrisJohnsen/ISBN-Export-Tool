@@ -123,6 +123,7 @@ type MissingISBNs = { name: 'MissingISBNs', shelf: string };
 type GetISBNs = { name: 'GetISBNs', shelf: string, both: boolean, editions: EditionsService[] };
 type Command = MissingISBNs | GetISBNs;
 interface UIRequestReceiver {
+  debugUI(): void,
   requestInput(ui: UI, input: RequestedIO): void,
   requestCommand(ui: UI, command: Command): void,
   // requestSaveOutput(output:RequestIO), // calls ui.output()
@@ -154,6 +155,31 @@ class UITableBuilder {
     if (weight)
       cell.widthWeight = weight;
     return action;
+  }
+  addHeightAdjuster(row: UITableRow, updated: (newHeight: number) => void): UITableRow {
+    const bump = (d: number) => () => { row.height += d; updated(row.height) };
+    const b = (t: string, a: 'leftAligned' | 'centerAligned' | 'rightAligned') => { const b = adjuster.addButton(t); b[a](); return b };
+    const adjuster = new UITableRow;
+    b('-1', 'leftAligned').onTap = bump(-1);
+    b('-10', 'leftAligned').onTap = bump(-10);
+    b('show/set', 'centerAligned').onTap = async () => {
+      const a = new Alert;
+      a.title = 'Current Height';
+      a.message = `The curret ehight is ${row.height}.\n\nEnter a new height:`;
+      const t = a.addTextField('new height', String(row.height));
+      t.setNumberPadKeyboard();
+      a.addCancelAction('Okay');
+      await a.presentAlert();
+      const h = parseInt(a.textFieldValue(0));
+      if (h > 0) {
+        row.height = h;
+        updated(row.height);
+      }
+    };
+    b('+10', 'rightAligned').onTap = bump(10);
+    b('+1', 'rightAligned').onTap = bump(1);
+    this.table.addRow(adjuster);
+    return adjuster;
   }
 }
 
@@ -324,7 +350,7 @@ class UITableUI implements UI {
     title.isHeader = true;
     this.table.addRow(title);
 
-    this.table.addRow(new UITableRow);
+    this.buildDebug();
 
     this.buildInput();
 
@@ -342,6 +368,18 @@ class UITableUI implements UI {
     this.buildOutput();
 
     if (this.presented) this.table.reload();
+  }
+  private buildDebug(): void {
+    const empty = new UITableRow;
+    empty.addText('').widthWeight = 4;
+    const button = empty.addButton('DEBUG');
+    button.centerAligned();
+    button.onTap = () => {
+      controller.debugUI();
+    };
+    button.widthWeight = 2;
+    empty.addText('').widthWeight = 4;
+    this.table.addRow(empty);
   }
   private buildInput(): void {
     const text = 'Input XXX';
@@ -559,6 +597,34 @@ class Controller implements UIRequestReceiver {
   private log: Log;
   constructor(logPathname: string, private cachePathname: string, private testCachePathname: string) {
     this.log = new Log(logPathname);
+  }
+  async debugUI() {
+    const state = { testMode: true };
+    const table = new UITable;
+    table.showSeparators = true;
+    const builder = new UITableBuilder(table);
+    build(false);
+    function build(rebuild = true) {
+      rebuild && table.removeAllRows();
+
+      builder.addSectionRow('Test Mode?', {
+        value: String(state.testMode), onSelect() { state.testMode = !state.testMode; build() },
+      });
+      builder.addSectionRow('Test Mode makes the following changes:\n'
+        + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
+        + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
+      ).height = 149;
+
+      rebuild && table.reload();
+    }
+    await table.present(false);
+    if (!state.testMode) {
+      const alert = new Alert;
+      alert.title = 'Non-Test Mode Not Implemented';
+      alert.message = 'Normal (non-test) mode is not yet implemented.\n\n' + 'Test Mode will be forced on for now.';
+      alert.addCancelAction('Okay');
+      await alert.presentAlert();
+    }
   }
   private csv?: string;
   async requestInput(ui: UI, inputReq: RequestedIO): Promise<void> {
@@ -812,6 +878,11 @@ await store.write();
 // (known) BUGS
 
 // TODO
+// debug tools "screen'
+//  view cache summary? (maybe useful, can view in Files, but not easily summarized)
+//    needs helper from cache code since we don't want to have to pick apart the possibly changing saved cache representation
+//    cachedQueryCount: Map<EditionsService,number>
+//    anything about expirations?
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 // during run
 //  make UI non-interactive (except a cancel button?)
@@ -822,15 +893,6 @@ await store.write();
 //  save to file (DocumentPicker.export)
 //  clipboard (Pasteboard.copyString)
 //  view (quick look?)
-// debug tools "screen'
-//  view cache summary? (maybe useful, can view in Files, but not easily summarized)
-//  test mode toggle
-//  overlay present()able so we don't have to muck with main UI state
-//    UI calls controller.debugUI(), controller does new await otherTable.present(), which temporarily overlays main UI
-//    normal trigger (row/button/whatever) in main UI when in development mode
-//    production mode
-//      no trigger at all?
-//      only hidden trigger? (invisible button in middle of blank row?)
 // test mode in UI
 //  main UI does not know about setting, but maybe summary editionsInfo includes a bool about it
 //    development mode: always render as a part of summary
