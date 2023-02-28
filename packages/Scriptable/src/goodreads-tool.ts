@@ -243,17 +243,13 @@ class UITableUI implements UI {
   private builder = new UITableBuilder(this.table);
   private presented = false;
   private state: UIState = {};
-  constructor(private controller: UIRequestReceiver, private savedDataObject: unknown) {
-    if (typeof this.savedDataObject == 'object' && this.savedDataObject) {
-      const restoredData = this.savedDataObject;
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      // XXX validation typanion?
-      if ('command' in restoredData)
-        this.previousCommand = restoredData.command as any;
-      if ('commands' in restoredData)
-        this.previousCommands = restoredData.commands as any;
-      /* eslint-enable */
-    }
+  constructor(private controller: UIRequestReceiver, private savedDataObject: Record<string, unknown>) {
+    const restoredData = this.savedDataObject;
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    // XXX validation typanion?
+    this.previousCommand = restoredData.command as any;
+    this.previousCommands = restoredData.commands as any;
+    /* eslint-enable */
     this.build();
   }
   input(input: Input): void {
@@ -581,10 +577,8 @@ class UITableUI implements UI {
     } finally {
       this.presented = false;
       this.saveState();
-      this.savedDataObject = {
-        commands: this.previousCommands,
-        command: this.previousCommand,
-      };
+      this.savedDataObject.commands = this.previousCommands;
+      this.savedDataObject.command = this.previousCommand;
     }
   }
 }
@@ -862,6 +856,8 @@ const store = new Store(asidePathname(module.filename, 'json'));
 await store.read();
 if (!store.data) store.data = {};
 if (!isStore(store.data)) throw 'restored data is not an object?';
+if (!store.data.UITableUIData) store.data.UITableUIData = {};
+if (!isStore(store.data.UITableUIData)) throw 'restored UI data is not an object?';
 
 const logPathname = asidePathname(module.filename, 'log');
 const cachePathname = asidePathname(module.filename, 'json', bn => bn + ' cache');
