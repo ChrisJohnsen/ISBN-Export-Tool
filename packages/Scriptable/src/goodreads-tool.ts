@@ -130,56 +130,219 @@ interface UIRequestReceiver {
 }
 
 // helper that builds common patterns of UITable elements
+type RowOpts = { onSelect?: () => void, dismissOnSelect?: boolean, height?: number, cellSpacing?: number };
+function buildRow(opts?: RowOpts): UITableRow {
+  const row = new UITableRow;
+  if (opts?.onSelect) {
+    row.onSelect = opts.onSelect;
+    row.dismissOnSelect = false; // usual default is true
+  }
+  if (opts?.dismissOnSelect)
+    row.dismissOnSelect = opts.dismissOnSelect;
+  if (opts?.height)
+    row.height = opts.height;
+  if (opts?.cellSpacing)
+    row.cellSpacing = opts.cellSpacing;
+  return row;
+}
+type CellOpts = (
+  { type: 'text', title: string, subtitle?: string, titleFont?: Font, /* font+color for title, subtitle */ }
+  | { type: 'button', title: string, onTap: () => void }
+  | { type: 'image', image: Image }
+) & { align?: 'left' | 'center' | 'right', widthWeight?: number };
+function buildCell(opts: CellOpts): UITableCell {
+  const cell = (() => {
+    if (opts.type == 'text') {
+      const cell = UITableCell.text(opts.title, opts.subtitle);
+      if (opts.titleFont) cell.titleFont = opts.titleFont;
+      return cell;
+    } else if (opts.type == 'button') {
+      const cell = UITableCell.button(opts.title);
+      cell.onTap = opts.onTap;
+      return cell;
+    } else if (opts.type == 'image')
+      return UITableCell.image(opts.image);
+    else assertNever(opts);
+  })();
+  if (opts.align)
+    cell[`${opts.align}Aligned`]();
+  if (opts.widthWeight)
+    cell.widthWeight = opts.widthWeight;
+  return cell;
+}
 class UITableBuilder {
-  constructor(private table: UITable) { }
-  private buildRow(onSelect?: () => void) {
-    const row = new UITableRow;
-    if (onSelect) {
-      row.onSelect = onSelect;
-      row.dismissOnSelect = false;
-    }
+  constructor(private table: UITable, private title: string) { }
+  private addRow(opts?: RowOpts) {
+    const row = buildRow(opts);
     this.table.addRow(row);
     return row;
   }
-  addSectionRow(description: string, opts: { onSelect?: () => void, value?: string, hint?: string } = {}): UITableRow {
-    const header = this.buildRow(opts.onSelect);
-    header.addText(description);
-    if (opts.value || opts.hint)
-      header.addText(opts.value ?? ' ', opts.hint).rightAligned();
-    return header;
-  }
-  addActionRow(value: string, onSelect?: () => void, weight?: number): UITableRow {
-    const action = this.buildRow(onSelect);
-    const cell = action.addText(value);
-    cell.rightAligned();
-    if (weight)
-      cell.widthWeight = weight;
-    return action;
-  }
   addHeightAdjuster(row: UITableRow, updated: (newHeight: number) => void): UITableRow {
     const bump = (d: number) => () => { row.height += d; updated(row.height) };
-    const b = (t: string, a: 'leftAligned' | 'centerAligned' | 'rightAligned') => { const b = adjuster.addButton(t); b[a](); return b };
-    const adjuster = new UITableRow;
-    b('-1', 'leftAligned').onTap = bump(-1);
-    b('-10', 'leftAligned').onTap = bump(-10);
-    b('show/set', 'centerAligned').onTap = async () => {
-      const a = new Alert;
-      a.title = 'Current Height';
-      a.message = `The curret ehight is ${row.height}.\n\nEnter a new height:`;
-      const t = a.addTextField('new height', String(row.height));
-      t.setNumberPadKeyboard();
-      a.addCancelAction('Okay');
-      await a.presentAlert();
-      const h = parseInt(a.textFieldValue(0));
-      if (h > 0) {
-        row.height = h;
-        updated(row.height);
+    const m1 = buildCell({ type: 'button', title: '-1', align: 'left', onTap: bump(-1) });
+    const m10 = buildCell({ type: 'button', title: '-10', align: 'left', onTap: bump(-10) });
+    const show = buildCell({
+      type: 'button', title: 'show/set', align: 'center', onTap: async () => {
+        const a = new Alert;
+        a.title = 'Current Height';
+        a.message = `The curret ehight is ${row.height}.\n\nEnter a new height:`;
+        const t = a.addTextField('new height', String(row.height));
+        t.setNumberPadKeyboard();
+        a.addCancelAction('Okay');
+        await a.presentAlert();
+        const h = parseInt(a.textFieldValue(0));
+        if (h > 0) {
+          row.height = h;
+          updated(row.height);
+        }
       }
+    });
+    const p10 = buildCell({ type: 'button', title: '+10', align: 'right', onTap: bump(10) });
+    const p1 = buildCell({ type: 'button', title: '+1', align: 'right', onTap: bump(1) });
+    return this.addRowWithCells([m1, m10, show, p10, p1]);
+  }
+  private addRowWithCells(cells: readonly UITableCell[], opts?: RowOpts) {
+    const row = this.addRow(opts);
+    cells.forEach(cell => row.addCell(cell));
+    return row;
+  }
+  addTitleRow() {
+    const cell = buildCell({ type: 'text', title: this.title, align: 'center', titleFont: Font.title1() });
+    return this.addRowWithCells([cell]);
+  }
+  private symbolImageAndWidth(name: string) {
+    const image = SFSymbol.named(name).image;
+    const sizes: Record<string, number | undefined> = {
+      // out of 100 total widthWeight in a UITable presented full-screen in a UITableRow with cellSpacing:0 on a 414pt width screen (828@2x)
+      'xmark': 9,
+      'checkmark': 9,
+      'checkmark.square': 9,
+      'square': 9,
+      'questionmark': 6,
+      'questionmark.circle': 8,
+      'questionmark.square': 9,
+      'chevron.backward': 6,
+      'chevron.forward': 6,
+      'arrowtriangle.right.square.fill': 9,
+      'arrowtriangle.down.square.fill': 9,
     };
-    b('+10', 'rightAligned').onTap = bump(10);
-    b('+1', 'rightAligned').onTap = bump(1);
-    this.table.addRow(adjuster);
-    return adjuster;
+    return { image, width: sizes[name] ?? 10 };
+  }
+  private symbolCell(name: string): CellOpts & { widthWeight: number } {
+    const { image, width: widthWeight } = this.symbolImageAndWidth(name);
+    return { type: 'image', image, widthWeight };
+  }
+  private addSymbolExamples() {
+    const t = (n: string) => {
+      // xmark                            9/100 17.5  49px 24.5pt
+      // checkmark                        9/100 18.5
+      // checkmark.square                 9/100 19.5
+      // square                           9/100 19.5
+      // questionmark                     6/100 13.5
+      // questionmark.circle              8/100 20    50px 25pt
+      // questionmark.square              9/100 19.5
+      // chevron.backward                 6/100 12.5
+      // chevron.forward                  6/100 12.5
+      // arrowtriangle.right.square.fill  9/100 19.5
+      // arrowtriangle.down.square.fill   9/100 19.5
+      const { image, width } = this.symbolImageAndWidth(n);
+      console.log(n);
+
+      const imageWidth = image.size.width;
+      console.log(image.size);
+      console.log(imageWidth / (width / 100));
+      console.log({ m: width, t: Math.trunc(imageWidth / 1.911), r: Math.round(imageWidth / 1.911) });
+      const sw = Device.screenSize().width; // 414x896 2x 828x1792
+      const dw = sw * width / 100;
+      console.log(dw / imageWidth);
+
+      const descs: CellOpts[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(w => ({ type: 'image', image, widthWeight: w }));
+      const used = descs.reduce((a, d) => a + (d.widthWeight ?? 0), 0);
+      this.addRowWithDescribedCells([...descs, { type: 'text', title: 'R', widthWeight: 100 - used }], { cellSpacing: 0 });
+    };
+    t('xmark');
+    t('checkmark');
+    t('checkmark.square');
+    t('square');
+    t('questionmark');
+    t('questionmark.circle');
+    t('questionmark.square');
+    t('chevron.backward');
+    t('chevron.forward');
+    t('arrowtriangle.right.square.fill');
+    t('arrowtriangle.down.square.fill');
+  }
+  addBackRow(text: string, onSelect: () => void) {
+    const chevron = this.symbolCell('chevron.backward');
+    const back = buildCell({ ...chevron, align: 'right' });
+    const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - chevron.widthWeight });
+    return this.addRowWithCells([back, textCell], { onSelect });
+  }
+  addSubtitleHelpRow(subtitle: string, helpLines?: string[]) {
+    const qm = this.symbolCell('questionmark.circle');
+    const cells = [];
+    let helpFn;
+    if (helpLines && helpLines.length > 0)
+      helpFn = () => {
+        const a = new Alert;
+        a.title = this.title + '\n' + subtitle + '\n';
+        a.message = helpLines.join('\n');
+        a.addCancelAction('Okay');
+        a.presentSheet();
+      };
+    if (helpFn)
+      cells.push(buildCell({ type: 'text', title: '', widthWeight: qm.widthWeight }));
+    cells.push(buildCell({ type: 'text', title: subtitle, align: 'center', titleFont: Font.title2(), widthWeight: 100 - 2 * qm.widthWeight }));
+    if (helpFn)
+      cells.push(buildCell({ ...qm, align: 'right' }));
+    return this.addRowWithCells(cells, { onSelect: helpFn });
+  }
+  addEmptyRow() {
+    return this.addRow();
+  }
+  addTextRow(text: string, opts: RowOpts = {}) {
+    const cell = buildCell({ type: 'text', title: text });
+    return this.addRowWithCells([cell], opts);
+  }
+  addIndentRow(text: string, opts: RowOpts = {}) {
+    const indent = buildCell({ type: 'text', title: '', widthWeight: 1 });
+    const main = buildCell({ type: 'text', title: text, widthWeight: 9 });
+    return this.addRowWithCells([indent, main], opts);
+  }
+  addForwardRow(text: string, onSelect: (() => void) | undefined) {
+    const symbol = onSelect ? 'chevron.forward' : 'xmark';
+    const image = this.symbolCell(symbol);
+    const forward = buildCell({ ...image, align: 'left' });
+    const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - image.widthWeight });
+    return this.addRowWithCells([textCell, forward], { onSelect });
+  }
+  addClosedDisclosureRow(text: string, value: string, opts: RowOpts = {}) {
+    const symbol = this.symbolCell('arrowtriangle.right.square.fill');
+    const disclosure = buildCell({ ...symbol, align: 'left' });
+    const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 45 });
+    const valueCell = buildCell({ type: 'text', title: value, align: 'right', widthWeight: 100 - 45 - symbol.widthWeight });
+    return this.addRowWithCells([disclosure, textCell, valueCell], opts);
+  }
+  addOpenedDisclosureRow(text: string, opts: RowOpts = {}) {
+    const symbol = this.symbolCell('arrowtriangle.down.square.fill');
+    const disclosure = buildCell({ ...symbol, align: 'left' });
+    const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - symbol.widthWeight });
+    return this.addRowWithCells([disclosure, textCell], opts);
+  }
+  addCheckableRow(text: string, checked: boolean | undefined, opts: RowOpts = {}) {
+    const mark = buildCell((() => {
+      const check = this.symbolCell('checkmark.square');
+      const uncheck = this.symbolCell('square');
+      const widthWeight = Math.max(check.widthWeight, uncheck.widthWeight);
+      if (typeof checked == 'undefined') return { type: 'text', title: '', widthWeight };
+      const symbol = checked ? check : uncheck;
+      return { ...symbol, align: 'left', widthWeight };
+    })());
+    const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - mark.widthWeight });
+    return this.addRowWithCells([textCell, mark], opts);
+  }
+  addRowWithDescribedCells(cellDescs: readonly CellOpts[], opts: RowOpts = {}) {
+    this.addRowWithCells(cellDescs.map(buildCell), opts);
   }
 }
 
@@ -240,7 +403,7 @@ type ByNames<T extends { name: PropertyKey }> = { [N in T['name']]: Extract<T, {
 
 class UITableUI implements UI {
   private table: UITable = new UITable;
-  private builder = new UITableBuilder(this.table);
+  private builder = new UITableBuilder(this.table, 'Goodreads Export ISBN Tool');
   private presented = false;
   private state: UIState = {};
   constructor(private controller: UIRequestReceiver, private savedDataObject: Record<string, unknown>) {
@@ -341,27 +504,21 @@ class UITableUI implements UI {
     this.table.removeAllRows();
     this.table.showSeparators = true;
 
-    const title = new UITableRow;
-    title.addText('Goodreads Export Tool').centerAligned();
-    title.isHeader = true;
-    this.table.addRow(title);
-
     this.buildDebug();
 
-    this.buildInput();
+    const title = this.builder.addTitleRow();
+    title.isHeader = true;
 
-    // command only builds if state.input
-    this.buildCommand();
-
-    // run only builds if state.ready && !state.progress && !state.summary
-    this.buildRun();
-
-    // progress only builds if state.progress && !state.summary
-    this.buildProgress();
-
-    // summary & output only build if state.summary
-    this.buildSummary();
-    this.buildOutput();
+    if (this.state.summary)
+      this.buildSummary();
+    else if (this.state.progress)
+      this.buildProgress();
+    else if (this.state.command)
+      this.buildCommand();
+    else if (this.state.input)
+      this.buildPickCommand();
+    else
+      this.buildPickInput();
 
     if (this.presented) this.table.reload();
   }
@@ -377,59 +534,114 @@ class UITableUI implements UI {
     empty.addText('').widthWeight = 4;
     this.table.addRow(empty);
   }
-  private buildInput(): void {
-    const text = 'Input XXX';
-    const pickInput = () => this.setInput(void 0);
-    if (!this.state.input) {
-
-      this.builder.addSectionRow(text, this.previousInput && { onSelect: () => this.setInput(this.previousInput) });
-      this.builder.addActionRow('the clipboard', () => this.controller.requestInput(this, { type: 'clipboard' }));
-      this.builder.addActionRow('a file…', () => this.controller.requestInput(this, { type: 'file' }));
-
-    } else if (this.state.input.type == 'clipboard') {
-
-      this.builder.addSectionRow(text, { value: 'the clipboard', hint: 'tap to change…', onSelect: pickInput });
-      const info = this.state.input.info;
-      this.builder.addSectionRow(`${info.items} items`);
-
-    } else if (this.state.input.type == 'file') {
-
-      this.builder.addSectionRow(text, { value: `the file "${this.state.input.displayName}"`, hint: 'tap to change…', onSelect: pickInput });
-      const info = this.state.input.info;
-      this.builder.addSectionRow(`${info.items} items`);
-
-    } else assertNever(this.state.input);
+  private buildPickInput(): void {
+    this.builder.addSubtitleHelpRow('Input Selection', [
+      'This program reads exported data from Goodreads to let you access the ISBNs of your shelved items in various ways:',
+      'Check items on a shelf for missing ISBNs, or',
+      'Extract ISBNs from shelved items (optionally including ISBNS of other editions of your shelved items).',
+      '',
+      'Exporting your Goodreads can be done from the Goodreads website:',
+      'Login,',
+      'Tap/click the "Desktop version" link in the footer of the website,',
+      'Tap/click on the "My Books" tab,',
+      'In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link',
+      'On the Import/Export page tap/click "Export Library" button at the top of the page.',
+      'A link like "Your export from <date>" will appear when the export is ready.',
+      '',
+      'Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data and use Select All and Copy to copy it to the clipboard.',
+      '',
+      'When you have your data ready, you can tell this program where to find it using the selections on this Input screen.'
+    ]);
+    this.builder.addEmptyRow();
+    this.builder.addTextRow('Where is your Goodreads export data?');
+    this.builder.addEmptyRow();
+    if (this.previousInput) {
+      const prev = this.previousInput;
+      this.builder.addForwardRow('already loaded', () => this.setInput(prev));
+      // XXX different color?
+    }
+    this.builder.addForwardRow('On the clipboard', () => this.controller.requestInput(this, { type: 'clipboard' }));
+    this.builder.addForwardRow('In a saved or downloaded file', () => this.controller.requestInput(this, { type: 'file' }));
   }
   private setCommand(command?: PartialCommand, restorePrevious = false) {
     this.saveState();
     this.state = this.validateState(this.state.input, restorePrevious, command);
     this.build();
   }
+  private buildPickCommand() {
+    if (!this.state.input) throw 'tried to build command picker UI without input';
+    this.builder.addBackRow('Input Selection', () => this.setInput(void 0));
+    this.builder.addSubtitleHelpRow('Command Selection', [
+      'Two commands area available to process your Goodreads export data:',
+      '',
+      'Missing ISBNs',
+      'This command will tell you which items on a shelf are missing ISBNs.',
+      '',
+      'Get ISBNs',
+      'This command will extract the ISBN of every ISBN-bearing item on a shelf.',
+      '',
+      'Select a command and view its help for more details.',
+    ]);
+    this.builder.addEmptyRow();
+    this.builder.addTextRow(`Found ${this.state.input.info.items} items in export data.`);
+    this.builder.addEmptyRow();
+    this.builder.addTextRow('Which command would you like to run?');
+    this.builder.addEmptyRow();
+    this.builder.addForwardRow('Missing ISBNs', () => this.setCommand({ name: 'MissingISBNs' }, true));
+    this.builder.addIndentRow('Finds items on a specified shelf that have no ISBN.', { height: 88 });
+    this.builder.addForwardRow('Get ISBNs', () => this.setCommand({ name: 'GetISBNs', both: false, editions: [] }, true));
+    this.builder.addIndentRow('Extracts ISBNs from items on a specified shelf.', { height: 88 });
+  }
   private buildCommand() {
-    if (!this.state.input) return;
-    const text = 'Command XXX';
-    const pickCommand = () => this.setCommand(void 0, false);
-    if (!this.state.command) {
+    if (!this.state.command) throw 'tried to build command UI without command';
+    this.builder.addBackRow('Command Selection', () => this.setCommand(void 0, false));
+    if (this.state.command.name == 'MissingISBNs') {
 
-      this.builder.addSectionRow(text, this.previousCommand && { onSelect: () => this.previousCommand && this.setCommand(this.previousCommands[this.previousCommand]) });
-      this.builder.addActionRow('MissingISBNs XXX', () => this.setCommand({ name: 'MissingISBNs' }, true));
-      this.builder.addActionRow('GetISBNs XXX', () => this.setCommand({ name: 'GetISBNs', both: false, editions: [] }, true));
-
-    } else if (this.state.command.name == 'MissingISBNs') {
-
-      this.builder.addSectionRow('MissingISBNs XXX', { hint: 'tap to change…', onSelect: pickCommand });
-      this.buildShelf();
+      this.builder.addSubtitleHelpRow('Missing ISBNs', [
+        'Sometimes when shelving a new book, Goodreads will pick a default edition '
+        + '(perhaps an eBook or audiobook edition) that happens to lack an ISBN. '
+        + 'This is usually okay if you mostly review shelved items "by eye", or by title/author search, '
+        + 'but the companion "Get ISBNs" command in this program cannot process an item if it lacks an ISBN.',
+        '',
+        'You can change the edition of a shelved item from its Book Details page '
+        + '(where you will see an ISBN listed, if the item has one), in the Editions list, '
+        + 'by using the "Switch to this edition" button under a different version (most print versions will have an ISBN).',
+        '',
+        'Note: If you switched any editions, you will probably want to re-export your Goodreads data before using "Get ISBNs".',
+      ]);
+      this.builder.addEmptyRow();
+      this.builder.addTextRow(`Found ${this.state.input.info.items} items in export data.`);
+      this.builder.addTextRow('Choose the shelf to check for items with no ISBN.', { height: 88 });
+      this.builder.addIndentRow('Ex: You might check your "to-read" shelf before using "Get ISBNs" on it.', { height: 88 });
+      this.buildSharedShelf();
 
     } else if (this.state.command.name == 'GetISBNs') {
 
-      this.builder.addSectionRow('GetISBNs XXX', { hint: 'tap to change…', onSelect: pickCommand });
-      this.buildShelf();
+      this.builder.addSubtitleHelpRow('Get ISBNs', [
+        'Some libraries let you import a list of ISBNs to check what is available in their collection.',
+        'You can use "Get ISBNs" on your "to-read" shelf and import the resulting ISBN list into a library '
+        + 'to find what is available to read at that library.',
+        '',
+        'Since there are often multiple editions of every book, this command can optionally query external services '
+        + '(Open Library, and Library Thing) to gather the ISBNs of other editions of your shelved items '
+        + '(so, for example, the ISBN list will include the hardcover and paperback editions, no matter which edition you '
+        + 'have shelved——assuming the services know about the edition: they are not always 100% complete).',
+        '',
+        'ISBNs come in two versions: ISBN-13, and ISBN-10 (old style). Every ISBN has an ISBN-13 version, '
+        + 'but might not have an ISBN-10 version. '
+        + 'If you are taking your list of ISBNs somewhere that does not automatically convert between the ISBN versions, '
+        + 'this command can optionally include both ISBN versions (when possible).'
+      ]);
+      this.builder.addEmptyRow();
+      this.builder.addTextRow(`Found ${this.state.input.info.items} items in export data.`);
+      this.builder.addTextRow('Choose the shelf from which ISBNs will be extracted.', { height: 88 });
+      // XXX smaller text? different alignment?
+      this.builder.addIndentRow('Ex: Get the ISBNs from your "to-read" shelf and send it to your library to see which items they have available.', { height: 132 });
+      this.buildSharedShelf();
 
       const command = this.state.command;
       const editionsEnabled = command.editions.length != 0;
-      const editionsText = editionsEnabled ? 'Get ISBNs of Other Editions' : 'Get Only Listed ISBNs (no other editions)';
       const editionsToggle = () => this.setCommand({ ...command, editions: editionsEnabled ? [] : Array.from(AllEditionsServices) });
-      const bothText = command.both ? 'Get Both ISBN-10 and -13' : 'Get Only One Of ISBN-13, ISBN-10';
       const bothToggle = () => this.setCommand({ ...command, both: !command.both });
       const serviceToggle = (service: EditionsService) => {
         let editions;
@@ -440,53 +652,112 @@ class UITableUI implements UI {
         this.setCommand({ ...command, editions });
       };
 
-      this.builder.addSectionRow('Options');
-      this.builder.addActionRow(editionsText, editionsToggle);
+      this.builder.addTextRow('Options');
+      this.builder.addCheckableRow('Get ISBNs of Other Editions?', editionsEnabled && void 0, { onSelect: editionsToggle });
+      const editionsDesc = editionsEnabled
+        ? 'External services (as selected below) will be queried for the ISBNs of other editions of each imported ISBN.'
+        : 'The ISBNs will only come from the imported data.';
+      this.builder.addIndentRow(editionsDesc, { height: 88 });
       if (editionsEnabled)
         AllEditionsServices.forEach(service => {
           const enabled = command.editions.includes(service);
-          return this.builder.addActionRow(service + ': ' + (enabled ? 'enabled' : 'disabled'), () => serviceToggle(service as EditionsService));
+          this.builder.addCheckableRow(service, enabled, { onSelect: () => serviceToggle(service as EditionsService) });
         });
-      this.builder.addActionRow(bothText, bothToggle);
+      this.builder.addCheckableRow('Get Both ISBN-13 and -10?', command.both, { onSelect: bothToggle });
+      const bothDesc = command.both
+        ? 'The generated ISBNs will include both the ISBN-13 and ISBN-10 versions of each included ISBN.'
+        : editionsEnabled
+          ? 'The generated ISBNs will be the ISBN-13 version of each included ISBN.'
+          : 'The generated ISBNs will come directly from the imported data: ISBN-13 if present, otherwise ISBN-10.';
+      this.builder.addIndentRow(bothDesc, { height: 88 });
 
     } else assertNever(this.state.command);
+
+    this.builder.addEmptyRow();
+
+    if (this.state.ready) {
+      const command = this.state.command;
+      const shelfItems = this.state.input.info.shelfItems[command.shelf];
+      this.builder.addForwardRow('Start', async () => {
+        if (command.name == 'GetISBNs' && command.editions.length > 0) {
+
+          const a = new Alert;
+          a.title = '"Other Editions" Takes Time';
+          a.message = 'Due to having to use external services, we limit how quickly we issue queries for other edition ISBNs. '
+            + 'It will take a second or two per queried ISBN to complete this command.\n'
+            + '\n'
+            + `This may be between ${shelfItems} and ${shelfItems * 2} seconds for the items on the "${command.shelf}" shelf.\n`
+            + '\n'
+            + 'The query results are saved for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
+          a.addCancelAction('That is too long to wait!');
+          a.addAction('That is okay, I will wait.');
+          const action = await a.presentAlert();
+          if (action == -1) return;
+        }
+        this.controller.requestCommand(this, command);
+      });
+    } else {
+      this.builder.addForwardRow('Start', void 0);
+      this.builder.addIndentRow('A shelf must be selected before the command can be started.', { height: 88 });
+    }
   }
-  private buildShelf(): void {
-    if (!this.state.command) return;
+  private buildSharedShelf(): void {
+    if (!this.state.command) throw 'tried to build shelf UI without a command';
     if (this.state.command.shelf) {
 
       const noShelf = { ...this.state.command, shelf: void 0 };
-      this.builder.addSectionRow('Shelf', { value: this.state.command.shelf, hint: 'tap to change…', onSelect: () => this.setCommand(noShelf) });
+      this.builder.addClosedDisclosureRow('Shelf', this.state.command.shelf, { onSelect: () => this.setCommand(noShelf) });
 
     } else {
 
+      // XXX different color/font for previous selection?
       const withPreviousShelf = { ...this.state.command, shelf: this.previousCommands[this.state.command.name]?.shelf };
       const canRevert = typeof withPreviousShelf.shelf != 'undefined' || void 0;
-      this.builder.addSectionRow('Select a Shelf', canRevert && { onSelect: () => this.setCommand(withPreviousShelf) });
+      this.builder.addOpenedDisclosureRow('Shelf', canRevert && { onSelect: () => this.setCommand(withPreviousShelf) });
       const shelfItems = this.state.input.info.shelfItems;
+      const addShelfRow = (shelf: string, items: string, onSelect?: () => void) =>
+        this.builder.addRowWithDescribedCells([
+          { type: 'text', title: shelf, widthWeight: 85, align: 'right' },
+          { type: 'text', title: items, widthWeight: 15, align: 'left' },
+        ], { onSelect, cellSpacing: 10 });
+      addShelfRow('Shelf Name', 'Items');
       Object.getOwnPropertyNames(shelfItems)
-        .forEach(shelf => {
-          const row = this.builder.addActionRow(shelf, () => this.setCommand({ ...withPreviousShelf, shelf }), 85);
-          row.cellSpacing = 10;
-          const x = row.addText(String(shelfItems[shelf]));
-          x.widthWeight = 15;
-        });
+        .forEach(shelf => addShelfRow(shelf, String(shelfItems[shelf]),
+          () => this.setCommand({ ...withPreviousShelf, shelf })));
 
     }
   }
-  private buildRun() {
-    if (!this.state.ready || this.state.progress || this.state.summary) return;
-    const command = this.state.command;
-    this.builder.addSectionRow('Run XXX', { onSelect: () => this.controller.requestCommand(this, command) });
-  }
   private buildProgress() {
-    if (!this.state.progress || this.state.summary) return;
+    if (!this.state.progress) throw 'tried to build progress UI without progress';
+    if (this.state.summary) throw 'tried to build progress UI after command completed';
+
+    this.builder.addBackRow('Cancel Get ISBNs', async () => {
+      const a = new Alert;
+      a.title = 'Cancel Get ISBNs?';
+      a.message = 'Normal operation will take a second or two per query to finish.';
+      a.addAction('Yes: Stop making queries!');
+      a.addCancelAction('No: I will wait.');
+      const action = await a.presentAlert();
+      console.log(`progress cancel warning result: ${action}`);
+      if (action == -1) return;
+      // XXX cancel command (new UIRequestReceiver method)
+      const w = new Alert;
+      w.title = 'Sorry!';
+      w.message = 'Stopping Get ISBNs is not yet implemented.';
+      w.addCancelAction('Sigh');
+      await w.presentAlert();
+    });
+    this.builder.addSubtitleHelpRow('Get ISBNs "Other Editions" Progress'); // XXX no progress help?
+    this.builder.addEmptyRow();
+    this.builder.addTextRow(`Retrieving ISBNs of other editions of ISBN-bearing items on "${this.state.command.shelf}" shelf.`, { height: 88 });
+
     const { total, started, done, fetched } = this.state.progress;
     const waiting = total - started;
     const active = started - done;
-    this.builder.addSectionRow('Progress XXX');
-    this.builder.addActionRow(`${fetched} fetched`);
-    this.builder.addActionRow(`${done} done + ${active} active + ${waiting} waiting = ${total}`);
+    this.builder.addTextRow(`Queries:`);
+    this.builder.addIndentRow(`${done} done + ${active} active + ${waiting} waiting = ${total}`);
+    this.builder.addTextRow(`Fetches:`);
+    this.builder.addIndentRow(`${fetched}`);
   }
   private setProgress(progress: Progress) {
     this.saveState();
@@ -505,70 +776,75 @@ class UITableUI implements UI {
     this.build();
   }
   private buildSummary() {
-    if (!this.state.summary) return;
+    if (!this.state.summary) throw 'tried to build summary UI without summary';
 
-    this.builder.addSectionRow('Summary XXX');
-
+    const command = this.state.command;
+    const commandName =
+      command.name == 'MissingISBNs' ? 'Missing ISBNs' :
+        command.name == 'GetISBNs' ? 'Get ISBNs' :
+          assertNever(command);
     const summary = this.state.summary;
+    this.builder.addBackRow(`${commandName} Options`, () => this.setCommand(command));
+    this.builder.addSubtitleHelpRow(`${commandName} Summary`, [
+      'The command results are summarized here. Select an output option (XXX) to view or save the full output.',
+      '',
+      'The "back" options at the bottom jump back to various screens (also available through multiple taps on "back" at the top).',
+    ]);
+    this.builder.addEmptyRow();
+
 
     if (summary.name == 'MissingISBNs') {
+      if (command.name != summary.name) throw 'got summary for different command'; // let TS know that command is also GetISBNs
+
       const shelf = this.state.command.shelf;
       const items = this.state.input.info.shelfItems[shelf] ?? -1;
-      ([
-        [`"${shelf}" Items:`, items],
-        ['Items Missing an ISBN:', summary.itemsMissingISBN],
-      ] as const).forEach(([desc, value]) => {
-        const row = this.builder.addActionRow(desc, void 0, 9);
-        const cell = row.addText(String(value));
-        cell.widthWeight = 1;
-      });
+      this.builder.addTextRow(`${summary.itemsMissingISBN} items with no ISBN (out of ${items} on "${shelf}" shelf).`, { height: 88 });
+      if (summary.itemsMissingISBN > 0)
+        this.builder.addIndentRow('Note: If you adjust your shelved editions, you should re-export your data before using "Get ISBNs".', { height: 88 });
+
     } else if (summary.name == 'GetISBNs') {
+      if (command.name != summary.name) throw 'got summary for different command'; // let TS know that command is also GetISBNs
+
+      const optionsDescription = (editions: boolean, both: boolean) => {
+        const editionsText = 'retrieving ISBNs of other editions';
+        const bothText = 'adding ISBN-10 equivalents';
+        if (!editions && !both)
+          return '';
+        else if (!editions && both)
+          return ` after ${bothText}`;
+        else if (editions && !both)
+          return ` after ${editionsText}`;
+        else if (editions && both)
+          return ` after ${editionsText}, and ${bothText}`;
+      };
       const shelf = this.state.command.shelf;
       const items = this.state.input.info.shelfItems[shelf] ?? -1;
-      ([
-        [`"${shelf}" Items:`, items],
-        ['Final ISBN Count:', summary.totalISBNs],
-      ] as const).forEach(([desc, value]) => {
-        const row = this.builder.addActionRow(desc, void 0, 85);
-        const cell = row.addText(String(value));
-        cell.widthWeight = 15;
-      });
-      const short: Record<EditionsService, string> = {
-        'Open Library WorkEditions': 'OL:WE',
-        'Open Library Search': 'OL:S',
-        'LibraryThing ThingISBN': 'LT:TI',
-      };
+      this.builder.addTextRow(`From ${items} "${shelf}" items,`);
+      this.builder.addTextRow(`${summary.totalISBNs} total ISBNs extracted${optionsDescription(command.editions.length > 0, command.both)}.`, { height: 88 });
+
       if (summary.editionsInfo) {
-        const info = summary.editionsInfo;
-        const services = Object.keys(info) as EditionsService[];
-        ([
-          ['', ...services.map(s => short[s as EditionsService])],
-          [`Cached Queries:`, ...services.map(service => info[service]?.cacheHits)],
-          [`Queries:`, ...services.map(service => info[service]?.queries)],
-          [`Fetches:`, ...services.map(service => info[service]?.fetches)],
-          [`Fetch Rate (/s):`, ...services.map(service => info[service]?.fetchRate.toFixed(3))],
-          [`Fastest Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.min)],
-          [`Median Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.median)],
-          [`Slowest Fetch (ms):`, ...services.map(service => info[service]?.fetchStats.max)],
-        ] as const).forEach(([desc, a, b, c]) => {
-          const row = this.builder.addActionRow(desc, void 0, 100 - 15 * 3 - 5);
-          const space = row.addText('');
-          space.widthWeight = 5;
-          const cell = (v: number | string) => {
-            const c = row.addText(String(v));
-            c.widthWeight = 15;
-          };
-          cell(a ?? '');
-          cell(b ?? '');
-          cell(c ?? '');
+        const cached = Object.entries(summary.editionsInfo).reduce((t, [, i]) => t + i.cacheHits, 0);
+        if (cached != 0)
+          this.builder.addTextRow(`Reused ${cached} Other Editions query results.`, { height: 88 });
+
+        Object.entries(summary.editionsInfo).forEach(([service, info]) => {
+          this.builder.addTextRow(`${service}`);
+          this.builder.addIndentRow((info.cacheHits != 0 ? `${info.cacheHits} reused results, ` : '') + `${info.queries} new queries`);
+          if (info.fetches != 0) {
+            this.builder.addIndentRow(`${info.fetches} fetches ${info.fetchRate.toFixed(3)}/s`);
+            this.builder.addIndentRow(`${info.fetchStats.min}/${info.fetchStats.median}/${info.fetchStats.max} (ms min/median/max)`);
+          }
         });
       }
 
     } else assertNever(summary);
-  }
-  private buildOutput() {
-    if (!this.state.summary) return;
-    this.builder.addSectionRow('Output XXX');
+
+    this.builder.addEmptyRow();
+    this.builder.addTextRow('XXX output options');
+    this.builder.addEmptyRow();
+    this.builder.addBackRow(`Choose New ${commandName} Options`, () => this.setCommand(command));
+    this.builder.addBackRow('Choose New Command', () => this.setCommand(void 0));
+    this.builder.addBackRow('Choose New Input', () => this.setInput(void 0));
   }
   async present(...args: Parameters<UITable['present']>): ReturnType<UITable['present']> {
     this.presented = true;
@@ -596,18 +872,19 @@ class Controller implements UIRequestReceiver {
     const state = { testMode: true };
     const table = new UITable;
     table.showSeparators = true;
-    const builder = new UITableBuilder(table);
+    const builder = new UITableBuilder(table, 'Debug UI');
     build(false);
     function build(rebuild = true) {
       rebuild && table.removeAllRows();
 
-      builder.addSectionRow('Test Mode?', {
-        value: String(state.testMode), onSelect() { state.testMode = !state.testMode; build() },
-      });
-      builder.addSectionRow('Test Mode makes the following changes:\n'
+      builder.addRowWithDescribedCells([
+        { type: 'text', title: 'Test Mode?', align: 'left' },
+        { type: 'text', title: String(state.testMode), align: 'right' },
+      ], { onSelect() { state.testMode = !state.testMode; build() } });
+      builder.addTextRow('Test Mode makes the following changes:\n'
         + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
         + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
-      ).height = 149;
+        , { height: 149 });
 
       rebuild && table.reload();
     }
@@ -874,15 +1151,28 @@ await store.write();
 // (known) BUGS
 
 // TODO
+// Summary
+//  back should alert if hit within X seconds of _new_ summary? (try to avoid "user hit back right after summary displayed")
+//    both top and "bottom" back options should do this?
+//      mostly important for top since it will be in the same place as progress back/cancel, but might as well have others do it too?
+//  add date to summary type, generate it in the UI when controller sends summary, check it when back is hit
+// Progress
+//  back has ask controller to cancel command
+//    currently controller only aborts when UI present finishes
+// Summary
+//  output options (requests made to controller)
+//    View         >
+//    Copy to Clip >
+//    Save to File >
+// GetISBNs Summary
+//  editions details too noisy?
+//    maybe put them in a disclosure, or in an alert, or below "save" + "back" actions?
 // debug tools "screen'
 //  view cache summary? (maybe useful, can view in Files, but not easily summarized)
 //    needs helper from cache code since we don't want to have to pick apart the possibly changing saved cache representation
 //    cachedQueryCount: Map<EditionsService,number>
 //    anything about expirations?
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
-// during run
-//  make UI non-interactive (except a cancel button?)
-//    no onSelects, no "tap to" hints
 // bar graph for progress?
 // output
 //  missing: pick columns, or just use the same set at the node tool?
@@ -909,7 +1199,6 @@ await store.write();
 //  make UI non-interactive and provide progress?
 // updateExceptUndefined
 //  helper for saveState updating previousCommands to not overwrite a non-undefined shelf with undefined
-// ? move building into separate builder class to avoid headerRow, actionRow, etc. on UI class?
 
 // STYLING
 // "tap to <use previous value>" hint in open menus: Input XXX, Command XXX, Select a Shelf
@@ -919,21 +1208,10 @@ await store.write();
 // typical UI names for input and output
 //  Open and Save (open not typically applied to clipboard...)
 // long description when first starting (togglable via empty row?)
+// icons with file/clipboard selection rows?
+//  doc.on.clipboard
+//  doc
 
 // FUTURE
-// redo UI as "screen"-based instead of row-based
-//  can we have multi-line (i.e. wrapped) texts in a UITable?
-//    if not, this UI style loses some of its appeal, but still might be worth it to give some extra room for shelf lists and summaries
-//  like an iOS navigation controller
-//  gives much more space for informational/descriptive text
-//  have "back" button on left of first row
-//  action rows push a new screen
-//    screens probably correspond to the UIState stages
 // break shelves into exclusive & other?
 //  then, let the UI do the sorting?
-// summary (and output) are kind of fragile, would be discarded after any change in input or command
-//  "cache" the last run command and restore its summary if the command is the same?
-//  really, this is related to the controller, since it is holding the result data? (ui only sees summary info, and possibly issues "save" request)
-//    maybe the controller caches (probably just in memory, not persistently) one-per-command arguments & output
-//      if command "run" again with same command and arguments as cached, just return the cached output?
-//        this means we can't to back-to-back GetISBNs w/editions fetches; would have to stop and restart the script in Scriptable to flush this "output cache"
