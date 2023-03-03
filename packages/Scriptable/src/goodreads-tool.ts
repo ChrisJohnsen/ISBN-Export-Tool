@@ -649,7 +649,6 @@ class UITableUI implements UI {
       this.builder.addEmptyRow();
       this.builder.addTextRow(`Found ${this.state.input.info.items} items in export data.`);
       this.builder.addTextRow('Choose the shelf from which ISBNs will be extracted.', { height: 88 });
-      // XXX smaller text? different alignment?
       this.builder.addIndentRow('Ex: Get the ISBNs from your "to-read" shelf and send it to your library to see which items they have available.', { height: 132 });
       this.buildSharedShelf();
 
@@ -756,7 +755,7 @@ class UITableUI implements UI {
       if (action == -1) return;
       this.controller.requestCancelCommand(this);
     });
-    this.builder.addSubtitleHelpRow('Get ISBNs "Other Editions" Progress'); // XXX no progress help?
+    this.builder.addSubtitleHelpRow('Get ISBNs "Other Editions" Progress');
     this.builder.addEmptyRow();
     this.builder.addTextRow(`Retrieving ISBNs of other editions of ISBN-bearing items on "${this.state.command.shelf}" shelf.`, { height: 88 });
 
