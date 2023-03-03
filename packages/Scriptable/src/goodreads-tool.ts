@@ -148,16 +148,23 @@ function buildRow(opts?: RowOpts): UITableRow {
     row.cellSpacing = opts.cellSpacing;
   return row;
 }
+type TextCell = { type: 'text', title: string, subtitle?: string, titleFont?: Font, titleColor?: Color /* font+color for subtitle */ };
 type CellOpts = (
-  { type: 'text', title: string, subtitle?: string, titleFont?: Font, /* font+color for title, subtitle */ }
+  | TextCell
   | { type: 'button', title: string, onTap: () => void }
   | { type: 'image', image: Image }
 ) & { align?: 'left' | 'center' | 'right', widthWeight?: number };
+function textCell(text: string | TextCell, opts: Omit<TextCell, 'type' | 'title'> = {}): TextCell {
+  return typeof text == 'string'
+    ? { type: 'text', title: text, ...opts }
+    : { ...text, ...opts };
+}
 function buildCell(opts: CellOpts): UITableCell {
   const cell = (() => {
     if (opts.type == 'text') {
       const cell = UITableCell.text(opts.title, opts.subtitle);
       if (opts.titleFont) cell.titleFont = opts.titleFont;
+      if (opts.titleColor) cell.titleColor = opts.titleColor;
       return cell;
     } else if (opts.type == 'button') {
       const cell = UITableCell.button(opts.title);
@@ -285,6 +292,23 @@ class UITableBuilder {
     t('doc.on.clipboard');
     t('doc');
   }
+  private addFontExamples() {
+    ([
+      'largeTitle',
+      'title1',
+      'title2',
+      'title3',
+      'headline',
+      'subheadline',
+      'body',
+      'callout',
+      'caption1',
+      'caption2',
+      'footnote',
+    ] as const).forEach(fn => {
+      this.addRowWithDescribedCells([{ type: 'text', title: fn, titleFont: Font[fn]() }]);
+    });
+  }
   addBackRow(text: string, onSelect: () => void) {
     const chevron = symbolCell('chevron.backward');
     const back = buildCell({ ...chevron, align: 'right' });
@@ -322,12 +346,12 @@ class UITableBuilder {
     const main = buildCell({ type: 'text', title: text, widthWeight: 9 });
     return this.addRowWithCells([indent, main], opts);
   }
-  addForwardRow(text: string, onSelect: (() => void) | undefined) {
+  addForwardRow(text: string | TextCell, onSelect: (() => void) | undefined) {
     const symbol = onSelect ? 'chevron.forward' : 'xmark';
     const image = symbolCell(symbol);
     const forward = buildCell({ ...image, align: 'left' });
-    const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - image.widthWeight });
-    return this.addRowWithCells([textCell, forward], { onSelect });
+    const txt = buildCell({ ...textCell(text), align: 'right', widthWeight: 100 - image.widthWeight });
+    return this.addRowWithCells([txt, forward], { onSelect });
   }
   addClosedDisclosureRow(text: string, value: string, opts: RowOpts = {}) {
     const symbol = symbolCell('arrowtriangle.right.square.fill');
@@ -571,8 +595,7 @@ class UITableUI implements UI {
     this.builder.addEmptyRow();
     if (this.previousInput) {
       const prev = this.previousInput;
-      this.builder.addForwardRow('already loaded', () => this.setInput(prev));
-      // XXX different color?
+      this.builder.addForwardRow(textCell('already loaded', { titleColor: Color.orange() }), () => this.setInput(prev));
     }
     this.builder.addForwardRow('On the clipboard', () => this.controller.requestInput(this, { type: 'clipboard' }));
     this.builder.addForwardRow('In a saved or downloaded file', () => this.controller.requestInput(this, { type: 'file' }));
@@ -723,20 +746,20 @@ class UITableUI implements UI {
 
     } else {
 
-      // XXX different color/font for previous selection?
-      const withPreviousShelf = { ...this.state.command, shelf: this.previousCommands[this.state.command.name]?.shelf };
+      const previousShelf = this.previousCommands[this.state.command.name]?.shelf;
+      const withPreviousShelf = { ...this.state.command, shelf: previousShelf };
       const canRevert = typeof withPreviousShelf.shelf != 'undefined' || void 0;
       this.builder.addOpenedDisclosureRow('Shelf', canRevert && { onSelect: () => this.setCommand(withPreviousShelf) });
       const shelfItems = this.state.input.info.shelfItems;
-      const addShelfRow = (shelf: string, items: string, onSelect?: () => void) =>
+      const addShelfRow = (shelf: string, items: string, onSelect?: () => void, previous = false) =>
         this.builder.addRowWithDescribedCells([
-          { type: 'text', title: shelf, widthWeight: 85, align: 'right' },
+          { type: 'text', title: shelf, widthWeight: 85, align: 'right', titleColor: (previous || void 0) && Color.orange() },
           { type: 'text', title: items, widthWeight: 15, align: 'left' },
         ], { onSelect, cellSpacing: 10 });
       addShelfRow('Shelf Name', 'Items');
       Object.getOwnPropertyNames(shelfItems)
         .forEach(shelf => addShelfRow(shelf, String(shelfItems[shelf]),
-          () => this.setCommand({ ...withPreviousShelf, shelf })));
+          () => this.setCommand({ ...withPreviousShelf, shelf }), shelf == previousShelf));
 
     }
   }
@@ -1262,8 +1285,6 @@ await store.write();
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 
 // STYLING
-// "tap to <use previous value>" hint in open menus: Input XXX, Command XXX, Select a Shelf
-//  style previous value differently and match it in the hint?
 // styling? default in dark mode is white on black, buttons are blue on black header is bold
 //  something special for "need to pick something here"?
 // long description when first starting (togglable via empty row?)
