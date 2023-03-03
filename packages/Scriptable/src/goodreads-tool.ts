@@ -95,7 +95,7 @@ class ReadWrite {
 
 // platform independent definitions (maybe UI could be web-based inside a WebView)
 
-import { AllEditionsServices, type Fetcher, type EditionsService } from 'utils';
+import { AllEditionsServices, type EditionsService } from 'utils';
 
 type IO = { type: 'clipboard' } | { type: 'file', displayName: string };
 type Input = IO & { info: { items: number, shelfItems: Record<string, number> } };
@@ -115,20 +115,21 @@ interface UI {
   commandProgress(progress: { total: number, started: number, done: number, fetched: number }): void,
   commandCanceled(): void;
   commandSummary(summary: CommandSummary): void,
-  // output(output: IO): void,
+
   getSavableData?(): unknown,
 }
 
-type RequestedIO = { type: 'clipboard' } | { type: 'file' };
+type RequestedInput = { type: 'clipboard' } | { type: 'file' };
+type RequestedOutput = RequestedInput | { type: 'view' };
 type MissingISBNs = { name: 'MissingISBNs', shelf: string };
 type GetISBNs = { name: 'GetISBNs', shelf: string, both: boolean, editions: EditionsService[] };
 type Command = MissingISBNs | GetISBNs;
 interface UIRequestReceiver {
   debugUI(): void,
-  requestInput(ui: UI, input: RequestedIO): void,
+  requestInput(ui: UI, input: RequestedInput): void,
   requestCommand(ui: UI, command: Command): void,
   requestCancelCommand(ui: UI): void,
-  // requestSaveOutput(output:RequestIO), // calls ui.output()
+  requestOutput(ui: UI, output: RequestedOutput): void,
 }
 
 // helper that builds common patterns of UITable elements
@@ -172,6 +173,31 @@ function buildCell(opts: CellOpts): UITableCell {
     cell.widthWeight = opts.widthWeight;
   return cell;
 }
+function symbolImageAndWidth(name: string): { image: Image; width: number; } {
+  const image = SFSymbol.named(name).image;
+  const sizes: Record<string, number | undefined> = {
+    // out of 100 total widthWeight in a UITable presented full-screen in a UITableRow with cellSpacing:0 on a 414pt width screen (828@2x)
+    'xmark': 9,
+    'checkmark': 9,
+    'checkmark.square': 9,
+    'square': 9,
+    'questionmark': 6,
+    'questionmark.circle': 8,
+    'questionmark.square': 9,
+    'chevron.backward': 6,
+    'chevron.forward': 6,
+    'arrowtriangle.right.square.fill': 9,
+    'arrowtriangle.down.square.fill': 9,
+    'magnifyingglass': 9,
+    'doc.on.clipboard': 8,
+    'doc': 7,
+  };
+  return { image, width: sizes[name] ?? 10 };
+}
+function symbolCell(name: string): CellOpts & { widthWeight: number } {
+  const { image, width: widthWeight } = symbolImageAndWidth(name);
+  return { type: 'image', image, widthWeight };
+}
 class UITableBuilder {
   constructor(private table: UITable, private title: string) { }
   private addRow(opts?: RowOpts) {
@@ -212,28 +238,6 @@ class UITableBuilder {
     const cell = buildCell({ type: 'text', title: this.title, align: 'center', titleFont: Font.title1() });
     return this.addRowWithCells([cell]);
   }
-  private symbolImageAndWidth(name: string) {
-    const image = SFSymbol.named(name).image;
-    const sizes: Record<string, number | undefined> = {
-      // out of 100 total widthWeight in a UITable presented full-screen in a UITableRow with cellSpacing:0 on a 414pt width screen (828@2x)
-      'xmark': 9,
-      'checkmark': 9,
-      'checkmark.square': 9,
-      'square': 9,
-      'questionmark': 6,
-      'questionmark.circle': 8,
-      'questionmark.square': 9,
-      'chevron.backward': 6,
-      'chevron.forward': 6,
-      'arrowtriangle.right.square.fill': 9,
-      'arrowtriangle.down.square.fill': 9,
-    };
-    return { image, width: sizes[name] ?? 10 };
-  }
-  private symbolCell(name: string): CellOpts & { widthWeight: number } {
-    const { image, width: widthWeight } = this.symbolImageAndWidth(name);
-    return { type: 'image', image, widthWeight };
-  }
   private addSymbolExamples() {
     const t = (n: string) => {
       // xmark                            9/100 17.5  49px 24.5pt
@@ -247,7 +251,11 @@ class UITableBuilder {
       // chevron.forward                  6/100 12.5
       // arrowtriangle.right.square.fill  9/100 19.5
       // arrowtriangle.down.square.fill   9/100 19.5
-      const { image, width } = this.symbolImageAndWidth(n);
+      // magnifyingglass                  9/100 20.5
+      // doc.on.clipboard                 8/100 21
+      // doc                              7/100 18
+
+      const { image, width } = symbolImageAndWidth(n);
       console.log(n);
 
       const imageWidth = image.size.width;
@@ -273,15 +281,18 @@ class UITableBuilder {
     t('chevron.forward');
     t('arrowtriangle.right.square.fill');
     t('arrowtriangle.down.square.fill');
+    t('magnifyingglass');
+    t('doc.on.clipboard');
+    t('doc');
   }
   addBackRow(text: string, onSelect: () => void) {
-    const chevron = this.symbolCell('chevron.backward');
+    const chevron = symbolCell('chevron.backward');
     const back = buildCell({ ...chevron, align: 'right' });
     const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - chevron.widthWeight });
     return this.addRowWithCells([back, textCell], { onSelect });
   }
   addSubtitleHelpRow(subtitle: string, helpLines?: string[]) {
-    const qm = this.symbolCell('questionmark.circle');
+    const qm = symbolCell('questionmark.circle');
     const cells = [];
     let helpFn;
     if (helpLines && helpLines.length > 0)
@@ -313,28 +324,28 @@ class UITableBuilder {
   }
   addForwardRow(text: string, onSelect: (() => void) | undefined) {
     const symbol = onSelect ? 'chevron.forward' : 'xmark';
-    const image = this.symbolCell(symbol);
+    const image = symbolCell(symbol);
     const forward = buildCell({ ...image, align: 'left' });
     const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - image.widthWeight });
     return this.addRowWithCells([textCell, forward], { onSelect });
   }
   addClosedDisclosureRow(text: string, value: string, opts: RowOpts = {}) {
-    const symbol = this.symbolCell('arrowtriangle.right.square.fill');
+    const symbol = symbolCell('arrowtriangle.right.square.fill');
     const disclosure = buildCell({ ...symbol, align: 'left' });
     const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 45 });
     const valueCell = buildCell({ type: 'text', title: value, align: 'right', widthWeight: 100 - 45 - symbol.widthWeight });
     return this.addRowWithCells([disclosure, textCell, valueCell], opts);
   }
   addOpenedDisclosureRow(text: string, opts: RowOpts = {}) {
-    const symbol = this.symbolCell('arrowtriangle.down.square.fill');
+    const symbol = symbolCell('arrowtriangle.down.square.fill');
     const disclosure = buildCell({ ...symbol, align: 'left' });
     const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - symbol.widthWeight });
     return this.addRowWithCells([disclosure, textCell], opts);
   }
   addCheckableRow(text: string, checked: boolean | undefined, opts: RowOpts = {}) {
     const mark = buildCell((() => {
-      const check = this.symbolCell('checkmark.square');
-      const uncheck = this.symbolCell('square');
+      const check = symbolCell('checkmark.square');
+      const uncheck = symbolCell('square');
       const widthWeight = Math.max(check.widthWeight, uncheck.widthWeight);
       if (typeof checked == 'undefined') return { type: 'text', title: '', widthWeight };
       const symbol = checked ? check : uncheck;
@@ -799,7 +810,7 @@ class UITableUI implements UI {
     };
     this.builder.addBackRow(`${commandName} Options`, async () => await confirmBack() && this.setCommand(command));
     this.builder.addSubtitleHelpRow(`${commandName} Summary`, [
-      'The command results are summarized here. Select an output option (XXX) to view or save the full output.',
+      'The command results are summarized here. Select an output option to view or save the full output.',
       '',
       'The "back" options at the bottom jump back to various screens (also available through multiple taps on "back" at the top).',
     ]);
@@ -853,7 +864,19 @@ class UITableUI implements UI {
     } else assertNever(summary);
 
     this.builder.addEmptyRow();
-    this.builder.addTextRow('XXX output options');
+    this.builder.addTextRow('Output Options');
+    const view = symbolCell('magnifyingglass');
+    const clip = symbolCell('doc.on.clipboard');
+    const file = symbolCell('doc');
+    const max = Math.max(...[view, clip, file].map(s => s.widthWeight));
+    [view, clip, file].forEach(s => s.widthWeight = max);
+    const addOutputRow = (title: string, symbol: typeof view, onSelect: () => void) => {
+      const widthWeight = 100 - symbol.widthWeight;
+      this.builder.addRowWithDescribedCells([{ type: 'text', title, align: 'right', widthWeight }, { ...symbol, align: 'center' }], { onSelect });
+    };
+    addOutputRow('View', view, () => this.controller.requestOutput(this, { type: 'view' }));
+    addOutputRow('Copy to the clipboard', clip, () => this.controller.requestOutput(this, { type: 'clipboard' }));
+    addOutputRow('Save to a file', file, () => this.controller.requestOutput(this, { type: 'file' }));
     this.builder.addEmptyRow();
     this.builder.addBackRow(`Choose New ${commandName} Options`, async () => await confirmBack() && this.setCommand(command));
     this.builder.addBackRow('Choose New Command', async () => await confirmBack() && this.setCommand(void 0));
@@ -874,7 +897,14 @@ class UITableUI implements UI {
 
 // controller interfaces with tool-core on behalf of a non-specific UI
 
-import { type FetchResult, getISBNs, missingISBNs, shelfInfo } from 'utils';
+import { type Fetcher, type FetchResult, getISBNs, missingISBNs, type Row, shelfInfo } from 'utils';
+import { toCSV } from 'utils';
+import { pick } from 'utils';
+
+type CommandOutput =
+  | { name: 'MissingISBNs', shelf: string, rows: Row[] }
+  | { name: 'GetISBNs', shelf: string, isbns: Set<string> }
+  ;
 
 class Controller implements UIRequestReceiver {
   private log: Log;
@@ -911,7 +941,7 @@ class Controller implements UIRequestReceiver {
     }
   }
   private csv?: string;
-  async requestInput(ui: UI, inputReq: RequestedIO): Promise<void> {
+  async requestInput(ui: UI, inputReq: RequestedInput): Promise<void> {
 
     const { csv, input } = await getInput();
     this.csv = csv;
@@ -978,6 +1008,7 @@ class Controller implements UIRequestReceiver {
       this.commandPromise = void 0;
     }
   }
+  private output?: CommandOutput;
   private async _requestCommand(ui: UI, command: Command): Promise<void> {
     if (!this.csv) throw 'requested command without first requesting input';
     let summary: CommandSummary;
@@ -985,6 +1016,7 @@ class Controller implements UIRequestReceiver {
     if (command.name == 'MissingISBNs') {
 
       const rows = await missingISBNs(this.csv, command.shelf);
+      this.output = { name: 'MissingISBNs', shelf: command.shelf, rows };
       summary = { name: 'MissingISBNs', itemsMissingISBN: rows.length };
 
     } else if (command.name == 'GetISBNs') {
@@ -1067,6 +1099,8 @@ class Controller implements UIRequestReceiver {
         bothISBNs: command.both,
       });
 
+      this.output = { name: 'GetISBNs', shelf: command.shelf, isbns: isbns };
+
       await store.write();
 
       if (command.editions.length == 0) {
@@ -1095,6 +1129,50 @@ class Controller implements UIRequestReceiver {
   async requestCancelCommand(ui: UI): Promise<void> {
     await this.abortIfRunning();
     ui.commandCanceled();
+  }
+  async requestOutput(ui: UI, output: RequestedOutput): Promise<void> {
+    if (!this.output) {
+      console.error('requestOutput called before any output available');
+      return;
+    }
+    const type = output.type;
+    const { filename, output: out } = getOutput(this.output);
+    if (type == 'view')
+
+      QuickLook.present(out, true);
+
+    else if (type == 'clipboard') {
+
+      Pasteboard.copyString(out);
+      infoAlert('Copied!', 'The output has been copied to the clipboard.');
+
+    } else if (type == 'file') {
+
+      const pickedPaths = await DocumentPicker.exportString(out, filename); // cancel rejects
+      const fm = FileManager.local();
+      const basename = (pn: string) => fm.fileName(pn);
+      if (pickedPaths.length == 1)
+        infoAlert('Saved to File', 'The output has been saved to the file:\n\n' + basename(pickedPaths[0]));
+      else if (pickedPaths.length > 1)
+        infoAlert('Saved to Multiple Files?', 'The output has been saved to the files?:\n\n' + pickedPaths.map(basename).join('\n'));
+
+    } else assertNever(type);
+
+    function infoAlert(title: string, message: string) {
+      const a = new Alert;
+      a.title = title;
+      a.message = message;
+      a.addCancelAction('Okay');
+      a.presentAlert();
+    }
+    function getOutput(output: CommandOutput): { filename: string, output: string } {
+      if (output.name == 'MissingISBNs') {
+        const pickedColumns = output.rows.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']));
+        return { filename: `ISBNS missing on ${output.shelf}.csv`, output: toCSV(pickedColumns) };
+      } else if (output.name == 'GetISBNs') {
+        return { filename: `ISBNs on ${output.shelf}.txt`, output: Array.from(output.isbns).join('\n') };
+      } else assertNever(output);
+    }
   }
   async abortIfRunning() {
     this.abortingFetches = true;
@@ -1169,11 +1247,6 @@ await store.write();
 // (known) BUGS
 
 // TODO
-// Summary
-//  output options (requests made to controller)
-//    View         >
-//    Copy to Clip >
-//    Save to File >
 // GetISBNs Summary
 //  editions details too noisy?
 //    maybe put them in a disclosure, or in an alert, or below "save" + "back" actions?
@@ -1185,10 +1258,7 @@ await store.write();
 // AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 // bar graph for progress?
 // output
-//  missing: pick columns, or just use the same set at the node tool?
-//  save to file (DocumentPicker.export)
-//  clipboard (Pasteboard.copyString)
-//  view (quick look?)
+//  missing: let user pick columns?
 // test mode in UI
 //  main UI does not know about setting, but maybe summary editionsInfo includes a bool about it
 //    development mode: always render as a part of summary
@@ -1218,9 +1288,6 @@ await store.write();
 // typical UI names for input and output
 //  Open and Save (open not typically applied to clipboard...)
 // long description when first starting (togglable via empty row?)
-// icons with file/clipboard selection rows?
-//  doc.on.clipboard
-//  doc
 
 // FUTURE
 // break shelves into exclusive & other?
