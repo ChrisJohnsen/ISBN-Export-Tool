@@ -113,6 +113,7 @@ type CommandSummary = MissingISBNsSummary | GetISBNsSummary;
 interface UI {
   input(input: Input): void,
   commandProgress(progress: { total: number, started: number, done: number, fetched: number }): void,
+  commandCanceled(): void;
   commandSummary(summary: CommandSummary): void,
   // output(output: IO): void,
   getSavableData?(): unknown,
@@ -126,6 +127,7 @@ interface UIRequestReceiver {
   debugUI(): void,
   requestInput(ui: UI, input: RequestedIO): void,
   requestCommand(ui: UI, command: Command): void,
+  requestCancelCommand(ui: UI): void,
   // requestSaveOutput(output:RequestIO), // calls ui.output()
 }
 
@@ -741,12 +743,7 @@ class UITableUI implements UI {
       const action = await a.presentAlert();
       console.log(`progress cancel warning result: ${action}`);
       if (action == -1) return;
-      // XXX cancel command (new UIRequestReceiver method)
-      const w = new Alert;
-      w.title = 'Sorry!';
-      w.message = 'Stopping Get ISBNs is not yet implemented.';
-      w.addCancelAction('Sigh');
-      await w.presentAlert();
+      this.controller.requestCancelCommand(this);
     });
     this.builder.addSubtitleHelpRow('Get ISBNs "Other Editions" Progress'); // XXX no progress help?
     this.builder.addEmptyRow();
@@ -767,6 +764,9 @@ class UITableUI implements UI {
   }
   commandProgress(progress: { total: number, started: number, done: number, fetched: number }): void {
     this.setProgress(progress);
+  }
+  commandCanceled(): void {
+    this.setCommand(this.state.command, true);
   }
   commandSummary(summary: CommandSummary) {
     this.setSummary({ ...summary, received: Date.now() });
@@ -1027,6 +1027,7 @@ class Controller implements UIRequestReceiver {
           cacheData,
           fetcher,
           reporter: report => {
+            if (this.abortingFetches) return;
             const ev = report.event;
             if (ev == 'abort fn') {
               this.abortEditions = report.fn;
@@ -1090,6 +1091,10 @@ class Controller implements UIRequestReceiver {
     await this.log.flush();
 
     ui.commandSummary(summary);
+  }
+  async requestCancelCommand(ui: UI): Promise<void> {
+    await this.abortIfRunning();
+    ui.commandCanceled();
   }
   async abortIfRunning() {
     this.abortingFetches = true;
@@ -1164,9 +1169,6 @@ await store.write();
 // (known) BUGS
 
 // TODO
-// Progress
-//  back has ask controller to cancel command
-//    currently controller only aborts when UI present finishes
 // Summary
 //  output options (requests made to controller)
 //    View         >
