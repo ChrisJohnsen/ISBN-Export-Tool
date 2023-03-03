@@ -1246,29 +1246,39 @@ await store.write();
 // (known) BUGS
 
 // TODO
+// production mode
+//  controlled by Rollup
+//  hides debug button
+// test mode
+//  controller pops alert if test mode xor production
+//    alert offers Continue/Abort/Switch Modes
+//  switch log file path, too?
+//    way to generalize so we don't have to pass 4 paths
+// real fetcher
+//  non-test mode
 // GetISBNs Summary
 //  editions details too noisy?
 //    maybe put them in a disclosure, or in an alert, or below "save" + "back" actions?
+// AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
+
+// STYLING
+// "tap to <use previous value>" hint in open menus: Input XXX, Command XXX, Select a Shelf
+//  style previous value differently and match it in the hint?
+// styling? default in dark mode is white on black, buttons are blue on black header is bold
+//  something special for "need to pick something here"?
+// long description when first starting (togglable via empty row?)
+
+// FUTURE
+// break shelves into exclusive & other?
+//  then, let the UI do the sorting?
 // debug tools "screen'
 //  view cache summary? (maybe useful, can view in Files, but not easily summarized)
 //    needs helper from cache code since we don't want to have to pick apart the possibly changing saved cache representation
 //    cachedQueryCount: Map<EditionsService,number>
 //    anything about expirations?
-// AllEditionsServices (part of utils) is now coupled to UI, move it to controller or main and have it passed in?
 // bar graph for progress?
 // output
 //  missing: let user pick columns?
-// test mode in UI
-//  main UI does not know about setting, but maybe summary editionsInfo includes a bool about it
-//    development mode: always render as a part of summary
-//    production mode: only render if test mode was active (nothing added if not in test mode)
-//  controller tells UI about test mode via new flows
-//    controller.getTestMode(this)...ui.testMode(true|false)  used during UI startup
-//    controller.debugUI(this)...ui.testMode(true|false)      used to present debug UI
-//    UI can render test mode status (e.g. as a banner in main UI, or just in GetISBNs rendering)
-//  main UI does not know about setting, but controller pops alert if test mode xor production
-//    alert offers Continue/Abort/Switch Modes
-// real fetcher
 // new input type: Scriptable bookmark
 //  probably not useful for one-off users, but should be useful for frequent runs while developing
 //  provide a one-tap way to use a previously selected bookmark
@@ -1278,16 +1288,3 @@ await store.write();
 //  make UI non-interactive and provide progress?
 // updateExceptUndefined
 //  helper for saveState updating previousCommands to not overwrite a non-undefined shelf with undefined
-
-// STYLING
-// "tap to <use previous value>" hint in open menus: Input XXX, Command XXX, Select a Shelf
-//  style previous value differently and match it in the hint?
-// styling? default in dark mode is white on black, buttons are blue on black header is bold
-//  something special for "need to pick something here"?
-// typical UI names for input and output
-//  Open and Save (open not typically applied to clipboard...)
-// long description when first starting (togglable via empty row?)
-
-// FUTURE
-// break shelves into exclusive & other?
-//  then, let the UI do the sorting?
