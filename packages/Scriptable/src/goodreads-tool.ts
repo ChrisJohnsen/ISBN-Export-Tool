@@ -355,6 +355,7 @@ type PartialMissingISBNs = Optional<MissingISBNs, 'shelf'>;
 type PartialGetISBNs = Optional<GetISBNs, 'shelf'>;
 type PartialCommand = PartialMissingISBNs | PartialGetISBNs;
 type Progress = { total: number, started: number, done: number, fetched: number };
+type UICommandSummary = CommandSummary & { received: number };
 type UIState =
   | {
     input?: undefined,
@@ -396,7 +397,7 @@ type UIState =
     command: Command,
     ready: true,
     progress: Progress,
-    summary: CommandSummary,
+    summary: UICommandSummary,
   }
   ;
 type ByNames<T extends { name: PropertyKey }> = { [N in T['name']]: Extract<T, { name: N }> };
@@ -450,7 +451,7 @@ class UITableUI implements UI {
     else
       assertNever(name);
   }
-  private validateState(input?: Input, restorePrevious = false, command?: PartialCommand, progress?: Progress, summary?: CommandSummary): UIState {
+  private validateState(input?: Input, restorePrevious = false, command?: PartialCommand, progress?: Progress, summary?: UICommandSummary): UIState {
 
     const validatedShelf = (input: Input, shelf?: string) => {
       if (typeof shelf == 'undefined')
@@ -768,9 +769,9 @@ class UITableUI implements UI {
     this.setProgress(progress);
   }
   commandSummary(summary: CommandSummary) {
-    this.setSummary(summary);
+    this.setSummary({ ...summary, received: Date.now() });
   }
-  private setSummary(summary: CommandSummary) {
+  private setSummary(summary: UICommandSummary) {
     this.saveState();
     this.state = this.validateState(this.state.input, false, this.state.command, this.state.progress ?? { total: 0, started: 0, done: 0, fetched: 0 }, summary);
     this.build();
@@ -784,7 +785,19 @@ class UITableUI implements UI {
         command.name == 'GetISBNs' ? 'Get ISBNs' :
           assertNever(command);
     const summary = this.state.summary;
-    this.builder.addBackRow(`${commandName} Options`, () => this.setCommand(command));
+    const confirmBack: () => Promise<boolean> = async () => {
+      if (command.name != 'GetISBNs') return true;
+      if (command.editions.length <= 0) return true;
+      const newish = Date.now() - summary.received < 5000;
+      if (!newish) return true;
+      const a = new Alert;
+      a.title = `Leaving So Soon?`;
+      a.message = `${commandName} just finished a few seconds ago.\n\nPlease confirm that you want to abandon these results and go back.`;
+      a.addAction('Abandon these results and go back now.');
+      a.addCancelAction('Do not go back yet.');
+      return await a.presentAlert() != -1;
+    };
+    this.builder.addBackRow(`${commandName} Options`, async () => await confirmBack() && this.setCommand(command));
     this.builder.addSubtitleHelpRow(`${commandName} Summary`, [
       'The command results are summarized here. Select an output option (XXX) to view or save the full output.',
       '',
@@ -842,9 +855,9 @@ class UITableUI implements UI {
     this.builder.addEmptyRow();
     this.builder.addTextRow('XXX output options');
     this.builder.addEmptyRow();
-    this.builder.addBackRow(`Choose New ${commandName} Options`, () => this.setCommand(command));
-    this.builder.addBackRow('Choose New Command', () => this.setCommand(void 0));
-    this.builder.addBackRow('Choose New Input', () => this.setInput(void 0));
+    this.builder.addBackRow(`Choose New ${commandName} Options`, async () => await confirmBack() && this.setCommand(command));
+    this.builder.addBackRow('Choose New Command', async () => await confirmBack() && this.setCommand(void 0));
+    this.builder.addBackRow('Choose New Input', async () => await confirmBack() && this.setInput(void 0));
   }
   async present(...args: Parameters<UITable['present']>): ReturnType<UITable['present']> {
     this.presented = true;
@@ -1151,11 +1164,6 @@ await store.write();
 // (known) BUGS
 
 // TODO
-// Summary
-//  back should alert if hit within X seconds of _new_ summary? (try to avoid "user hit back right after summary displayed")
-//    both top and "bottom" back options should do this?
-//      mostly important for top since it will be in the same place as progress back/cancel, but might as well have others do it too?
-//  add date to summary type, generate it in the UI when controller sends summary, check it when back is hit
 // Progress
 //  back has ask controller to cancel command
 //    currently controller only aborts when UI present finishes
