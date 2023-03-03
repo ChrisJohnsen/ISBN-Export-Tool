@@ -326,6 +326,8 @@ const makeReporter: (pw: ProgressWriter) => ProgressReporter & { summary(): void
       if (event == 'rejection')
         return pw.writeLine(report.reason.toString());
 
+      if (event == 'abort fn') return;
+
       // store planned query counts and compute total for progress line
       if (event == 'query plan') {
         total = Array.from(report.plan.values()).reduce((t, isbns) => t + isbns.size, 0);
