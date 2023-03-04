@@ -1,7 +1,7 @@
 // Common definitions for all "editions of" retrievers
 
 import { version } from './version.js';
-import { type MaybeCacheControl } from './cache.js';
+import { CacheControl, type MaybeCacheControl } from './cache.js';
 
 // types for simplified data retrieval
 
@@ -35,6 +35,31 @@ function serverOf(url: string) {
   const match = url.match(new RegExp('^https?://([^/]+)'));
   if (match) return match[1].toLowerCase();
   else return url;
+}
+
+export type ThrottleableFetcher = (url: string) => Promise<ThrottleableFetchResult>;
+export type ThrottleableFetchResult = { status: number, statusText: string, retryAfter?: string | null } | string;
+export function serverThrottledFetcher(throttleableFetcher: ThrottleableFetcher): Fetcher {
+  const serverThrottle = new ServerThrottle;
+
+  return async url => {
+    const waitUntil = serverThrottle.shouldThrottle(url);
+    if (waitUntil != false)
+      return new CacheControl({ status: 429, statusText: 'server requested throttling until ' + waitUntil.toUTCString() }, { until: waitUntil });
+
+    const fetchResult = await throttleableFetcher(url);
+    if (typeof fetchResult == 'string') return fetchResult;
+
+    const { status, statusText, retryAfter } = fetchResult;
+    if (status == 429 || status == 503) {
+      const date =
+        retryAfter
+          ? serverThrottle.set(url, retryAfter)
+          : serverThrottle.set(url, '600');
+      return new CacheControl({ status, statusText }, { until: date });
+    }
+    return { status, statusText };
+  };
 }
 
 // result types for "editions of" functions

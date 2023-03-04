@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { type BaseContext, Builtins, Cli, Command, Option, UsageError } from 'clipanion';
 import { Fetcher, pick, toCSV } from 'utils';
 import { missingISBNs } from 'utils';
-import { AllEditionsServices, CacheControl, type EditionsService, type EditionsServices, getISBNs, type CacheData, type ProgressReporter } from 'utils';
-import { version, ServerThrottle } from 'utils';
+import { AllEditionsServices, type EditionsService, type EditionsServices, getISBNs, type CacheData, type ProgressReporter } from 'utils';
+import { version } from 'utils';
 import * as path from 'node:path';
 import { JSONFile } from 'lowdb/node';
 import { Low } from 'lowdb';
@@ -203,29 +203,18 @@ const cli: Cli<CacheContext> = Cli.from([
 
 // "editions of" helpers
 
-import { fetcherUserAgent, type FetchResult } from 'utils';
+import { fetcherUserAgent, serverThrottledFetcher } from 'utils';
 import fetch from 'node-fetch';
 
-const serverThrottle = new ServerThrottle;
-
-async function realFetcher(url: string): Promise<FetchResult> {
-  const waitUntil = serverThrottle.shouldThrottle(url);
-  if (waitUntil != false)
-    return { status: 429, statusText: 'server requested throttling until ' + waitUntil.toUTCString() };
+const realFetcher = serverThrottledFetcher(async url => {
   const response = await fetch(url, { headers: [['User-Agent', fetcherUserAgent('Node')]] });
   const { status, statusText } = response;
+  const retryAfter = response.headers.get('Retry-After');
   if (response.ok) return await response.text();
-  if (response.status == 429 || response.status == 503) {
-    const retryAfter = response.headers.get('Retry-After');
-    const date =
-      retryAfter
-        ? serverThrottle.set(url, retryAfter)
-        : serverThrottle.set(url, '600');
-    return new CacheControl({ status, statusText }, { until: date });
-  }
-  return { status, statusText };
-}
+  return { status, statusText, retryAfter };
+});
 
+import { type FetchResult } from 'utils';
 import { equivalentISBNs } from 'utils';
 
 // generate fake data for the "editions of" parsers to consume so we do not make real requests while testing
