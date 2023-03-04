@@ -4493,6 +4493,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"rollup-plugin-consts@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "rollup-plugin-consts@npm:1.1.0"
+  peerDependencies:
+    rollup: ">=1.15.0 <3"
+  checksum: 0a07a3311ace63dc7ea7541eb8e106168baa1e3843503e5c03dcc8332593726f3861ee667ba0a3cfbfed1dccba21b60a8cfb2eeff4acd5ccfd22d5fe5c7d14b9
+  languageName: node
+  linkType: hard
+
 "rollup-plugin-esbuild@npm:^5.0.0":
   version: 5.0.0
   resolution: "rollup-plugin-esbuild@npm:5.0.0"
@@ -4600,6 +4609,7 @@ __metadata:
     "@scriptable-ios/eslint-config": "npm:^1.6.5"
     "@types/scriptable-ios": "npm:^1.6.5"
     esbuild: "npm:^0.17.4"
+    rollup-plugin-consts: "npm:^1.1.0"
     rollup-plugin-esbuild: "npm:^5.0.0"
     utils: "workspace:^"
   languageName: unknown

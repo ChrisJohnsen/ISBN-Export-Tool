@@ -563,7 +563,7 @@ class UITableUI implements UI {
   private buildDebug(): void {
     const empty = new UITableRow;
     empty.addText('').widthWeight = 4;
-    const button = empty.addButton('DEBUG');
+    const button = empty.addButton(production ? ' ' : 'DEBUG');
     button.centerAligned();
     button.onTap = () => {
       controller.debugUI();
@@ -922,6 +922,7 @@ class UITableUI implements UI {
 import { type Fetcher, type FetchResult, getISBNs, missingISBNs, type Row, shelfInfo } from 'utils';
 import { toCSV } from 'utils';
 import { pick } from 'utils';
+import production from 'consts:production';
 
 type CommandOutput =
   | { name: 'MissingISBNs', shelf: string, rows: Row[] }
@@ -933,34 +934,27 @@ class Controller implements UIRequestReceiver {
   constructor(logPathname: string, private cachePathname: string, private testCachePathname: string) {
     this.log = new Log(logPathname);
   }
+  private testMode = !production;
   async debugUI() {
-    const state = { testMode: true };
     const table = new UITable;
     table.showSeparators = true;
     const builder = new UITableBuilder(table, 'Debug UI');
-    build(false);
-    function build(rebuild = true) {
-      rebuild && table.removeAllRows();
+    const build = (reload = true) => {
+      reload && table.removeAllRows();
 
       builder.addRowWithDescribedCells([
         { type: 'text', title: 'Test Mode?', align: 'left' },
-        { type: 'text', title: String(state.testMode), align: 'right' },
-      ], { onSelect() { state.testMode = !state.testMode; build() } });
+        { type: 'text', title: String(this.testMode), align: 'right' },
+      ], { onSelect: () => { this.testMode = !this.testMode; build() } });
       builder.addTextRow('Test Mode makes the following changes:\n'
         + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
         + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
         , { height: 149 });
 
-      rebuild && table.reload();
-    }
+      reload && table.reload();
+    };
+    build(false);
     await table.present(false);
-    if (!state.testMode) {
-      const alert = new Alert;
-      alert.title = 'Non-Test Mode Not Implemented';
-      alert.message = 'Normal (non-test) mode is not yet implemented.\n\n' + 'Test Mode will be forced on for now.';
-      alert.addCancelAction('Okay');
-      await alert.presentAlert();
-    }
   }
   private csv?: string;
   async requestInput(ui: UI, inputReq: RequestedInput): Promise<void> {
@@ -1043,16 +1037,51 @@ class Controller implements UIRequestReceiver {
 
     } else if (command.name == 'GetISBNs') {
 
-      const testMode = true;
+      if ((production && this.testMode || !production && !this.testMode) && command.editions.length > 0) {
+        const x = this.testMode
+          ? {
+            title: 'Warning: Test Mode Active',
+            message: 'External services for Get ISBNs "Other Editions" will not be contacted, fake data will be returned instead.',
+            continue: 'Continue in Test Mode',
+            switch: 'Switch to Normal Mode and Continue',
+          }
+          : {
+            title: 'Warning: Test Mode Inactive',
+            message: 'Actual requests will be made to external services for Get ISBNs "Other Editions".',
+            continue: 'Continue in Normal Mode',
+            switch: 'Switch to Test Mode and Continue',
+          };
+        const a = new Alert;
+        a.title = x.title;
+        a.message = x.message;
+        a.addAction(x.continue);
+        a.addAction(x.switch);
+        a.addCancelAction('Do Not Run Get ISBNs');
+        const action = await a.presentAlert();
+        if (action == -1) return;
+        else if (action == 1)
+          this.testMode = !this.testMode;
+      }
+
+      if (!this.testMode) {
+        const a = new Alert;
+        a.title = 'Normal Mode not implemented';
+        a.message = 'Try again later?';
+        a.addAction('Switch to Test Mode');
+        a.addCancelAction('Cancel');
+        const action = await a.presentAlert();
+        if (action == -1) return;
+        this.testMode = true;
+      }
 
       const fetcher: Fetcher = (fetcher => {
         return url => {
           if (this.abortingFetches) return Promise.reject(`aborting ${url}`);
           return fetcher(url);
         };
-      })(testMode ? fakeFetcher : () => Promise.reject('real fetcher not implemented!'));
+      })(this.testMode ? fakeFetcher : () => Promise.reject('real fetcher not implemented!'));
 
-      const store = new Store(testMode ? this.testCachePathname : this.cachePathname);
+      const store = new Store(this.testMode ? this.testCachePathname : this.cachePathname);
       await store.read();
       const cacheData = (store => {
         if (!store) return void 0;
@@ -1269,14 +1298,10 @@ await store.write();
 // (known) BUGS
 
 // TODO
-// production mode
-//  controlled by Rollup
-//  hides debug button
 // test mode
-//  controller pops alert if test mode xor production
-//    alert offers Continue/Abort/Switch Modes
 //  switch log file path, too?
 //    way to generalize so we don't have to pass 4 paths
+//  report test mode in progress and summary?
 // real fetcher
 //  non-test mode
 // GetISBNs Summary
