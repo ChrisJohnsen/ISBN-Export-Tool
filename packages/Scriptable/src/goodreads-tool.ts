@@ -930,10 +930,7 @@ type CommandOutput =
   ;
 
 class Controller implements UIRequestReceiver {
-  private log: Log;
-  constructor(logPathname: string, private cachePathname: string, private testCachePathname: string) {
-    this.log = new Log(logPathname);
-  }
+  constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string) { }
   private testMode = !production;
   async debugUI() {
     const table = new UITable;
@@ -1081,7 +1078,8 @@ class Controller implements UIRequestReceiver {
         };
       })(this.testMode ? fakeFetcher : () => Promise.reject('real fetcher not implemented!'));
 
-      const store = new Store(this.testMode ? this.testCachePathname : this.cachePathname);
+      const log = new Log(this.logPathnamer(this.testMode));
+      const store = new Store(this.cachePathnamer(this.testMode));
       await store.read();
       const cacheData = (store => {
         if (!store) return void 0;
@@ -1138,11 +1136,11 @@ class Controller implements UIRequestReceiver {
               ui.commandProgress(progress);
               report.warnings.forEach(e => {
                 console.warn(e.description);
-                this.log.append(e.description);
+                log.append(e.description);
               });
               report.faults.forEach(e => {
                 console.warn(e.description);
-                this.log.append(e.description);
+                log.append(e.description);
               });
             }
           }
@@ -1153,6 +1151,7 @@ class Controller implements UIRequestReceiver {
       this.output = { name: 'GetISBNs', shelf: command.shelf, isbns: isbns };
 
       await store.write();
+      await log.flush();
 
       if (command.editions.length == 0) {
         summary = { name: 'GetISBNs', totalISBNs: isbns.size };
@@ -1172,8 +1171,6 @@ class Controller implements UIRequestReceiver {
 
     }
     else summary = assertNever(command);
-
-    await this.log.flush();
 
     ui.commandSummary(summary);
   }
@@ -1284,10 +1281,14 @@ if (!store.data.UITableUIData) store.data.UITableUIData = {};
 if (!isStore(store.data.UITableUIData)) throw 'restored UI data is not an object?';
 
 const logPathname = asidePathname(module.filename, 'log');
+const testLogPathname = asidePathname(module.filename, 'log', bn => bn + ' test');
 const cachePathname = asidePathname(module.filename, 'json', bn => bn + ' cache');
 const testCachePathname = asidePathname(module.filename, 'json', bn => bn + ' test cache');
 
-const controller = new Controller(logPathname, cachePathname, testCachePathname);
+const controller = new Controller(
+  testMode => testMode ? testLogPathname : logPathname,
+  testMode => testMode ? testCachePathname : cachePathname,
+);
 
 const ui = new UITableUI(controller, store.data.UITableUIData);
 await ui.present(true);
@@ -1299,8 +1300,6 @@ await store.write();
 
 // TODO
 // test mode
-//  switch log file path, too?
-//    way to generalize so we don't have to pass 4 paths
 //  report test mode in progress and summary?
 // real fetcher
 //  non-test mode
