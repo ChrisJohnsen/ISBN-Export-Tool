@@ -1060,23 +1060,12 @@ class Controller implements UIRequestReceiver {
           this.testMode = !this.testMode;
       }
 
-      if (!this.testMode) {
-        const a = new Alert;
-        a.title = 'Normal Mode not implemented';
-        a.message = 'Try again later?';
-        a.addAction('Switch to Test Mode');
-        a.addCancelAction('Cancel');
-        const action = await a.presentAlert();
-        if (action == -1) return;
-        this.testMode = true;
-      }
-
       const fetcher: Fetcher = (fetcher => {
         return url => {
           if (this.abortingFetches) return Promise.reject(`aborting ${url}`);
           return fetcher(url);
         };
-      })(this.testMode ? fakeFetcher : () => Promise.reject('real fetcher not implemented!'));
+      })(this.testMode ? fakeFetcher : realFetcher);
 
       const log = new Log(this.logPathnamer(this.testMode));
       const store = new Store(this.cachePathnamer(this.testMode));
@@ -1229,6 +1218,25 @@ class Controller implements UIRequestReceiver {
   }
 }
 
+import { fetcherUserAgent, serverThrottledFetcher } from 'utils';
+
+const realFetcher = serverThrottledFetcher(async url => {
+  const req = new Request(url);
+  req.headers = { 'User-Agent': fetcherUserAgent('Scriptable') };
+  const body = await req.loadString();
+
+  const status = (s => typeof s == 'number' ? s : parseInt(s, 10))(req.response.statusCode);
+  if (200 <= status && status < 300) return body;
+
+  const statusText = '';
+  const headers = new Map(Object.entries(req.response.headers).map(([k, v]) => [k.toLowerCase(), v]));
+  const retryAfter = headers.get('retry-after');
+  if (typeof retryAfter == 'string')
+    return { status, statusText, retryAfter };
+  else
+    return { status, statusText };
+});
+
 import { equivalentISBNs } from 'utils';
 
 // generate fake data for the "editions of" parsers to consume so we do not make real requests while testing
@@ -1297,12 +1305,22 @@ await controller.abortIfRunning();
 await store.write();
 
 // (known) BUGS
+// doing real fetches with OL:S and LT:TI enabled caused errors
+//  in Progress, saw "active" numbers increasing beyond 10 (built-in parallelism limit)
+//    eventually some began to show as finished, and when the summary came in, both services reported fewer fetches than intended queries
+//  console.error reports about network something (unavailable? restricted? disabled? didn't copy it down)
+//  Scriptable limiting the network connections?
+//    would have often had two requests active at a time since some queries would go through each throttle (OL and LT)
+//  with just OL:S enabled it worked okay
+//    only 10 "active" at a time (really, waiting in the throttle scheduler)
+//    probably only one request active at a time (due to throttle scheduler), but if one took more than 1s, another would have hit its schedule and launched before the long running one finished
+//  change parallelism limit to 1 for Scriptable?
+// when given a non-CSV file, nothing happens
+//  show an error alert?
 
 // TODO
 // test mode
 //  report test mode in progress and summary?
-// real fetcher
-//  non-test mode
 // GetISBNs Summary
 //  editions details too noisy?
 //    maybe put them in a disclosure, or in an alert, or below "save" + "back" actions?
@@ -1316,11 +1334,17 @@ await store.write();
 // FUTURE
 // break shelves into exclusive & other?
 //  then, let the UI do the sorting?
+// UI to pre-filter shelf contents before sending to GetISBNs editions?
+//  might get complicated to deal with long lists
+//    need to be able to sort on author or title, search too?
+//  maybe not GetISBNs-specific could be generic to either if the core functions re-worked to take Row[] instead of CSV+shelf
 // debug tools "screen'
 //  view cache summary? (maybe useful, can view in Files, but not easily summarized)
 //    needs helper from cache code since we don't want to have to pick apart the possibly changing saved cache representation
 //    cachedQueryCount: Map<EditionsService,number>
 //    anything about expirations?
+//    "histogram" of # of queried ISBNs with N editions
+//      maybe need to be able to see source ISBN, too: if looking to try to reduce output size by eliminating/skipping "many editions" works
 // bar graph for progress?
 // output
 //  missing: let user pick columns?
