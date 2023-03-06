@@ -986,7 +986,12 @@ class Controller implements UIRequestReceiver {
       throw `unhandled input request type: ${type}`;
     }
     async function getInputInfo(csv: string): Promise<Input['info']> {
-      const { exclusive, shelfCounts } = await shelfInfo(csv);
+      const { exclusive, shelfCounts } = await shelfInfo(csv).catch(e => {
+        const a = new Alert;
+        a.title = 'Error Parsing Input';
+        a.message = 'Are you sure that was a Goodreads export?';
+        return a.presentAlert().then(() => Promise.reject(e), () => Promise.reject(e));
+      });
       const items = Array.from(exclusive).reduce((total, shelf) => total + (shelfCounts.get(shelf) ?? 0), 0);
       const shelfItems = Object.fromEntries(Array.from(shelfCounts.entries()).sort((a, b) => {
         if (a[0] == b[0]) return 0;
@@ -1328,8 +1333,6 @@ await store.write();
 
 // (known) BUGS
 // log rejections?
-// when given a non-CSV file, nothing happens
-//  show an error alert?
 
 // TODO
 // test mode
