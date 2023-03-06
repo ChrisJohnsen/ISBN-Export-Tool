@@ -1345,7 +1345,6 @@ await store.write();
 // STYLING
 // styling? default in dark mode is white on black, buttons are blue on black header is bold
 //  something special for "need to pick something here"?
-// long description when first starting (togglable via empty row?)
 
 // FUTURE
 // break shelves into exclusive & other?
