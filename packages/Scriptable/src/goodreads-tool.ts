@@ -1034,30 +1034,43 @@ class Controller implements UIRequestReceiver {
 
     } else if (command.name == 'GetISBNs') {
 
-      if ((production && this.testMode || !production && !this.testMode) && command.editions.length > 0) {
-        const x = this.testMode
-          ? {
-            title: 'Warning: Test Mode Active',
-            message: 'External services for Get ISBNs "Other Editions" will not be contacted, fake data will be returned instead.',
-            continue: 'Continue in Test Mode',
-            switch: 'Switch to Normal Mode and Continue',
-          }
-          : {
-            title: 'Warning: Test Mode Inactive',
-            message: 'Actual requests will be made to external services for Get ISBNs "Other Editions".',
-            continue: 'Continue in Normal Mode',
-            switch: 'Switch to Test Mode and Continue',
-          };
-        const a = new Alert;
-        a.title = x.title;
-        a.message = x.message;
-        a.addAction(x.continue);
-        a.addAction(x.switch);
-        a.addCancelAction('Do Not Run Get ISBNs');
-        const action = await a.presentAlert();
-        if (action == -1) return;
-        else if (action == 1)
-          this.testMode = !this.testMode;
+      if (command.editions.length > 0) {
+        if (production && this.testMode || !production && !this.testMode) {
+          const x = this.testMode
+            ? {
+              title: 'Warning: Test Mode Active',
+              message: 'External services for Get ISBNs "Other Editions" will not be contacted, fake data will be returned instead.',
+              continue: 'Continue in Test Mode',
+              switch: 'Switch to Normal Mode and Continue',
+            }
+            : {
+              title: 'Warning: Test Mode Inactive',
+              message: 'Actual requests will be made to external services for Get ISBNs of "Other Editions".',
+              continue: 'Continue in Normal Mode',
+              switch: 'Switch to Test Mode and Continue',
+            };
+          const a = new Alert;
+          a.title = x.title;
+          a.message = x.message;
+          a.addAction(x.continue);
+          a.addAction(x.switch);
+          a.addCancelAction('Do Not Run Get ISBNs');
+          const action = await a.presentAlert();
+          if (action == -1) return;
+          else if (action == 1)
+            this.testMode = !this.testMode;
+        }
+        const wv = new WebView;
+        await wv.loadHTML('');
+        const online = await wv.evaluateJavaScript('navigator.onLine');
+        if (!online) {
+          const a = new Alert;
+          a.title = 'Device Offline?';
+          a.message = 'This device appears to be offline.\n\nPlease make sure you have an Internet connection before doing Get ISBNs of Other Editions.';
+          a.addCancelAction('Okay');
+          await a.presentAlert();
+          return;
+        }
       }
 
       const fetcher: Fetcher = (fetcher => {
@@ -1102,6 +1115,7 @@ class Controller implements UIRequestReceiver {
             if (ev == 'abort fn') {
               this.abortEditions = report.fn;
             } else if (ev == 'rejection') {
+              console.warn('GetISBNS Other Editions reported rejection');
               console.error(report.reason);
             } else if (ev == 'service cache hit') {
               infoFor(report.service).hits++;
@@ -1241,8 +1255,16 @@ import { equivalentISBNs } from 'utils';
 
 // generate fake data for the "editions of" parsers to consume so we do not make real requests while testing
 async function fakeFetcher(url: string): Promise<FetchResult> {
-  const randomInt = (n: number) => Math.trunc(Math.random() * n);
-  await new Promise<void>(res => Timer.schedule(randomInt(200) * 1 + 200, false, res));
+  const makeReplacementRequests = false;
+  if (makeReplacementRequests) {
+    const s = Date.now();
+    const furl = /openlibrary/.test(url) ? 'https://httpbin.org/delay/0' : 'https://httpbun.com/delay/0';
+    await new Request(furl).loadString();
+    console.log(Date.now() - s);
+  } else {
+    const randomInt = (n: number) => Math.trunc(Math.random() * n);
+    await new Promise<void>(res => Timer.schedule(randomInt(200) * 1 + 200, false, res));
+  }
   const isbnSearchMatch = url.match(/[?&]q=([ -\dxX]*)/);
   if (isbnSearchMatch) {
     const isbns = equivalentISBNs(isbnSearchMatch[1]);
@@ -1305,16 +1327,7 @@ await controller.abortIfRunning();
 await store.write();
 
 // (known) BUGS
-// doing real fetches with OL:S and LT:TI enabled caused errors
-//  in Progress, saw "active" numbers increasing beyond 10 (built-in parallelism limit)
-//    eventually some began to show as finished, and when the summary came in, both services reported fewer fetches than intended queries
-//  console.error reports about network something (unavailable? restricted? disabled? didn't copy it down)
-//  Scriptable limiting the network connections?
-//    would have often had two requests active at a time since some queries would go through each throttle (OL and LT)
-//  with just OL:S enabled it worked okay
-//    only 10 "active" at a time (really, waiting in the throttle scheduler)
-//    probably only one request active at a time (due to throttle scheduler), but if one took more than 1s, another would have hit its schedule and launched before the long running one finished
-//  change parallelism limit to 1 for Scriptable?
+// log rejections?
 // when given a non-CSV file, nothing happens
 //  show an error alert?
 
