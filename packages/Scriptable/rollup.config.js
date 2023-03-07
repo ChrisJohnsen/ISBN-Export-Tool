@@ -11,10 +11,10 @@ export default async cliOptions => {
   const production = !!cliOptions.configProduction;
   const config = [
     {
-      input: 'src/goodreads-tool.ts',
+      input: 'src/isbn-tool.ts',
       output: [
-        { file: 'dist/goodreads-tool.js' },
-        iCloud && { file: 'iCloud/Goodreads Tool.js' },
+        { file: 'dist/isbn-tool.js' },
+        iCloud && { file: 'iCloud/ISBN Tool.js' },
       ],
       external: [],
       plugins: [

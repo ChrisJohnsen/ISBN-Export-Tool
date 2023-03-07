@@ -199,7 +199,7 @@ const cli: Cli<CacheContext> = Cli.from([
   MissingISBNs,
   GetISBNs,
   CacheClear,
-], { binaryName: 'goodreads-tool', binaryLabel: 'Goodreads export tools', binaryVersion: version });
+], { binaryName: 'isbn-tool', binaryLabel: 'ISBN export tools', binaryVersion: version });
 
 // "editions of" helpers
 

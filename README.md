@@ -1,6 +1,11 @@
-# Goodreads export tools
+# ISBN export tools
 
 Currently under development. Existing features:
+
+* Understands Goodreads export format (CSV with a specific set of columns) and
+  its "shelf" system.
+
+    Suggest your favorite book list format for support in future versions!
 
 * List `to-read` entries that don't have ISBNs.
 
@@ -8,50 +13,49 @@ Currently under development. Existing features:
     is some version that does not haven an ISBN (often: eBook, audio). Such a
     list could be used to manaully "fix" the active edition.
 
-        node goodreads-tool.js missing-ISBNS path/to/goodreads-export.csv
+        node isbn-tool.js missing-ISBNS path/to/export.csv
 
 * Extract a list of ISBNs from shelved items.
 
-    This can be imported by some library interfaces. Doing so can let you review
-    which books in (the exported snapshot of) your Goodreads (e.g.) `to-read`
-    shelf are available through a particular library.
+    Lists of ISBNs can be imported by some library interfaces. Doing so can let
+    you review which books from your exported data are available through a
+    particular library.
 
-        node goodreads-tool.js get-ISBNS path/to/goodreads-export.csv to-read
+        node isbn-tool.js get-ISBNS path/to/export.csv to-read
 
-    If Goodreads supplies an ISBN-13 and ISBN-10, then only the ISBN-13 will be
-    extracted.
-
-    * Optionally include both the ISBN-13 and ISBN-10 of each shelved item:
-
-            node goodreads-tool.js get-ISBNS path/to/goodreads-export.csv to-read --both
-
-        ISBN-10s are a proper subset of ISBN-13s, so there usually isn't a need
-        for both, but maybe the system you want to send the generated list to
-        doesn't know (how) to convert between them.
+    ISBN-13 values are preferred over ISBN-10 values.
 
     * Optionally ask external web services for the ISBNs of other editions of
-      the work that is shelved in Goodreads. The supported web services are Open
-      Library (two methods, probably equivalent), and LibraryThing (one method).
-      Requests are rate limited, so it may take a second or two to retrieve the
-      result ISBNs.
+      the ISBN that was extracted from the exported data. The supported web
+      services are Open Library (two methods, probably equivalent), and
+      LibraryThing (one method). Requests are rate limited, so it may take a
+      second or two to retrieve the result ISBNs.
 
-            node goodreads-tool.js get-ISBNS path/to/goodreads-export.csv to-read --editions
+            node isbn-tool.js get-ISBNS path/to/export.csv to-read --editions
 
         This only produces ISBN-13s, but can be combined with `--both` if you
         want both of them. The "editions of" relation is cached locally to avoid
         spamming the web services.
 
         This can be handy if the system to which you'll be giving the extracted
-        ISBNs does not automatically look for other editions of a particular work
-        (maybe you shelved the paperback edition on Goodreads, the library doesn't
-        have it, but does have a hardback edition).
+        ISBNs does not automatically look for other editions of a particular
+        work (maybe you saved the paperback edition, the library doesn't have
+        it, but does have a hardback edition).
+
+    * Optionally include both the ISBN-13 and ISBN-10 of each shelved item:
+
+            node isbn-tool.js get-ISBNS path/to/export.csv to-read --both
+
+        ISBN-10s are a proper subset of ISBN-13s, so there usually isn't a need
+        for both, but maybe the system you want to send the generated list to
+        doesn't know (how) to convert between them.
 
 # Development
 
 This software is developed with Node.js using the IDE and tooling described
-below. It is intended to eventually run in the iOS Scriptable app, but also
-directly in Node.js for easier testing of the functionality that can be shared.
-A webpage-based version should also be possible, but is not a primary focus.
+below. It runs in the iOS Scriptable app, and in Node.js (for easier testing of
+the functionality that can be shared). A webpage-based version should also be
+possible, but is not a primary focus.
 
 ## Editor/IDE
 

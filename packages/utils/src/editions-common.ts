@@ -11,7 +11,7 @@ export type BareFetchResult = string | { status: number, statusText: string };
 export type FetchResult = MaybeCacheControl<BareFetchResult>;
 
 export function fetcherUserAgent(platform?: string) {
-  return `GoodreadsTool/${version} (${platform ? platform + '; ' : ''}+mailto:seventh_winsome.0u@icloud.com)`;
+  return `ISBNExportTool/${version} (${platform ? platform + '; ' : ''}+mailto:seventh_winsome.0u@icloud.com)`;
 }
 
 export class ServerThrottle {

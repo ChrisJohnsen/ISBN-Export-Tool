@@ -2766,24 +2766,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"goodreads-export-tools@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "goodreads-export-tools@workspace:."
-  dependencies:
-    "@typescript-eslint/eslint-plugin": "npm:^5.49.0"
-    "@typescript-eslint/parser": "npm:^5.49.0"
-    esbuild: "npm:^0.17.4"
-    eslint: "npm:^8.32.0"
-    eslint-plugin-jest: "npm:^27.2.1"
-    eslint-plugin-jest-formatting: "npm:^3.1.0"
-    jest: "npm:^29.4.0"
-    jest-config: "npm:^29.4.0"
-    jest-watch-suspend: "npm:^1.1.2"
-    rollup: "npm:^3.10.1"
-    typescript: "npm:^4.9.4"
-  languageName: unknown
-  linkType: soft
-
 "graceful-fs@npm:^4.2.6, graceful-fs@npm:^4.2.9":
   version: 4.2.10
   resolution: "graceful-fs@npm:4.2.10"
@@ -3067,6 +3049,24 @@ __metadata:
   checksum: 763e33689433924775b560e63fb7c0f7fae6cbc54fd9c410bb3536341b96fca85ce26720ba13ffb9b46446bdf540308771fe5910462b47b1e7d4c42dbd230f46
   languageName: node
   linkType: hard
+
+"isbn-export-tools@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "isbn-export-tools@workspace:."
+  dependencies:
+    "@typescript-eslint/eslint-plugin": "npm:^5.49.0"
+    "@typescript-eslint/parser": "npm:^5.49.0"
+    esbuild: "npm:^0.17.4"
+    eslint: "npm:^8.32.0"
+    eslint-plugin-jest: "npm:^27.2.1"
+    eslint-plugin-jest-formatting: "npm:^3.1.0"
+    jest: "npm:^29.4.0"
+    jest-config: "npm:^29.4.0"
+    jest-watch-suspend: "npm:^1.1.2"
+    rollup: "npm:^3.10.1"
+    typescript: "npm:^4.9.4"
+  languageName: unknown
+  linkType: soft
 
 "isbn3@npm:^1.1.30":
   version: 1.1.30

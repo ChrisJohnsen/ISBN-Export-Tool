@@ -441,7 +441,7 @@ type ByNames<T extends { name: PropertyKey }> = { [N in T['name']]: Extract<T, {
 
 class UITableUI implements UI {
   private table: UITable = new UITable;
-  private builder = new UITableBuilder(this.table, 'Goodreads Export ISBN Tool');
+  private builder = new UITableBuilder(this.table, 'ISBN Export Tool');
   private presented = false;
   private state: UIState = {};
   constructor(private controller: UIRequestReceiver, private savedDataObject: Record<string, unknown>) {
@@ -450,6 +450,8 @@ class UITableUI implements UI {
     // XXX validation typanion?
     this.previousCommand = restoredData.command as any;
     this.previousCommands = restoredData.commands as any;
+    if (!isStore(this.previousCommands))
+      this.previousCommands = {};
     /* eslint-enable */
     this.build();
   }
@@ -574,13 +576,17 @@ class UITableUI implements UI {
   }
   private buildPickInput(): void {
     this.builder.addSubtitleHelpRow('Input Selection', [
-      'This program reads exported data from Goodreads to let you access the ISBNs of your shelved items in various ways:',
-      'Check items on a shelf for missing ISBNs, or',
-      'Extract ISBNs from shelved items (optionally including ISBNS of other editions of your shelved items).',
+      'This program reads exported book list data to let you access the ISBNs of your books in various ways:',
+      'Check exported listings for missing ISBNs, and',
+      'Extract ISBNs from exported data (optionally including ISBNS of other editions of the listed book).',
       '',
+      'Currently, Goodreads export format (CSV with a specific set of columns) and its "shelf" system are supported.',
+      'Suggest your favorite book list format for support in future versions!',
+      '',
+      'Goodreads Export Tips',
       'Exporting your Goodreads can be done from the Goodreads website:',
       'Login,',
-      'Tap/click the "Desktop version" link in the footer of the website,',
+      'If on a mobile device, tap/click the "Desktop version" link in the footer of the website,',
       'Tap/click on the "My Books" tab,',
       'In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link',
       'On the Import/Export page tap/click "Export Library" button at the top of the page.',
@@ -591,7 +597,7 @@ class UITableUI implements UI {
       'When you have your data ready, you can tell this program where to find it using the selections on this Input screen.'
     ]);
     this.builder.addEmptyRow();
-    this.builder.addTextRow('Where is your Goodreads export data?');
+    this.builder.addTextRow('Where is your export data?');
     this.builder.addEmptyRow();
     if (this.previousInput) {
       const prev = this.previousInput;
@@ -989,7 +995,7 @@ class Controller implements UIRequestReceiver {
       const { exclusive, shelfCounts } = await shelfInfo(csv).catch(e => {
         const a = new Alert;
         a.title = 'Error Parsing Input';
-        a.message = 'Are you sure that was a Goodreads export?';
+        a.message = 'Are you sure that was a CSV data export?';
         return a.presentAlert().then(() => Promise.reject(e), () => Promise.reject(e));
       });
       const items = Array.from(exclusive).reduce((total, shelf) => total + (shelfCounts.get(shelf) ?? 0), 0);

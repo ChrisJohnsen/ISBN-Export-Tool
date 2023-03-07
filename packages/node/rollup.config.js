@@ -8,15 +8,15 @@ const plugins = [node_resolve(), commonjs(), esbuild({ target: "es2022" })];
 
 export default async cliOptions => {
   const config = {
-    input: 'src/goodreads-tool.ts',
+    input: 'src/isbn-tool.ts',
     output: [
       {
-        file: 'dist/goodreads-tool-bundled.mjs',
+        file: 'dist/isbn-tool-bundled.mjs',
         inlineDynamicImports: true,
         sourcemap: true,
       },
       {
-        file: 'dist/goodreads-tool-bundled.cjs',
+        file: 'dist/isbn-tool-bundled.cjs',
         format: 'cjs',
         inlineDynamicImports: true,
         sourcemap: true,
