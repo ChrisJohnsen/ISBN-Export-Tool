@@ -7,9 +7,9 @@
     "@rollup/plugin-node-resolve": "^15.0.1",
     "@rollup/plugin-terser": "^0.4.0",
     "@rollup/plugin-virtual": "^3.0.1",
-    "@scriptable-ios/eslint-config": "^1.6.5",
-    "@types/scriptable-ios": "^1.6.5",
-    "esbuild": "^0.17.4",
+    "@scriptable-ios/eslint-config": "^1.7.0",
+    "@types/scriptable-ios": "^1.7.0",
+    "esbuild": "^0.17.11",
     "rollup-plugin-consts": "^1.1.0",
     "rollup-plugin-esbuild": "^5.0.0"
   },

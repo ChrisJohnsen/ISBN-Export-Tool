@@ -9,7 +9,6 @@ export function normalizeISBN(isbnish: string): string {
 }
 
 import { parse } from 'isbn3';
-/// <reference path='./isbn3.d.ts'/>
 
 /**
  * Returns true if the given string is a valid ISBN.

@@ -6,13 +6,13 @@
     "@rollup/plugin-commonjs": "^24.0.1",
     "@rollup/plugin-node-resolve": "^15.0.1",
     "@rollup/plugin-terser": "^0.4.0",
-    "@types/node": "^18.11.18",
-    "esbuild": "^0.17.4",
+    "@types/node": "^18.14.6",
+    "esbuild": "^0.17.11",
     "rollup-plugin-esbuild": "^5.0.0"
   },
   "dependencies": {
-    "clipanion": "^3.2.0-rc.14",
-    "lowdb": "^5.0.5",
+    "clipanion": "^3.2.0",
+    "lowdb": "^5.1.0",
     "node-fetch": "^3.3.0",
     "utils": "workspace:^"
   }
