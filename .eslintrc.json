@@ -5,7 +5,7 @@
     "sourceType": "module"
   },
   "extends": [ "eslint:recommended" ],
-  "ignorePatterns": [ "**/dist/**" ],
+  "ignorePatterns": [ "**/dist/**", "**/iCloud" ],
   "overrides": [
     {
       "files": [ "**.cjs" ],
