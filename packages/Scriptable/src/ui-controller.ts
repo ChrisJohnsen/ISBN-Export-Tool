@@ -2,7 +2,7 @@
 
 import production from 'consts:production';
 import { assertNever, isObject } from './ts-utils.js';
-import { basename, Log, ReadWrite, Store } from './scriptable-utils.js';
+import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-utils.js';
 import { Command, CommandSummary, GetISBNsSummary, Input, RequestedInput, RequestedOutput, UI, UIRequestReceiver } from './ui-types.js';
 import { UITableBuilder } from './uitable-builder.js';
 
@@ -278,11 +278,13 @@ export class Controller implements UIRequestReceiver {
     }
     const type = output.type;
     const { filename, output: out } = getOutput(this.output);
-    if (type == 'view')
+    if (type == 'view') {
 
-      QuickLook.present(out, true);
+      const file = localTempfile(filename, out);
+      await QuickLook.present(file.pathname, true);
+      await file.remove();
 
-    else if (type == 'clipboard') {
+    } else if (type == 'clipboard') {
 
       Pasteboard.copyString(out);
       infoAlert('Copied!', 'The output has been copied to the clipboard.');

@@ -13,6 +13,16 @@ export function dirname(path: string) {
   return dirSlash.replace(/[/]*$/, '');
 }
 
+export function localTempfile(filename: string, contents?: string | Data): ReadWrite {
+  const rw = new ReadWrite(lfm.joinPath(lfm.temporaryDirectory(), filename));
+  if (contents)
+    if (typeof contents == 'string')
+      rw.writeString(contents);
+    else
+      rw.write(contents);
+  return rw;
+}
+
 /**
  * Generate a pathname (with the given extension) "next to" the given pathname.
  *
@@ -68,25 +78,31 @@ export class Log {
 }
 
 export class ReadWrite {
-  constructor(private pathname: string) { }
+  constructor(private _pathname: string) { }
+  get pathname(): string {
+    return this._pathname;
+  }
   async exists(): Promise<boolean> {
-    return lfm.fileExists(this.pathname);
+    return lfm.fileExists(this._pathname);
   }
   async read(): Promise<Data> {
-    if (lfm.fileExists(this.pathname)) {
-      await lfm.downloadFileFromiCloud(this.pathname);
-      return lfm.read(this.pathname);
+    if (lfm.fileExists(this._pathname)) {
+      await lfm.downloadFileFromiCloud(this._pathname);
+      return lfm.read(this._pathname);
     }
     return Data.fromString('');
   }
   async write(data: Data): Promise<void> {
-    lfm.write(this.pathname, data);
+    lfm.write(this._pathname, data);
   }
   async readString(): Promise<string> {
     return (await this.read()).toRawString();
   }
   async writeString(str: string) {
     return this.write(Data.fromString(str));
+  }
+  async remove(): Promise<void> {
+    return lfm.remove(this._pathname);
   }
 }
 
