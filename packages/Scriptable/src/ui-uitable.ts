@@ -2,7 +2,6 @@
 
 import production from 'consts:production';
 import { assertNever, isObject } from './ts-utils.js';
-import { AllEditionsServices, EditionsService } from 'utils';
 import { Command, CommandSummary, GetISBNs, Input, MissingISBNs, UI, UIRequestReceiver } from './ui-types.js';
 import { symbolCell, textCell, UITableBuilder } from './uitable-builder.js';
 
@@ -74,6 +73,13 @@ export class UITableUI implements UI {
     if (!isObject(this.previousCommands))
       this.previousCommands = {};
     /* eslint-enable */
+    this.controller.requestEditionsServices(this);
+  }
+  private enabledEditionsServices: Set<string> = new Set;
+  editionsServices(enabledServices: readonly string[]): void {
+    this.enabledEditionsServices = new Set(enabledServices);
+    this.saveState();
+    this.state = this.validateState(this.state.input, false, this.state.command, this.state.progress, this.state.summary);
     this.build();
   }
   input(input: Input): void {
@@ -144,6 +150,10 @@ export class UITableUI implements UI {
       } else assertNever(command);
     }
 
+    if (command.name == 'GetISBNs') {
+      command.editions = command.editions.filter(s => this.enabledEditionsServices.has(s));
+    }
+
     function validateReadyCommand(command: PartialCommand): Command | undefined {
       if (typeof command.shelf == 'undefined') return void 0;
       return { ...command, shelf: command.shelf };
@@ -189,7 +199,7 @@ export class UITableUI implements UI {
     const button = empty.addButton(production ? ' ' : 'DEBUG');
     button.centerAligned();
     button.onTap = () => {
-      this.controller.debugUI();
+      this.controller.debugUI(this);
     };
     button.widthWeight = 2;
     empty.addText('').widthWeight = 4;
@@ -304,9 +314,9 @@ export class UITableUI implements UI {
 
       const command = this.state.command;
       const editionsEnabled = command.editions.length != 0;
-      const editionsToggle = () => this.setCommand({ ...command, editions: editionsEnabled ? [] : Array.from(AllEditionsServices) });
+      const editionsToggle = () => this.setCommand({ ...command, editions: editionsEnabled ? [] : Array.from(this.enabledEditionsServices) });
       const bothToggle = () => this.setCommand({ ...command, both: !command.both });
-      const serviceToggle = (service: EditionsService) => {
+      const serviceToggle = (service: string) => {
         let editions;
         if (command.editions.includes(service))
           editions = command.editions.filter(s => s != service);
@@ -322,9 +332,9 @@ export class UITableUI implements UI {
         : 'The ISBNs will only come from the imported data.';
       this.builder.addIndentRow(editionsDesc, { height: 88 });
       if (editionsEnabled)
-        AllEditionsServices.forEach(service => {
+        this.enabledEditionsServices.forEach(service => {
           const enabled = command.editions.includes(service);
-          this.builder.addCheckableRow(service, enabled, { onSelect: () => serviceToggle(service as EditionsService) });
+          this.builder.addCheckableRow(service, enabled, { onSelect: () => serviceToggle(service) });
         });
       this.builder.addCheckableRow('Get Both ISBN-13 and -10?', command.both, { onSelect: bothToggle });
       const bothDesc = command.both

@@ -6,7 +6,7 @@ import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-uti
 import { Command, CommandSummary, GetISBNsSummary, Input, RequestedInput, RequestedOutput, UI, UIRequestReceiver } from './ui-types.js';
 import { UITableBuilder } from './uitable-builder.js';
 
-import { type EditionsService, type Fetcher, getISBNs, missingISBNs, type Row, shelfInfo } from 'utils';
+import { type EditionsService, type Fetcher, getISBNs, missingISBNs, type Row, shelfInfo, AllEditionsServices } from 'utils';
 import { toCSV } from 'utils';
 import { pick } from 'utils';
 
@@ -16,9 +16,22 @@ type CommandOutput =
   ;
 
 export class Controller implements UIRequestReceiver {
-  constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string) { }
+  constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string) {
+    this.enabledEditionsServices = new Set(AllEditionsServices);
+    this.enabledEditionsServices.delete('Open Library WorkEditions');
+  }
+  private enabledEditionsServices: Set<EditionsService>;
+  requestEditionsServices(ui: UI): void {
+    ui.editionsServices(Array.from(this.enabledEditionsServices));
+  }
+  private enableEditionsService(service: EditionsService, enable = true) {
+    if (enable)
+      this.enabledEditionsServices.add(service);
+    else
+      this.enabledEditionsServices.delete(service);
+  }
   private testMode = !production;
-  async debugUI() {
+  async debugUI(ui: UI) {
     const table = new UITable;
     table.showSeparators = true;
     const builder = new UITableBuilder(table, 'Debug UI');
@@ -33,11 +46,18 @@ export class Controller implements UIRequestReceiver {
         + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
         + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
         , { height: 149 });
+      const olweStatus = this.enabledEditionsServices.has('Open Library WorkEditions') ? 'enabled' : 'disabled';
+      const olweToggle = () => this.enableEditionsService('Open Library WorkEditions', !this.enabledEditionsServices.has('Open Library WorkEditions'));
+      builder.addRowWithDescribedCells([
+        { type: 'text', title: 'OL:WE status', align: 'left' },
+        { type: 'text', title: olweStatus, align: 'right' },
+      ], { onSelect: () => { olweToggle(); build() } });
 
       reload && table.reload();
     };
     build(false);
     await table.present(false);
+    ui.editionsServices(Array.from(this.enabledEditionsServices));
   }
   private csv?: string;
   async requestInput(ui: UI, inputReq: RequestedInput): Promise<void> {
@@ -194,9 +214,11 @@ export class Controller implements UIRequestReceiver {
         return info;
       };
 
+      const onlyEditionsServices = (s: string): s is EditionsService => (AllEditionsServices as Set<string>).has(s);
+
       const isbns = await getISBNs(this.csv, command.shelf, {
         otherEditions: command.editions.length != 0 && {
-          services: new Set(command.editions),
+          services: new Set(command.editions.filter(onlyEditionsServices)),
           cacheData,
           fetcher,
           reporter: report => {
