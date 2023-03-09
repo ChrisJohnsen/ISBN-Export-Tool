@@ -170,17 +170,6 @@ export class Controller implements UIRequestReceiver {
           else if (action == 1)
             this.testMode = !this.testMode;
         }
-        const wv = new WebView;
-        await wv.loadHTML('');
-        const online = await wv.evaluateJavaScript('navigator.onLine');
-        if (!online) {
-          const a = new Alert;
-          a.title = 'Device Offline?';
-          a.message = 'This device appears to be offline.\n\nPlease make sure you have an Internet connection before doing Get ISBNs of Other Editions.';
-          a.addCancelAction('Okay');
-          await a.presentAlert();
-          return;
-        }
       }
 
       const fetcher: Fetcher = (fetcher => {

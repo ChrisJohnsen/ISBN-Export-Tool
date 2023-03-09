@@ -354,6 +354,18 @@ export class UITableUI implements UI {
       this.builder.addForwardRow('Start', async () => {
         if (command.name == 'GetISBNs' && command.editions.length > 0) {
 
+          const wv = new WebView;
+          await wv.loadHTML('');
+          const online = await wv.evaluateJavaScript('navigator.onLine');
+          if (!online) {
+            const a = new Alert;
+            a.title = 'Device Offline?';
+            a.message = 'This device appears to be offline.\n\nPlease make sure you have an Internet connection before doing Get ISBNs of Other Editions.';
+            a.addCancelAction('Okay');
+            await a.presentAlert();
+            return;
+          }
+
           const a = new Alert;
           a.title = '"Other Editions" Takes Time';
           a.message = 'Due to having to use external services, we limit how quickly we issue queries for other edition ISBNs. '
