@@ -513,6 +513,7 @@ export class UITableUI implements UI {
       const shelf = this.state.command.shelf;
       const items = this.state.input.info.shelfItems[shelf] ?? -1;
       this.builder.addTextRow(`From ${items} "${shelf}" items,`);
+      this.builder.addTextRow(`found ${summary.itemsWithISBN} items with an ISBN,`);
       this.builder.addTextRow(`${summary.totalISBNs} total ISBNs extracted${optionsDescription(command.editions.length > 0, command.both)}.`, { height: 88 });
 
       if (summary.editionsInfo) {

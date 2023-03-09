@@ -13,7 +13,8 @@ export type GetISBNsSummary = {
     fetches: number,
     fetchRate: number,
     fetchStats: { min: number, median: number, max: number }
-  } }, totalISBNs: number
+    }
+  }, itemsWithISBN: number, totalISBNs: number
 };
 export type CommandSummary = MissingISBNsSummary | GetISBNsSummary;
 

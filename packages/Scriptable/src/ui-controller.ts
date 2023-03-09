@@ -287,7 +287,7 @@ export class Controller implements UIRequestReceiver {
       const allIsbns = both(await editions(isbns));
 
       this.output = { name: 'GetISBNs', shelf: command.shelf, isbns: allIsbns };
-      summary = { name: 'GetISBNs', totalISBNs: allIsbns.size, editionsInfo };
+      summary = { name: 'GetISBNs', itemsWithISBN: isbns.size, totalISBNs: allIsbns.size, editionsInfo };
 
     }
     else summary = assertNever(command);
