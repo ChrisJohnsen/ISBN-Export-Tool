@@ -339,9 +339,7 @@ export class UITableUI implements UI {
       this.builder.addCheckableRow('Get Both ISBN-13 and -10?', command.both, { onSelect: bothToggle });
       const bothDesc = command.both
         ? 'The generated ISBNs will include both the ISBN-13 and ISBN-10 versions of each included ISBN.'
-        : editionsEnabled
-          ? 'The generated ISBNs will be the ISBN-13 version of each included ISBN.'
-          : 'The generated ISBNs will come directly from the imported data: ISBN-13 if present, otherwise ISBN-10.';
+        : 'The generated ISBNs will be the ISBN-13 version of each included ISBN.';
       this.builder.addIndentRow(bothDesc, { height: 88 });
 
     } else assertNever(this.state.command);

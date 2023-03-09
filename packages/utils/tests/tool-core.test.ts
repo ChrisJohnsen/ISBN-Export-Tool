@@ -1,6 +1,6 @@
 import { describe, test, expect, jest, afterEach } from '@jest/globals';
 import { outdent } from 'outdent';
-import { AllEditionsServices, CacheControl, EditionsService, equivalentISBNs, Fetcher, getISBNs, missingISBNs, normalizeISBN, ProgressReport, Row, shelfInfo } from 'utils';
+import { AllEditionsServices, bothISBNsOf, CacheControl, EditionsService, equivalentISBNs, Fetcher, getEditionsOf, getISBNs, missingAndISBNs, missingISBNs, normalizeISBN, parseCSVRows, ProgressReport, Row, rowsShelvedAs, shelfInfo } from 'utils';
 
 describe('missingISBNs', () => {
 
@@ -917,18 +917,8 @@ function makeFakeFetcher(data: Record<string, string[]>): Fetcher {
 
 describe('shelfInfo', () => {
 
-  test('not really CSV', async () => {
-    const csv = outdent`
-      This is just a string. It is
-      not particularly CSV-like, but it
-      might be interpreted like that.
-    `;
-
-    await expect(shelfInfo(csv)).rejects.toBeDefined();
-  });
-
   test('no Bookshelves column', async () => {
-    const csv = outdent`
+    const rows = await parseCSVRows(outdent`
       id,ISBN13
       100,100000
       101,
@@ -936,13 +926,13 @@ describe('shelfInfo', () => {
       103,103000
       104,"=""104000"""
       105,105000
-    `;
+    `);
 
-    await expect(shelfInfo(csv)).rejects.toBeDefined();
+    await expect(shelfInfo(rows)).rejects.toBeDefined();
   });
 
   test('no Exclusive Shelf column', async () => {
-    const csv = outdent`
+    const rows = await parseCSVRows(outdent`
       id,Bookshelves
       100,to-read
       101,read
@@ -950,9 +940,9 @@ describe('shelfInfo', () => {
       103,library
       104,"kindle,to-read"
       105,currently-reading
-    `;
+    `);
 
-    const { exclusive, shelfCounts } = await shelfInfo(csv);
+    const { exclusive, shelfCounts } = await shelfInfo(rows);
 
     expect(exclusive).toStrictEqual(new Set);
     expect(shelfCounts).toStrictEqual(new Map([
@@ -966,7 +956,7 @@ describe('shelfInfo', () => {
   });
 
   test('no read only in Exclusive Shelf columns', async () => {
-    const csv = outdent`
+    const rows = await parseCSVRows(outdent`
       id,Bookshelves,Exclusive Shelf
       100,to-read,to-read
       101,,read
@@ -974,9 +964,9 @@ describe('shelfInfo', () => {
       103,library,read
       104,"kindle,to-read",to-read
       105,currently-reading,currently-reading
-    `;
+    `);
 
-    const { exclusive, shelfCounts } = await shelfInfo(csv);
+    const { exclusive, shelfCounts } = await shelfInfo(rows);
 
     expect(exclusive).toStrictEqual(new Set(['to-read', 'read', 'did-not-finish', 'currently-reading']));
     expect(shelfCounts).toStrictEqual(new Map([
@@ -986,6 +976,132 @@ describe('shelfInfo', () => {
       ['library', 2],
       ['kindle', 1],
       ['currently-reading', 1]
+    ]));
+  });
+});
+
+describe('rowsShelvedAs', () => {
+  test('must have Bookshelves', () => {
+    const rows = [
+      { id: '1' },
+      { id: '2' },
+    ];
+
+    expect(() => rowsShelvedAs(rows, '')).toThrow();
+  });
+
+  test('match from Bookshelves', () => {
+    const rows = [
+      { id: '1', Bookshelves: '' },
+      { id: '2', Bookshelves: 'shelf' },
+      { id: '3', Bookshelves: 'shelf 1' },
+      { id: '4', Bookshelves: 'shelf 1,shelf 2' },
+      { id: '5', Bookshelves: 'shelf 1, shelf 2' },
+      { id: '6', Bookshelves: 'shelf 1, shelf 2 , shelf 3' },
+    ];
+
+    expect(rowsShelvedAs(rows, '')).toStrictEqual([]);
+    expect(rowsShelvedAs(rows, 'shelf').map(r => r.id)).toStrictEqual(['2']);
+    expect(rowsShelvedAs(rows, 'shelf 1').map(r => r.id)).toStrictEqual('3,4,5,6'.split(','));
+    expect(rowsShelvedAs(rows, 'shelf 2').map(r => r.id)).toStrictEqual('4,5,6'.split(','));
+    expect(rowsShelvedAs(rows, 'shelf 3').map(r => r.id)).toStrictEqual('6'.split(','));
+  });
+
+  test('match from Exclusive Shelf', () => {
+    const rows = [
+      { id: '1', 'Exclusive Shelf': '', Bookshelves: '' },
+      { id: '2', 'Exclusive Shelf': '', Bookshelves: 'shelf' },
+      { id: '3', 'Exclusive Shelf': 'read', Bookshelves: 'shelf 1' },
+      { id: '4', 'Exclusive Shelf': 'to-read', Bookshelves: 'to-read,shelf 1,shelf 2' },
+      { id: '5', 'Exclusive Shelf': 'read', Bookshelves: 'shelf 1, shelf 2' },
+      { id: '6', 'Exclusive Shelf': '', Bookshelves: 'shelf 1, shelf 2 , shelf 3' },
+    ];
+
+    expect(rowsShelvedAs(rows, '')).toStrictEqual([]);
+    expect(rowsShelvedAs(rows, 'shelf').map(r => r.id)).toStrictEqual(['2']);
+    expect(rowsShelvedAs(rows, 'shelf 1').map(r => r.id)).toStrictEqual('3,4,5,6'.split(','));
+    expect(rowsShelvedAs(rows, 'shelf 2').map(r => r.id)).toStrictEqual('4,5,6'.split(','));
+    expect(rowsShelvedAs(rows, 'shelf 3').map(r => r.id)).toStrictEqual('6'.split(','));
+
+    expect(rowsShelvedAs(rows, 'read').map(r => r.id)).toStrictEqual('3,5'.split(','));
+    expect(rowsShelvedAs(rows, 'to-read').map(r => r.id)).toStrictEqual('4'.split(','));
+  });
+});
+
+describe('missingAndISBNs', () => {
+  test('missing, empty ISBN13/ISBN, quoted ISBN13/ISBN', () => {
+    const rows: Row[] = [
+      { id: '1', },
+      { id: '2', ISBN13: '' },
+      { id: '3', ISBN: '' },
+      { id: '4', ISBN13: '', ISBN: '' },
+      { id: '5', ISBN13: '9780000005007' },
+      { id: '6', ISBN: '0000006009' },
+      { id: '7', ISBN13: '978 000000700 1', ISBN: '0 000007005' },
+      { id: '8', ISBN13: '="978000000800-8"' },
+      { id: '9', ISBN: '="0 000009008"' },
+      { id: 'A', ISBN13: '="978 0000010001"', ISBN: '="0 0000-1000 6"' },
+    ];
+
+    const r = missingAndISBNs(rows);
+
+    expect(r.missingISBN.map(r => r.id)).toStrictEqual('1,2,3,4'.split(','));
+    expect(r.isbns).toStrictEqual(new Set([
+      '9780000005007',
+      '9780000006004',
+      '9780000007001',
+      '9780000008008',
+      '9780000009005',
+      '9780000010001',
+    ]));
+  });
+});
+
+describe('getEditionsOf', () => {
+  // other functionality tested under getISBNs; adopt its test if it ever goes away
+  test('core functionality (more under getISBNs)', async () => {
+    await expect(getEditionsOf([], { fetcher: () => Promise.reject() })).resolves.toStrictEqual(new Set([]));
+    await expect(getEditionsOf(['1234'], { fetcher: () => Promise.reject() })).resolves.toStrictEqual(new Set(['1234']));
+
+    const fetcher = makeFakeFetcher({
+      '9780000002006': ['0-00-010200-8'],
+      '9780000002044': ['978-0-00-010204-1', '0000202045'],
+      '9780000002051': ['9780000102058', '9780000202055', '978-0 00-030205 2'],
+      '9780000002068': [],
+    });
+
+    const result = await getEditionsOf([
+      '0000002003', '9780000002044', '9780000002051', '9780000002068'
+    ], { fetcher, throttle: false });
+
+    // ISBN-13 version of "editions of"
+    expect(result).toStrictEqual(new Set([
+      '9780000002006', '9780000102003',
+
+      '9780000002044', '9780000102041', '9780000202048',
+
+      '9780000002051', '9780000102058', '9780000202055', '9780000302052',
+
+      '9780000002068',
+    ]));
+  });
+});
+
+describe('bothISBNsOf', () => {
+  // other functionality tested under getISBNs; adopt its test if it ever goes away
+  test('core functionality (more under getISBNs)', async () => {
+    const isbns = [
+      '0000002003',
+      '9780000002044',
+      '0000002054',
+      '9780000002068',
+    ];
+
+    expect(bothISBNsOf(isbns)).toStrictEqual(new Set([
+      '0000002003', '9780000002006',
+      '0000002046', '9780000002044',
+      '0000002054', '9780000002051',
+      '0000002062', '9780000002068',
     ]));
   });
 });

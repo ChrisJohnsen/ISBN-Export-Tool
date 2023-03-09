@@ -79,6 +79,18 @@ export function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> 
   });
 }
 
+export async function parseCSVRows(csv: string): Promise<Row[]> {
+  return new Promise(resolve => {
+    const rows = new Array<Row>;
+    parseCSV(csv, {
+      row(rowObj) {
+        rows.push(rowObj);
+      },
+      done() { resolve(rows) }
+    });
+  });
+}
+
 export function toCSV(rows: Row[]): string;
 export function toCSV(headerAndRows: string[][]): string;
 export function toCSV(data: {

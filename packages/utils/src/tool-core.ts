@@ -14,20 +14,41 @@ import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
 import * as t from 'typanion';
 
-export async function shelfInfo(csv: string): Promise<{ shelfCounts: Map<string, number>, exclusive: Set<string> }> {
-  return await reduceCSV(csv, {
-    fn(info, row) {
-      const { exclusive, shelves } = getShelves(row);
-      if (exclusive)
-        info.exclusive.add(exclusive);
-      const update = (shelf: string) => {
-        const count = info.shelfCounts.get(shelf) ?? 0;
-        info.shelfCounts.set(shelf, count + 1);
-      };
-      shelves.forEach(update);
-      return info;
-    }, initial: { shelfCounts: new Map<string, number>, exclusive: new Set<string> }
-  });
+export async function shelfInfo(rows: Iterable<Row>): Promise<{ shelfCounts: Map<string, number>, exclusive: Set<string> }> {
+  const info = { shelfCounts: new Map<string, number>, exclusive: new Set<string> };
+  for (const row of rows) {
+    const { exclusive, shelves } = getShelves(row);
+    if (exclusive)
+      info.exclusive.add(exclusive);
+    const update = (shelf: string) => {
+      const count = info.shelfCounts.get(shelf) ?? 0;
+      info.shelfCounts.set(shelf, count + 1);
+    };
+    shelves.forEach(update);
+  }
+  return info;
+}
+
+export function rowsShelvedAs(allRows: Iterable<Row>, shelf: string): Row[] {
+  const rows = new Array<Row>;
+  for (const row of allRows) {
+    if (onShelf(shelf, row))
+      rows.push(row);
+  }
+  return rows;
+}
+
+export function missingAndISBNs(rows: Iterable<Row>): { missingISBN: Row[], isbns: Set<string> } {
+  const missingISBN = new Array<Row>;
+  const isbns = new Set<string>;
+  for (const row of rows) {
+    const rowIsbns = rowISBNs(row);
+    if (rowISBNs(row).length == 0)
+      missingISBN.push(row);
+    else
+      rowIsbns.forEach(isbn => isbns.add(equivalentISBNs(isbn)[0]));
+  }
+  return { missingISBN, isbns };
 }
 
 export async function missingISBNs(csv: string, shelf: string): Promise<Row[]> {
@@ -75,6 +96,28 @@ export async function getISBNs(
       })();
 
   return allISBNs;
+}
+
+export async function getEditionsOf(
+  isbns: Iterable<string>,
+  opts: {
+    fetcher: Fetcher
+    services?: EditionsServices,
+    cacheData?: CacheData,
+    reporter?: ProgressReporter,
+    throttle?: boolean,
+  }
+): Promise<Set<string>> {
+  return await fetchOtherEditionISBNs(isbns, opts.fetcher,
+    opts.throttle ?? true, opts.services, opts.cacheData, opts.reporter);
+}
+
+export function bothISBNsOf(isbns: Iterable<string>): Set<string> {
+  const bothISBNs = new Set<string>;
+  for (const isbn of isbns) {
+    equivalentISBNs(isbn).forEach(isbn => bothISBNs.add(isbn));
+  }
+  return bothISBNs;
 }
 
 function getShelves(row: Row): { exclusive?: string, shelves: Set<string> } {

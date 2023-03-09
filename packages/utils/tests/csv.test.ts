@@ -1,5 +1,5 @@
 import { describe, test, expect } from '@jest/globals';
-import { reduceCSV, toCSV, type Row } from 'utils';
+import { parseCSVRows, reduceCSV, toCSV, type Row } from 'utils';
 import { outdent } from 'outdent';
 
 const outdentToCRLF = outdent({ newline: '\r\n' });
@@ -32,6 +32,22 @@ describe('reduceCSV', () => {
   });
 });
 
+describe('parseCSVRows', () => {
+  const csv = outdent`
+    a,b,c c,d
+    1,-2,three,04
+    2,"two words","=""quotes""",k
+  `;
+
+  test('returns Row[]', async () => {
+    const result = await parseCSVRows(csv);
+
+    expect(result).toStrictEqual([
+      { a: '1', b: '-2', 'c c': 'three', d: '04' },
+      { a: '2', b: 'two words', 'c c': '="quotes"', d: 'k' }]);
+  });
+});
+
 describe('toCSV', () => {
   const objs = [
     { eh: '1', bee: 'B', sea: '3' },
@@ -48,7 +64,7 @@ describe('toCSV', () => {
     `);
   });
 
-  test('array of same shape objects, explict header', () => {
+  test('array of same shape objects, explicit header', () => {
     const result = toCSV({ header: Object.keys(objs[0]), rows: objs });
 
     expect(result).toEqual(outdentToCRLF`
@@ -84,7 +100,7 @@ describe('toCSV', () => {
 
   });
 
-  test('array of arrays, explict header', () => {
+  test('array of arrays, explicit header', () => {
     const explicitHeadder = toCSV({ header: rows[0], rows: rows.slice(1) });
 
     expect(explicitHeadder).toEqual(csv);
