@@ -214,11 +214,12 @@ export class Controller implements UIRequestReceiver {
         return info;
       };
 
-      const onlyEditionsServices = (s: string): s is EditionsService => (AllEditionsServices as Set<string>).has(s);
+      const valid = (s: string): s is EditionsService => (AllEditionsServices as Set<string>).has(s)
+      const enabled = (s: EditionsService) => this.enabledEditionsServices.has(s);
 
       const isbns = await getISBNs(this.csv, command.shelf, {
         otherEditions: command.editions.length != 0 && {
-          services: new Set(command.editions.filter(onlyEditionsServices)),
+          services: new Set(command.editions.filter(valid).filter(enabled)),
           cacheData,
           fetcher,
           reporter: report => {
