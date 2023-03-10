@@ -8,7 +8,7 @@ interface RowInfo {
   extraColumns: readonly string[],
 }
 
-export type Row = Record<string, string>;
+export type Row = Record<string, string | undefined>;
 
 interface ParseOpts {
   row: (row: Row, info: RowInfo) => void,

@@ -25,7 +25,7 @@ describe('missingISBNs', () => {
       105,105000
     `;
 
-    await expect(missingISBNs(csv, 'to-read')).rejects.toBeDefined();
+    await expect(missingISBNs(csv, 'to-read')).resolves.toStrictEqual([]);
   });
 
   test('no ISBN or ISBN13 column', async () => {
@@ -174,10 +174,11 @@ describe('missingISBNs', () => {
     expect(ids(result)).toStrictEqual([200, 210]);
   });
 
-  function ids(rows: Row[]): number[] {
-    return rows.map(row => parseInt(row.id));
-  }
 });
+
+function ids(rows: Row[]): number[] {
+  return rows.map(row => parseInt(row.id ?? '-1'));
+}
 
 describe('getISBNs', () => {
 
@@ -197,7 +198,7 @@ describe('getISBNs', () => {
       100,100000
     `;
 
-    await expect(getISBNs(csv, 'to-read')).rejects.toBeDefined();
+    await expect(getISBNs(csv, 'to-read')).resolves.toStrictEqual(new Set);
   });
 
   test('no ISBN or ISBN13 column', async () => {
@@ -928,7 +929,7 @@ describe('shelfInfo', () => {
       105,105000
     `);
 
-    await expect(shelfInfo(rows)).rejects.toBeDefined();
+    await expect(shelfInfo(rows)).resolves.toStrictEqual({ exclusive: new Set, shelfCounts: new Map });
   });
 
   test('no Exclusive Shelf column', async () => {
@@ -981,13 +982,13 @@ describe('shelfInfo', () => {
 });
 
 describe('rowsShelvedAs', () => {
-  test('must have Bookshelves', () => {
+  test('no Bookshelves column', () => {
     const rows = [
       { id: '1' },
       { id: '2' },
     ];
 
-    expect(() => rowsShelvedAs(rows, '')).toThrow();
+    expect(rowsShelvedAs(rows, '')).toStrictEqual([]);
   });
 
   test('match from Bookshelves', () => {
@@ -1001,10 +1002,10 @@ describe('rowsShelvedAs', () => {
     ];
 
     expect(rowsShelvedAs(rows, '')).toStrictEqual([]);
-    expect(rowsShelvedAs(rows, 'shelf').map(r => r.id)).toStrictEqual(['2']);
-    expect(rowsShelvedAs(rows, 'shelf 1').map(r => r.id)).toStrictEqual('3,4,5,6'.split(','));
-    expect(rowsShelvedAs(rows, 'shelf 2').map(r => r.id)).toStrictEqual('4,5,6'.split(','));
-    expect(rowsShelvedAs(rows, 'shelf 3').map(r => r.id)).toStrictEqual('6'.split(','));
+    expect(ids(rowsShelvedAs(rows, 'shelf'))).toStrictEqual([2]);
+    expect(ids(rowsShelvedAs(rows, 'shelf 1'))).toStrictEqual([3, 4, 5, 6]);
+    expect(ids(rowsShelvedAs(rows, 'shelf 2'))).toStrictEqual([4, 5, 6]);
+    expect(ids(rowsShelvedAs(rows, 'shelf 3'))).toStrictEqual([6]);
   });
 
   test('match from Exclusive Shelf', () => {
@@ -1018,19 +1019,19 @@ describe('rowsShelvedAs', () => {
     ];
 
     expect(rowsShelvedAs(rows, '')).toStrictEqual([]);
-    expect(rowsShelvedAs(rows, 'shelf').map(r => r.id)).toStrictEqual(['2']);
-    expect(rowsShelvedAs(rows, 'shelf 1').map(r => r.id)).toStrictEqual('3,4,5,6'.split(','));
-    expect(rowsShelvedAs(rows, 'shelf 2').map(r => r.id)).toStrictEqual('4,5,6'.split(','));
-    expect(rowsShelvedAs(rows, 'shelf 3').map(r => r.id)).toStrictEqual('6'.split(','));
+    expect(ids(rowsShelvedAs(rows, 'shelf'))).toStrictEqual([2]);
+    expect(ids(rowsShelvedAs(rows, 'shelf 1'))).toStrictEqual([3, 4, 5, 6]);
+    expect(ids(rowsShelvedAs(rows, 'shelf 2'))).toStrictEqual([4, 5, 6]);
+    expect(ids(rowsShelvedAs(rows, 'shelf 3'))).toStrictEqual([6]);
 
-    expect(rowsShelvedAs(rows, 'read').map(r => r.id)).toStrictEqual('3,5'.split(','));
-    expect(rowsShelvedAs(rows, 'to-read').map(r => r.id)).toStrictEqual('4'.split(','));
+    expect(ids(rowsShelvedAs(rows, 'read'))).toStrictEqual([3, 5]);
+    expect(ids(rowsShelvedAs(rows, 'to-read'))).toStrictEqual([4]);
   });
 });
 
 describe('missingAndISBNs', () => {
   test('missing, empty ISBN13/ISBN, quoted ISBN13/ISBN', () => {
-    const rows: Row[] = [
+    const rows = [
       { id: '1', },
       { id: '2', ISBN13: '' },
       { id: '3', ISBN: '' },
@@ -1045,7 +1046,7 @@ describe('missingAndISBNs', () => {
 
     const r = missingAndISBNs(rows);
 
-    expect(r.missingISBN.map(r => r.id)).toStrictEqual('1,2,3,4'.split(','));
+    expect(ids(r.missingISBN)).toStrictEqual([1, 2, 3, 4]);
     expect(r.isbns).toStrictEqual(new Set([
       '9780000005007',
       '9780000006004',

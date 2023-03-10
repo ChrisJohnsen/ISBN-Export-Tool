@@ -122,7 +122,7 @@ export function bothISBNsOf(isbns: Iterable<string>): Set<string> {
 
 function getShelves(row: Row): { exclusive?: string, shelves: Set<string> } {
   const exclusive = row['Exclusive Shelf'];
-  const bookshelves = row.Bookshelves == '' ? [] : row.Bookshelves.split(/\s*,\s*/);
+  const bookshelves = !row.Bookshelves ? [] : row.Bookshelves.split(/\s*,\s*/);
   const shelves = new Set(bookshelves);
   if (exclusive) {
     shelves.add(exclusive);
@@ -144,7 +144,10 @@ function onShelf(shelf: string, row?: Row): ((row: Row) => boolean) | boolean {
 
 function rowISBNs(row: Row): string[] {
   return (['ISBN13', 'ISBN'] as const)
-    .flatMap(isbnKey => isbnKey in row ? [row[isbnKey]] : [])
+    .flatMap(isbnKey => {
+      const isbnStr = row[isbnKey];
+      return isbnStr ? [isbnStr] : [];
+    })
     .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
     .filter(isbn => isbn != '');
 }

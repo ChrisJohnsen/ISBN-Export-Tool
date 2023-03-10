@@ -24,7 +24,7 @@ describe('reduceCSV', () => {
 
   test('sum a column', async () => {
     const result = await reduceCSV(csv, {
-      fn: (acc, row) => acc + parseInt(row.a),
+      fn: (acc, row) => acc + parseInt(row.a ?? '0'),
       initial: 0
     });
 
