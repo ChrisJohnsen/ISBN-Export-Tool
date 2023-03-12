@@ -2,45 +2,52 @@
 
 // UI interface
 
-export type IO = { type: 'clipboard' } | { type: 'file', displayName: string };
-export type Input = IO & { info: { items: number, shelfItems: Record<string, number> } };
-export type MissingISBNsSummary = { name: 'MissingISBNs', itemsMissingISBN: number };
-export type GetISBNsSummary = {
-  name: 'GetISBNs', editionsInfo?: {
-    string?: {
-    cacheHits: number,
-    queries: number,
-    fetches: number,
-    fetchRate: number,
-    fetchStats: { min: number, median: number, max: number }
-    }
-  }, itemsWithISBN: number, totalISBNs: number
+export type InputParseInfo = { items: number, shelfItems: Record<string, number | undefined> }
+export type Input = (
+  | { type: 'clipboard' }
+  | { type: 'file', displayName: string }
+) & InputParseInfo;
+export type Summary = {
+  missingISBNCount: number,
+  isbnCount: number,
 };
-export type CommandSummary = MissingISBNsSummary | GetISBNsSummary;
+export type EditionsSummary = {
+  isbns: number,
+  editionsServicesSummary: {
+    [editionService: string]: undefined | {
+      cacheHits: number,
+      queries: number,
+      fetches: number,
+      fetchRate: number,
+      fetchStats: { min: number, median: number, max: number }
+    }
+  },
+};
+export type EditionsProgress = { total: number, started: number, done: number, fetched: number };
 
 export interface UI {
   editionsServices(enabledServices: readonly string[]): void,
   input(input: Input): void,
-  commandProgress(progress: { total: number, started: number, done: number, fetched: number }): void,
-  commandCanceled(): void;
-  commandSummary(summary: CommandSummary): void,
-
-  getSavableData?(): unknown,
+  summary(summary: Summary): void,
+  outputDone(): void,
+  editionsProgress(progress: EditionsProgress): void,
+  editionsCanceled(): void,
+  editionsSummary(summary: EditionsSummary): void,
 }
 
 // controller interface
 
 export type RequestedInput = { type: 'clipboard' } | { type: 'file' };
 export type RequestedOutput = RequestedInput | { type: 'view' };
-export type MissingISBNs = { name: 'MissingISBNs', shelf: string };
-export type GetISBNs = { name: 'GetISBNs', shelf: string, both: boolean, editions: readonly string[] };
-export type Command = MissingISBNs | GetISBNs;
 
 export interface UIRequestReceiver {
   debugUI(ui: UI): void,
   requestEditionsServices(ui: UI): void,
   requestInput(ui: UI, input: RequestedInput): void,
-  requestCommand(ui: UI, command: Command): void,
-  requestCancelCommand(ui: UI): void,
-  requestOutput(ui: UI, output: RequestedOutput): void,
+  requestShelf(ui: UI, shelf: string): void,
+  requestOutputMissing(ui: UI, kind: RequestedOutput): void,
+  requestOutputISBNs(ui: UI, both: boolean, kind: RequestedOutput): void,
+  requestEditions(ui: UI, services: string[]): void,
+  requestCancelEditions(ui: UI): void,
+  requestOutputEditionsISBNs(ui: UI, both: boolean, kind: RequestedOutput): void,
 }

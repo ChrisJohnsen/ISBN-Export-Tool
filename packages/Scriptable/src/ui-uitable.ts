@@ -1,175 +1,168 @@
 // UITable-based UI uses controller to do the work
 
 import production from 'consts:production';
-import { assertNever, isObject } from './ts-utils.js';
-import { Command, CommandSummary, GetISBNs, Input, MissingISBNs, UI, UIRequestReceiver } from './ui-types.js';
+import { assertNever } from './ts-utils.js';
+import { type EditionsSummary, type Summary, type Input, type UI, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
 import { symbolCell, textCell, UITableBuilder } from './uitable-builder.js';
 
-type Optional<T, OP extends PropertyKey> =
-  { [required in Exclude<keyof T, OP>]-?: T[required] }
-  & { [optional in Extract<keyof T, OP>]?: T[optional] };
-type PartialMissingISBNs = Optional<MissingISBNs, 'shelf'>;
-type PartialGetISBNs = Optional<GetISBNs, 'shelf'>;
-type PartialCommand = PartialMissingISBNs | PartialGetISBNs;
-type Progress = { total: number, started: number, done: number, fetched: number };
-type UICommandSummary = CommandSummary & { received: number };
+type UISummary = Summary & { choosingOutput?: 'missing' | 'ISBNs' & { both: boolean } };
+type UIEditionsSummary = EditionsSummary & { received: number, both: boolean };
 type UIState =
   | {
     input?: undefined,
-    command?: undefined,
-    ready?: undefined,
-    progress?: undefined,
+    shelf?: undefined,
     summary?: undefined,
+    editionsServices?: undefined,
+    editionsProgress?: undefined,
+    editionsSummary?: undefined,
   }
   | {
     input: Input,
-    command?: undefined,
-    ready?: undefined,
-    progress?: undefined,
+    shelf?: undefined,
     summary?: undefined,
+    editionsServices?: undefined,
+    editionsProgress?: undefined,
+    editionsSummary?: undefined,
   }
   | {
     input: Input,
-    command: PartialCommand,
-    ready?: undefined,
-    progress?: undefined,
+    shelf: string,
     summary?: undefined,
+    editionsServices?: undefined,
+    editionsProgress?: undefined,
+    editionsSummary?: undefined,
   }
   | {
     input: Input,
-    command: Command,
-    ready: true,
-    progress?: undefined,
-    summary?: undefined,
+    shelf: string,
+    summary: UISummary,
+    editionsServices?: undefined,
+    editionsProgress?: undefined,
+    editionsSummary?: undefined,
   }
   | {
     input: Input,
-    command: Command,
-    ready: true,
-    progress: Progress,
-    summary?: undefined,
+    shelf: string,
+    summary: UISummary,
+    editionsServices: Set<string>,
+    editionsProgress?: undefined,
+    editionsSummary?: undefined,
   }
   | {
     input: Input,
-    command: Command,
-    ready: true,
-    progress: Progress,
-    summary: UICommandSummary,
+    shelf: string,
+    summary: UISummary,
+    editionsServices: Set<string>,
+    editionsProgress: EditionsProgress,
+    editionsSummary?: undefined,
+  }
+  | {
+    input: Input,
+    shelf: string,
+    summary: UISummary,
+    editionsServices: Set<string>,
+    editionsProgress: EditionsProgress,
+    editionsSummary: UIEditionsSummary,
   }
   ;
-type ByNames<T extends { name: PropertyKey }> = { [N in T['name']]: Extract<T, { name: N }> };
 
 export class UITableUI implements UI {
   private table: UITable = new UITable;
   private builder = new UITableBuilder(this.table, 'ISBN Export Tool');
   private presented = false;
-  private state: UIState = {};
+
+  private previousShelf?: string;
+  private previousServices?: string[];
+  private previousBoth?: boolean;
   constructor(private controller: UIRequestReceiver, private savedDataObject: Record<string, unknown>) {
     const restoredData = this.savedDataObject;
     /* eslint-disable @typescript-eslint/no-explicit-any */
     // XXX validation typanion?
-    this.previousCommand = restoredData.command as any;
-    this.previousCommands = restoredData.commands as any;
-    if (!isObject(this.previousCommands))
-      this.previousCommands = {};
+    this.previousShelf = restoredData.shelf as any;
+    this.previousServices = restoredData.services as any;
+    if (!Array.isArray(this.previousServices))
+      this.previousServices = void 0;
+    this.previousBoth = restoredData.both as any;
     /* eslint-enable */
+    if (typeof this.previousBoth != 'boo' + 'lean')
+      this.previousBoth = void 0;
     this.controller.requestEditionsServices(this);
+  }
+  private saveData() {
+    this.savePrevious();
+    this.savedDataObject.shelf = this.previousShelf;
+    this.savedDataObject.services = this.previousServices;
+    this.savedDataObject.both = this.previousBoth;
   }
   private enabledEditionsServices: Set<string> = new Set;
   editionsServices(enabledServices: readonly string[]): void {
     this.enabledEditionsServices = new Set(enabledServices);
-    this.saveState();
-    this.state = this.validateState(this.state.input, false, this.state.command, this.state.progress, this.state.summary);
+    this.savePrevious();
+    this.state = this.validateState(this.state.input, false, this.state.shelf, this.state.summary, this.state.editionsServices, this.state.editionsProgress, this.state.editionsSummary);
     this.build();
   }
-  input(input: Input): void {
-    this.setInput(input);
-  }
-  private setInput(input?: Input) {
-    this.saveState();
+  private state: UIState = {};
+  input(input?: Input) {
+    this.savePrevious();
     this.state = this.validateState(input, true);
     this.build();
   }
   private previousInput?: Input;
-  private previousCommands: Partial<ByNames<PartialCommand>> = {};
-  private previousCommand?: keyof typeof this.previousCommands;
-  private saveState() {
+  private savePrevious() {
 
     if (!this.state.input) return;
 
     this.previousInput = this.state.input;
 
-    if (!this.state.command) return;
+    if (!this.state.shelf) return;
 
-    let commandToSave = this.state.command;
-    const name = commandToSave.name;
+    this.previousShelf = this.state.shelf;
 
-    this.previousCommand = name;
+    if (this.state.summary) {
+      const output = this.state.summary.choosingOutput;
+      if (output == 'ISBNs')
+        this.previousBoth = output.both;
+    }
+    if (this.state.editionsSummary) {
+      this.previousBoth = this.state.editionsSummary.both;
+    }
 
-    const previousShelf = this.previousCommands[name]?.shelf;
-    if (typeof commandToSave.shelf == 'undefined' && typeof previousShelf != 'undefined')
-      commandToSave = { ...commandToSave, shelf: previousShelf };
+    if (!this.state.editionsServices
+      || this.state.editionsServices.size <= 0) return;
 
-    if (name == 'MissingISBNs')
-      this.previousCommands[name] = commandToSave;
-    else if (name == 'GetISBNs')
-      this.previousCommands[name] = commandToSave;
-    else
-      assertNever(name);
+    this.previousServices = Array.from(this.state.editionsServices);
   }
-  private validateState(input?: Input, restorePrevious = false, command?: PartialCommand, progress?: Progress, summary?: UICommandSummary): UIState {
+  private validateState(input?: Input, restorePrevious = false, shelf?: string, summary?: UISummary, editionsServices?: Set<string>, editionsProgress?: EditionsProgress, editionsSummary?: UIEditionsSummary): UIState {
 
     const validatedShelf = (input: Input, shelf?: string) => {
       if (typeof shelf == 'undefined')
         return void 0;
-      if (Object.hasOwn(input.info.shelfItems, shelf))
+      if (Object.hasOwn(input.shelfItems, shelf))
         return shelf;
     };
 
-    if (!input) return { input: void 0 };
+    if (!input) return {};
 
-    if (!command) {
+    shelf = validatedShelf(input, shelf);
 
-      if (!restorePrevious) return { input };
+    if (restorePrevious)
+      shelf ??= validatedShelf(input, this.previousShelf);
 
-      command = this.previousCommand ? this.previousCommands[this.previousCommand] : void 0;
-      if (!command) return { input };
-    }
+    if (!shelf) return { input };
+    if (!summary) return { input, shelf };
 
     if (restorePrevious) {
-      if (command.name == 'MissingISBNs') {
-        const previousCommand = this.previousCommands[command.name];
-        command.shelf = validatedShelf(input, command.shelf ?? previousCommand?.shelf);
-      } else if (command.name == 'GetISBNs') {
-        const previousCommand = this.previousCommands[command.name];
-        command.shelf = validatedShelf(input, command.shelf ?? previousCommand?.shelf);
-        if (previousCommand) {
-          command.both = previousCommand.both;
-          command.editions = previousCommand.editions;
-        }
-      } else assertNever(command);
+      if (this.previousServices)
+        editionsServices ??= new Set(this.previousServices.filter(s => this.enabledEditionsServices.has(s)));
+      if (!editionsServices || editionsServices.size <= 0)
+        editionsServices = new Set(this.enabledEditionsServices);
     }
 
-    if (command.name == 'GetISBNs') {
-      command.editions = command.editions.filter(s => this.enabledEditionsServices.has(s));
-    }
+    if (!editionsServices) return { input, shelf, summary };
+    if (!editionsProgress) return { input, shelf, summary, editionsServices };
+    if (!editionsSummary) return { input, shelf, summary, editionsServices, editionsProgress };
+    return { input, shelf, summary, editionsServices, editionsProgress, editionsSummary };
 
-    function validateReadyCommand(command: PartialCommand): Command | undefined {
-      if (typeof command.shelf == 'undefined') return void 0;
-      return { ...command, shelf: command.shelf };
-    }
-
-    const readyCommand = validateReadyCommand(command);
-    if (!readyCommand)
-      return { input, command };
-
-    if (!progress)
-      return { input, command: readyCommand, ready: true };
-
-    if (!summary)
-      return { input, command: readyCommand, ready: true, progress };
-
-    return { input, command: readyCommand, ready: true, progress, summary };
   }
   private build() {
     this.table.removeAllRows();
@@ -180,14 +173,16 @@ export class UITableUI implements UI {
     const title = this.builder.addTitleRow();
     title.isHeader = true;
 
-    if (this.state.summary)
+    if (this.state.editionsSummary)
+      this.buildEditionsSummary();
+    else if (this.state.editionsProgress)
+      this.buildEditionsProgress();
+    else if (this.state.editionsServices)
+      this.buildPickEditionsServices();
+    else if (this.state.summary)
       this.buildSummary();
-    else if (this.state.progress)
-      this.buildProgress();
-    else if (this.state.command)
-      this.buildCommand();
     else if (this.state.input)
-      this.buildPickCommand();
+      this.buildPickShelf();
     else
       this.buildPickInput();
 
@@ -232,309 +227,114 @@ export class UITableUI implements UI {
     this.builder.addEmptyRow();
     if (this.previousInput) {
       const prev = this.previousInput;
-      this.builder.addForwardRow(textCell('already loaded', { titleColor: Color.orange() }), () => this.setInput(prev));
+      this.builder.addForwardRow(textCell('already loaded', { titleColor: Color.orange() }), () => this.input(prev));
     }
     this.builder.addForwardRow('On the clipboard', () => this.controller.requestInput(this, { type: 'clipboard' }));
     this.builder.addForwardRow('In a saved or downloaded file', () => this.controller.requestInput(this, { type: 'file' }));
   }
-  private setCommand(command?: PartialCommand, restorePrevious = false) {
-    this.saveState();
-    this.state = this.validateState(this.state.input, restorePrevious, command);
-    this.build();
-  }
-  private buildPickCommand() {
-    if (!this.state.input) throw 'tried to build command picker UI without input';
-    this.builder.addBackRow('Input Selection', () => this.setInput(void 0));
-    this.builder.addSubtitleHelpRow('Command Selection', [
-      'Two commands area available to process your Goodreads export data:',
+  private buildPickShelf(): void {
+    if (!this.state.input) throw 'tried to build shelf picker UI without input';
+
+    this.builder.addBackRow('Input Selection', () => this.input());
+    this.builder.addSubtitleHelpRow('Item Selection', [
+      'Start by selecting which items from the exported data we will examine. '
+      + 'The next step will check the selection for items that are missing ISBNs.',
       '',
-      'Missing ISBNs',
-      'This command will tell you which items on a shelf are missing ISBNs.',
-      '',
-      'Get ISBNs',
-      'This command will extract the ISBN of every ISBN-bearing item on a shelf.',
-      '',
-      'Select a command and view its help for more details.',
+      'Currently only a whole "shelf" of items can be selected. On this screen, choose the shelf that holds the items you want to examine.',
     ]);
     this.builder.addEmptyRow();
-    this.builder.addTextRow(`Found ${this.state.input.info.items} items in export data.`);
-    this.builder.addEmptyRow();
-    this.builder.addTextRow('Which command would you like to run?');
-    this.builder.addEmptyRow();
-    this.builder.addForwardRow('Missing ISBNs', () => this.setCommand({ name: 'MissingISBNs' }, true));
-    this.builder.addIndentRow('Finds items on a specified shelf that have no ISBN.', { height: 88 });
-    this.builder.addForwardRow('Get ISBNs', () => this.setCommand({ name: 'GetISBNs', both: false, editions: [] }, true));
-    this.builder.addIndentRow('Extracts ISBNs from items on a specified shelf.', { height: 88 });
+    this.builder.addTextRow(`Found ${this.state.input.items} items in export data.`);
+    this.builder.addTextRow('Choose the shelf to examine.');
+
+    const shelfItems = this.state.input.shelfItems;
+    const addShelfRow = (shelf: string, items: string, onSelect?: () => void, previous = false) =>
+      this.builder.addRowWithDescribedCells([
+        { type: 'text', title: shelf, widthWeight: 85, align: 'right', titleColor: previous ? Color.orange() : void 0 },
+        { type: 'text', title: items, widthWeight: 15, align: 'left' },
+      ], { onSelect, cellSpacing: 10 });
+    addShelfRow('Shelf Name', 'Items');
+    Object.getOwnPropertyNames(shelfItems)
+      .forEach(shelf => addShelfRow(shelf, String(shelfItems[shelf]),
+        () => this.setShelf(shelf), shelf == this.previousShelf));
   }
-  private buildCommand() {
-    if (!this.state.command) throw 'tried to build command UI without command';
-    this.builder.addBackRow('Command Selection', () => this.setCommand(void 0, false));
-    if (this.state.command.name == 'MissingISBNs') {
-
-      this.builder.addSubtitleHelpRow('Missing ISBNs', [
-        'Sometimes when shelving a new book, Goodreads will pick a default edition '
-        + '(perhaps an eBook or audiobook edition) that happens to lack an ISBN. '
-        + 'This is usually okay if you mostly review shelved items "by eye", or by title/author search, '
-        + 'but the companion "Get ISBNs" command in this program cannot process an item if it lacks an ISBN.',
-        '',
-        'You can change the edition of a shelved item from its Book Details page '
-        + '(where you will see an ISBN listed, if the item has one), in the Editions list, '
-        + 'by using the "Switch to this edition" button under a different version (most print versions will have an ISBN).',
-        '',
-        'Note: If you switched any editions, you will probably want to re-export your Goodreads data before using "Get ISBNs".',
-      ]);
-      this.builder.addEmptyRow();
-      this.builder.addTextRow(`Found ${this.state.input.info.items} items in export data.`);
-      this.builder.addTextRow('Choose the shelf to check for items with no ISBN.', { height: 88 });
-      this.builder.addIndentRow('Ex: You might check your "to-read" shelf before using "Get ISBNs" on it.', { height: 88 });
-      this.buildSharedShelf();
-
-    } else if (this.state.command.name == 'GetISBNs') {
-
-      this.builder.addSubtitleHelpRow('Get ISBNs', [
-        'Some libraries let you import a list of ISBNs to check what is available in their collection.',
-        'You can use "Get ISBNs" on your "to-read" shelf and import the resulting ISBN list into a library '
-        + 'to find what is available to read at that library.',
-        '',
-        'Since there are often multiple editions of every book, this command can optionally query external services '
-        + '(Open Library, and Library Thing) to gather the ISBNs of other editions of your shelved items '
-        + '(so, for example, the ISBN list will include the hardcover and paperback editions, no matter which edition you '
-        + 'have shelved——assuming the services know about the edition: they are not always 100% complete).',
-        '',
-        'ISBNs come in two versions: ISBN-13, and ISBN-10 (old style). Every ISBN has an ISBN-13 version, '
-        + 'but might not have an ISBN-10 version. '
-        + 'If you are taking your list of ISBNs somewhere that does not automatically convert between the ISBN versions, '
-        + 'this command can optionally include both ISBN versions (when possible).'
-      ]);
-      this.builder.addEmptyRow();
-      this.builder.addTextRow(`Found ${this.state.input.info.items} items in export data.`);
-      this.builder.addTextRow('Choose the shelf from which ISBNs will be extracted.', { height: 88 });
-      this.builder.addIndentRow('Ex: Get the ISBNs from your "to-read" shelf and send it to your library to see which items they have available.', { height: 132 });
-      this.buildSharedShelf();
-
-      const command = this.state.command;
-      const editionsEnabled = command.editions.length != 0;
-      const editionsToggle = () => this.setCommand({ ...command, editions: editionsEnabled ? [] : Array.from(this.enabledEditionsServices) });
-      const bothToggle = () => this.setCommand({ ...command, both: !command.both });
-      const serviceToggle = (service: string) => {
-        let editions;
-        if (command.editions.includes(service))
-          editions = command.editions.filter(s => s != service);
-        else
-          editions = command.editions.concat([service]);
-        this.setCommand({ ...command, editions });
-      };
-
-      this.builder.addTextRow('Options');
-      this.builder.addCheckableRow('Get ISBNs of Other Editions?', editionsEnabled && void 0, { onSelect: editionsToggle });
-      const editionsDesc = editionsEnabled
-        ? 'External services (as selected below) will be queried for the ISBNs of other editions of each imported ISBN.'
-        : 'The ISBNs will only come from the imported data.';
-      this.builder.addIndentRow(editionsDesc, { height: 88 });
-      if (editionsEnabled)
-        this.enabledEditionsServices.forEach(service => {
-          const enabled = command.editions.includes(service);
-          this.builder.addCheckableRow(service, enabled, { onSelect: () => serviceToggle(service) });
-        });
-      this.builder.addCheckableRow('Get Both ISBN-13 and -10?', command.both, { onSelect: bothToggle });
-      const bothDesc = command.both
-        ? 'The generated ISBNs will include both the ISBN-13 and ISBN-10 versions of each included ISBN.'
-        : 'The generated ISBNs will be the ISBN-13 version of each included ISBN.';
-      this.builder.addIndentRow(bothDesc, { height: 88 });
-
-    } else assertNever(this.state.command);
-
-    this.builder.addEmptyRow();
-
-    if (this.state.ready) {
-      const command = this.state.command;
-      const shelfItems = this.state.input.info.shelfItems[command.shelf];
-      this.builder.addForwardRow('Start', async () => {
-        if (command.name == 'GetISBNs' && command.editions.length > 0) {
-
-          const wv = new WebView;
-          await wv.loadHTML('');
-          const online = await wv.evaluateJavaScript('navigator.onLine');
-          if (!online) {
-            const a = new Alert;
-            a.title = 'Device Offline?';
-            a.message = 'This device appears to be offline.\n\nPlease make sure you have an Internet connection before doing Get ISBNs of Other Editions.';
-            a.addCancelAction('Okay');
-            await a.presentAlert();
-            return;
-          }
-
-          const a = new Alert;
-          a.title = '"Other Editions" Takes Time';
-          a.message = 'Due to having to use external services, we limit how quickly we issue queries for other edition ISBNs. '
-            + 'It will take a second or two per queried ISBN to complete this command.\n'
-            + '\n'
-            + `This may be between ${shelfItems} and ${shelfItems * 2} seconds for the items on the "${command.shelf}" shelf.\n`
-            + '\n'
-            + 'The query results are saved for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
-          a.addCancelAction('That is too long to wait!');
-          a.addAction('That is okay, I will wait.');
-          const action = await a.presentAlert();
-          if (action == -1) return;
-        }
-        this.controller.requestCommand(this, command);
-      });
-    } else {
-      this.builder.addForwardRow('Start', void 0);
-      this.builder.addIndentRow('A shelf must be selected before the command can be started.', { height: 88 });
-    }
+  private setShelf(shelf: string): void {
+    this.savePrevious();
+    this.state = this.validateState(this.state.input, false, shelf);
+    if (this.state.shelf)
+      this.controller.requestShelf(this, this.state.shelf);
   }
-  private buildSharedShelf(): void {
-    if (!this.state.command) throw 'tried to build shelf UI without a command';
-    if (this.state.command.shelf) {
-
-      const noShelf = { ...this.state.command, shelf: void 0 };
-      this.builder.addClosedDisclosureRow('Shelf', this.state.command.shelf, { onSelect: () => this.setCommand(noShelf) });
-
-    } else {
-
-      const previousShelf = this.previousCommands[this.state.command.name]?.shelf;
-      const withPreviousShelf = { ...this.state.command, shelf: previousShelf };
-      const canRevert = typeof withPreviousShelf.shelf != 'undefined' || void 0;
-      this.builder.addOpenedDisclosureRow('Shelf', canRevert && { onSelect: () => this.setCommand(withPreviousShelf) });
-      const shelfItems = this.state.input.info.shelfItems;
-      const addShelfRow = (shelf: string, items: string, onSelect?: () => void, previous = false) =>
-        this.builder.addRowWithDescribedCells([
-          { type: 'text', title: shelf, widthWeight: 85, align: 'right', titleColor: (previous || void 0) && Color.orange() },
-          { type: 'text', title: items, widthWeight: 15, align: 'left' },
-        ], { onSelect, cellSpacing: 10 });
-      addShelfRow('Shelf Name', 'Items');
-      Object.getOwnPropertyNames(shelfItems)
-        .forEach(shelf => addShelfRow(shelf, String(shelfItems[shelf]),
-          () => this.setCommand({ ...withPreviousShelf, shelf }), shelf == previousShelf));
-
-    }
-  }
-  private buildProgress() {
-    if (!this.state.progress) throw 'tried to build progress UI without progress';
-    if (this.state.summary) throw 'tried to build progress UI after command completed';
-
-    this.builder.addBackRow('Cancel Get ISBNs', async () => {
-      const a = new Alert;
-      a.title = 'Cancel Get ISBNs?';
-      a.message = 'Normal operation will take a second or two per query to finish.';
-      a.addAction('Yes: Stop making queries!');
-      a.addCancelAction('No: I will wait.');
-      const action = await a.presentAlert();
-      console.log(`progress cancel warning result: ${action}`);
-      if (action == -1) return;
-      this.controller.requestCancelCommand(this);
-    });
-    this.builder.addSubtitleHelpRow('Get ISBNs "Other Editions" Progress');
-    this.builder.addEmptyRow();
-    this.builder.addTextRow(`Retrieving ISBNs of other editions of ISBN-bearing items on "${this.state.command.shelf}" shelf.`, { height: 88 });
-
-    const { total, started, done, fetched } = this.state.progress;
-    const waiting = total - started;
-    const active = started - done;
-    this.builder.addTextRow(`Queries:`);
-    this.builder.addIndentRow(`${done} done + ${active} active + ${waiting} waiting = ${total}`);
-    this.builder.addTextRow(`Fetches:`);
-    this.builder.addIndentRow(`${fetched}`);
-  }
-  private setProgress(progress: Progress) {
-    this.saveState();
-    this.state = this.validateState(this.state.input, false, this.state.command, progress);
+  summary(summary?: UISummary) {
+    this.savePrevious();
+    this.state = this.validateState(this.state.input, false, this.state.shelf, summary);
     this.build();
   }
-  commandProgress(progress: { total: number, started: number, done: number, fetched: number }): void {
-    this.setProgress(progress);
-  }
-  commandCanceled(): void {
-    this.setCommand(this.state.command, true);
-  }
-  commandSummary(summary: CommandSummary) {
-    this.setSummary({ ...summary, received: Date.now() });
-  }
-  private setSummary(summary: UICommandSummary) {
-    this.saveState();
-    this.state = this.validateState(this.state.input, false, this.state.command, this.state.progress ?? { total: 0, started: 0, done: 0, fetched: 0 }, summary);
-    this.build();
-  }
-  private buildSummary() {
-    if (!this.state.summary) throw 'tried to build summary UI without summary';
+  private buildSummary(): void {
+    if (!this.state.summary) throw 'tried to build item summary UI without summary';
 
-    const command = this.state.command;
-    const commandName =
-      command.name == 'MissingISBNs' ? 'Missing ISBNs' :
-        command.name == 'GetISBNs' ? 'Get ISBNs' :
-          assertNever(command);
+    const shelf = this.state.shelf;
+    const items = this.state.input.shelfItems[shelf] ?? 0;
     const summary = this.state.summary;
-    const confirmBack: () => Promise<boolean> = async () => {
-      if (command.name != 'GetISBNs') return true;
-      if (command.editions.length <= 0) return true;
-      const newish = Date.now() - summary.received < 5000;
-      if (!newish) return true;
-      const a = new Alert;
-      a.title = `Leaving So Soon?`;
-      a.message = `${commandName} just finished a few seconds ago.\n\nPlease confirm that you want to abandon these results and go back.`;
-      a.addAction('Abandon these results and go back now.');
-      a.addCancelAction('Do not go back yet.');
-      return await a.presentAlert() != -1;
-    };
-    this.builder.addBackRow(`${commandName} Options`, async () => await confirmBack() && this.setCommand(command));
-    this.builder.addSubtitleHelpRow(`${commandName} Summary`, [
-      'The command results are summarized here. Select an output option to view or save the full output.',
-      '',
-      'The "back" options at the bottom jump back to various screens (also available through multiple taps on "back" at the top).',
-    ]);
-    this.builder.addEmptyRow();
+    const addMissingSummaryRow = () =>
+      this.builder.addTextRow(`${summary.missingISBNCount} items with no ISBN.`);
+    const addISBNSummaryRow = () =>
+      this.builder.addTextRow(`${summary.isbnCount} items with an ISBN.`);
+    const ISBNs = (both: boolean) => Object.assign('ISBNs', { both });
+    if (!summary.choosingOutput) {
+      this.builder.addBackRow('Item Selection', () => this.summary());
+      this.builder.addSubtitleHelpRow('Item Summary', [
+        'Each item from the provided data that does not have an ISBN is in the "Items Missing an ISBN" list.',
+        'Likewise, each item that has an ISBN will contribute its ISBN to the "Item ISBNs" list.',
+        '',
+        'Each category can be viewed or saved by selecting its view/save option.',
+        '',
+        'You can use the "Select Editions Services" option to extend the list of ISBNs with those of other editions of the same work. '
+        + 'See the help on that screen for more information.',
+      ]);
+      this.builder.addEmptyRow();
+      this.builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
+      addMissingSummaryRow();
+      this.builder.addForwardRow('View/Save Items Missing an ISBN', () => this.summary({ ...summary, choosingOutput: 'missing' }));
+      addISBNSummaryRow();
+      this.builder.addForwardRow('View/Save Item ISBNs', () => this.summary({ ...summary, choosingOutput: ISBNs(this.previousBoth ?? false) }));
+      this.builder.addEmptyRow();
+      this.builder.addTextRow('Want to also include the ISBNs of other editions of the extracted item ISBNs?', { height: 88 });
+      this.builder.addForwardRow('Select Editions Services', () => this.setEditionsServices(void 0, true));
+    } else {
+      const choice = (outputChoice => {
+        if (outputChoice == 'missing') {
+          return {
+            desc: 'Items Missing an ISBN',
+            output: (kind: RequestedOutput) => this.controller.requestOutputMissing(this, kind),
+            addSummaryRow: addMissingSummaryRow,
+          };
+        } else if (outputChoice == 'ISBNs') {
+          const both = outputChoice.both;
+          const toggleBoth = () => this.summary({ ...summary, choosingOutput: ISBNs(!both) });
+          return {
+            desc: 'Item ISBNs',
+            output: (kind: RequestedOutput) => this.controller.requestOutputISBNs(this, both, kind),
+            addSummaryRow: addISBNSummaryRow,
+            extras: () => this.builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, { onSelect: toggleBoth }),
+          };
+        } else assertNever(outputChoice);
+      })(summary.choosingOutput);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { choosingOutput, ...backSummary } = summary;
+      this.builder.addBackRow('Item Summary', () => this.summary(backSummary));
+      this.builder.addSubtitleHelpRow(`${choice.desc}`, [
+        'Select an output option to view or save the full output.',
+      ]);
+      this.builder.addEmptyRow();
 
+      this.builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
+      choice.addSummaryRow();
 
-    if (summary.name == 'MissingISBNs') {
-      if (command.name != summary.name) throw 'got summary for different command'; // let TS know that command is also GetISBNs
-
-      const shelf = this.state.command.shelf;
-      const items = this.state.input.info.shelfItems[shelf] ?? -1;
-      this.builder.addTextRow(`${summary.itemsMissingISBN} items with no ISBN (out of ${items} on "${shelf}" shelf).`, { height: 88 });
-      if (summary.itemsMissingISBN > 0)
-        this.builder.addIndentRow('Note: If you adjust your shelved editions, you should re-export your data before using "Get ISBNs".', { height: 88 });
-
-    } else if (summary.name == 'GetISBNs') {
-      if (command.name != summary.name) throw 'got summary for different command'; // let TS know that command is also GetISBNs
-
-      const optionsDescription = (editions: boolean, both: boolean) => {
-        const editionsText = 'retrieving ISBNs of other editions';
-        const bothText = 'adding ISBN-10 equivalents';
-        if (!editions && !both)
-          return '';
-        else if (!editions && both)
-          return ` after ${bothText}`;
-        else if (editions && !both)
-          return ` after ${editionsText}`;
-        else if (editions && both)
-          return ` after ${editionsText}, and ${bothText}`;
-      };
-      const shelf = this.state.command.shelf;
-      const items = this.state.input.info.shelfItems[shelf] ?? -1;
-      this.builder.addTextRow(`From ${items} "${shelf}" items,`);
-      this.builder.addTextRow(`found ${summary.itemsWithISBN} items with an ISBN,`);
-      this.builder.addTextRow(`${summary.totalISBNs} total ISBNs extracted${optionsDescription(command.editions.length > 0, command.both)}.`, { height: 88 });
-
-      if (summary.editionsInfo) {
-        const cached = Object.entries(summary.editionsInfo).reduce((t, [, i]) => t + i.cacheHits, 0);
-        if (cached != 0)
-          this.builder.addTextRow(`Reused ${cached} Other Editions query results.`, { height: 88 });
-
-        Object.entries(summary.editionsInfo).forEach(([service, info]) => {
-          this.builder.addTextRow(`${service}`);
-          this.builder.addIndentRow((info.cacheHits != 0 ? `${info.cacheHits} reused results, ` : '') + `${info.queries} new queries`);
-          if (info.fetches != 0) {
-            this.builder.addIndentRow(`${info.fetches} fetches ${info.fetchRate.toFixed(3)}/s`);
-            this.builder.addIndentRow(`${info.fetchStats.min}/${info.fetchStats.median}/${info.fetchStats.max} (ms min/median/max)`);
-          }
-        });
-      }
-
-    } else assertNever(summary);
-
-    this.builder.addEmptyRow();
+      this.buildSharedOutput(choice.output, choice.extras);
+    }
+  }
+  private buildSharedOutput(output: (kind: RequestedOutput) => void, buildExtraOptionRows?: () => void) {
     this.builder.addTextRow('Output Options');
+    buildExtraOptionRows?.();
     const view = symbolCell('magnifyingglass');
     const clip = symbolCell('doc.on.clipboard');
     const file = symbolCell('doc');
@@ -544,13 +344,203 @@ export class UITableUI implements UI {
       const widthWeight = 100 - symbol.widthWeight;
       this.builder.addRowWithDescribedCells([{ type: 'text', title, align: 'right', widthWeight }, { ...symbol, align: 'center' }], { onSelect });
     };
-    addOutputRow('View', view, () => this.controller.requestOutput(this, { type: 'view' }));
-    addOutputRow('Copy to the clipboard', clip, () => this.controller.requestOutput(this, { type: 'clipboard' }));
-    addOutputRow('Save to a file', file, () => this.controller.requestOutput(this, { type: 'file' }));
+    addOutputRow('View', view, () => output({ type: 'view' }));
+    addOutputRow('Copy to the clipboard', clip, () => output({ type: 'clipboard' }));
+    addOutputRow('Save to a file', file, () => output({ type: 'file' }));
+  }
+  outputDone(): void {
+    if (this.state.summary?.choosingOutput) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { choosingOutput, ...backSummary } = this.state.summary;
+      this.summary(backSummary);
+    }
+    // this is called after requestOutputEditionsISBNs, too, but we don't do anything here:
+    // the editions summary screen has its own "back" option at the bottom
+  }
+  private setEditionsServices(services?: Set<string>, restorePrevious = false): void {
+    this.savePrevious();
+    this.state = this.validateState(this.state.input, restorePrevious, this.state.shelf, this.state.summary, services);
+    this.build();
+  }
+  private buildPickEditionsServices(): void {
+    if (!this.state.editionsServices) throw 'tried to build editions services picker UI without editions services state';
+
+    this.builder.addBackRow('Item Summary', () => this.setEditionsServices());
+    this.builder.addSubtitleHelpRow('Select Editions Services', [
+      'Books often have multiple editions, and thus multiple ISBNs. '
+      + 'Some book lists only let you add only one edition of a book, '
+      + 'so the data will only include (at most) one ISBN for each book.',
+      '',
+      'If you are interested in finding any edition of the books in your lists, '
+      + 'then it might be handy to be able to gather not just the ISBN of the '
+      + '(sometimes arbitrary) edition in your list, but also the ISBNs of '
+      + 'other editions of that book.',
+      '',
+      'Some book websites offer a way to find the ISBNs of other editions of a book '
+      + '(at least the editions that those services know about). '
+      + 'This program can use those services to gather those extra ISBNs.',
+      '',
+      'Requests to these services are limited to one per second, so it may take '
+      + 'some time to process a large list. The results are saved for re-use '
+      + 'though, so later queries about the same book should be faster.',
+    ]);
     this.builder.addEmptyRow();
-    this.builder.addBackRow(`Choose New ${commandName} Options`, async () => await confirmBack() && this.setCommand(command));
-    this.builder.addBackRow('Choose New Command', async () => await confirmBack() && this.setCommand(void 0));
-    this.builder.addBackRow('Choose New Input', async () => await confirmBack() && this.setInput(void 0));
+
+    const services = this.state.editionsServices;
+    const serviceToggle = (service: string) => {
+      const newServices = new Set(services);
+      if (newServices.has(service))
+        newServices.delete(service);
+      else
+        newServices.add(service);
+      this.setEditionsServices(newServices);
+    };
+
+    this.enabledEditionsServices.forEach(service => {
+      const enabled = services.has(service);
+      this.builder.addCheckableRow(service, enabled, { onSelect: () => serviceToggle(service) });
+    });
+    this.builder.addEmptyRow();
+
+    if (services.size > 0) {
+      const isbns = this.state.summary.isbnCount;
+      this.builder.addForwardRow('Get Other Editions', async () => {
+
+        const wv = new WebView;
+        await wv.loadHTML('');
+        const online = await wv.evaluateJavaScript('navigator.onLine');
+        if (!online) {
+          const a = new Alert;
+          a.title = 'Device Offline?';
+          a.message = 'This device appears to be offline.\n\nPlease make sure you have an Internet connection before doing Get ISBNs of Other Editions.';
+          a.addCancelAction('Okay');
+          await a.presentAlert();
+          return;
+        }
+
+        const a = new Alert;
+        a.title = 'Getting Editions May Take Some Time';
+        a.message = 'Due to using external services, we limit how quickly we issue queries for other edition ISBNs. '
+          + 'It will take approximately one second per queried ISBN to complete this command.\n'
+          + '\n'
+          + `This could be up to ${isbns} seconds for the selected items.\n`
+          + '\n'
+          + 'The query results are saved for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
+        a.addCancelAction('That is too long to wait!');
+        a.addAction('That is okay, I will wait.');
+        const action = await a.presentAlert();
+        if (action == -1) return;
+
+        this.controller.requestEditions(this, Array.from(services));
+      }, true);
+      this.builder.addIndentRow('Note: Getting ISBNs of other editions will send your selected ISBNs to the above-selected third party services!', { height: 88 });
+      this.builder.addIndentRow('Go back to Item Summary if you do not want to send your ISBNs to any third party services.', { height: 88 });
+      this.builder.addBackRow('Item Summary', () => this.setEditionsServices());
+    } else {
+      this.builder.addForwardRow('Get Other Editions', void 0, true);
+      this.builder.addIndentRow('One or more editions services must be selected before we can proceed.', { height: 88 });
+    }
+  }
+  editionsProgress(progress: EditionsProgress): void {
+    this.savePrevious();
+    this.state = this.validateState(this.state.input, false, this.state.shelf, this.state.summary, this.state.editionsServices, progress);
+    this.build();
+  }
+  private buildEditionsProgress(): void {
+    if (!this.state.editionsProgress) throw 'tried to build editions progress UI without editions progress';
+    if (this.state.editionsSummary) throw 'tried to build progress UI after command completed';
+
+    this.builder.addBackRow('Cancel Other Editions', async () => {
+      const a = new Alert;
+      a.title = 'Cancel Other Editions?';
+      a.message = 'Normal operation will take approximately one second per query to finish.';
+      a.addAction('Yes: Stop making queries!');
+      a.addCancelAction('No: I will wait.');
+      const action = await a.presentAlert();
+      console.log(`progress cancel warning result: ${action}`);
+      if (action == -1) return;
+      this.controller.requestCancelEditions(this);
+    });
+    this.builder.addSubtitleHelpRow('Other Editions Progress');
+    this.builder.addEmptyRow();
+    this.builder.addTextRow(`Retrieving ISBNs of other editions of ISBN-bearing items on "${this.state.shelf}" shelf.`, { height: 88 });
+
+    const { total, started, done, fetched } = this.state.editionsProgress;
+    const waiting = total - started;
+    const active = started - done;
+    this.builder.addTextRow(`Queries:`);
+    this.builder.addIndentRow(`${done} done + ${active} active + ${waiting} waiting = ${total}`);
+    this.builder.addTextRow(`Fetches:`);
+    this.builder.addIndentRow(`${fetched}`);
+  }
+  editionsCanceled(): void {
+    this.setEditionsServices(this.state.editionsServices);
+  }
+  editionsSummary(summary: EditionsSummary): void {
+    this.setEditionsSummary({ ...summary, received: Date.now(), both: this.previousBoth ?? false });
+  }
+  private setEditionsSummary(summary?: UIEditionsSummary): void {
+    this.savePrevious();
+    this.state = this.validateState(this.state.input, false, this.state.shelf, this.state.summary, this.state.editionsServices, summary && (this.state.editionsProgress ?? { total: 0, started: 0, done: 0, fetched: 0 }), summary);
+    this.build();
+  }
+  private buildEditionsSummary(): void {
+    if (!this.state.editionsSummary) throw 'tried to build editions summary UI without editions summary';
+
+    const { isbns, editionsServicesSummary: summary, received, both } = this.state.editionsSummary;
+    const confirmBack: () => Promise<boolean> = async () => {
+      const newish = Date.now() - received < 5000;
+      if (!newish) return true;
+      const a = new Alert;
+      a.title = `Leaving So Soon?`;
+      a.message = `Other Editions just finished a few seconds ago.\n\nPlease confirm that you want to abandon these results and go back.`;
+      a.addAction('Abandon these results and go back now.');
+      a.addCancelAction('Do not go back yet.');
+      return await a.presentAlert() != -1;
+    };
+    this.builder.addBackRow('Select Editions Services', async () => await confirmBack() && this.setEditionsSummary());
+    this.builder.addSubtitleHelpRow(`Other Editions Summary`, [
+      'The ISBNs of other editions of your selected items have been retrieved. '
+      + 'The queries are summarized on this screen.',
+      '',
+      'Select an Output Option to view or save the full list of ISBNs.',
+      '',
+      'The "back" option at the bottom jumps back to the input selection screen (also available through multiple taps on "back" at the top).',
+    ]);
+    this.builder.addEmptyRow();
+
+    const shelf = this.state.shelf;
+    const items = this.state.input.shelfItems[shelf] ?? 0;
+    this.builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
+    this.builder.addTextRow(`${this.state.summary.isbnCount} items with an ISBN.`);
+    this.builder.addTextRow(`${isbns} total ISBNs after retrieving ISBNs of other editions.`, { height: 88 });
+    this.builder.addEmptyRow();
+
+    const cached = Object.entries(summary).reduce((t, [, i]) => t + (i?.cacheHits ?? 0), 0);
+    if (cached != 0)
+      this.builder.addTextRow(`Reused ${cached} Other Editions query results.`);
+
+    Object.entries(summary).forEach(([service, info]) => {
+      if (!info) return;
+      this.builder.addTextRow(`${service}`);
+      this.builder.addIndentRow((info.cacheHits != 0 ? `${info.cacheHits} reused results, ` : '') + `${info.queries} new queries`);
+      if (info.fetches != 0) {
+        this.builder.addIndentRow(`${info.fetches} fetches ${info.fetchRate.toFixed(3)}/s`);
+        this.builder.addIndentRow(`${info.fetchStats.min}/${info.fetchStats.median}/${info.fetchStats.max} (ms min/median/max)`);
+      }
+    });
+
+    this.builder.addEmptyRow();
+    const s = this.state.editionsSummary;
+    const toggleBoth = () => this.setEditionsSummary({ ...s, both: !both });
+    this.buildSharedOutput(
+      output => this.controller.requestOutputEditionsISBNs(this, both, output),
+      () => this.builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, { onSelect: toggleBoth })
+    );
+
+    this.builder.addEmptyRow();
+    this.builder.addBackRow('Choose New Input', async () => await confirmBack() && this.input());
+
   }
   async present(...args: Parameters<UITable['present']>): ReturnType<UITable['present']> {
     this.presented = true;
@@ -558,9 +548,7 @@ export class UITableUI implements UI {
       return await this.table.present(...args);
     } finally {
       this.presented = false;
-      this.saveState();
-      this.savedDataObject.commands = this.previousCommands;
-      this.savedDataObject.command = this.previousCommand;
+      this.saveData();
     }
   }
 }

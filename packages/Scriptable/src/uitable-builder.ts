@@ -216,9 +216,11 @@ export class UITableBuilder {
     const main = buildCell({ type: 'text', title: text, widthWeight: 9 });
     return this.addRowWithCells([indent, main], opts);
   }
-  addForwardRow(text: string | TextCell, onSelect: (() => void) | undefined) {
-    const symbol = onSelect ? 'chevron.forward' : 'xmark';
-    const image = symbolCell(symbol);
+  addForwardRow(text: string | TextCell, onSelect: (() => void) | undefined, constantSymbolWidth = false) {
+    const symbols = ['xmark', 'chevron.forward'].map(symbolCell);
+    const image = symbols[Number(!!onSelect)];
+    if (constantSymbolWidth)
+      image.widthWeight = Math.max(...symbols.map(i => i.widthWeight));
     const forward = buildCell({ ...image, align: 'left' });
     const txt = buildCell({ ...textCell(text), align: 'right', widthWeight: 100 - image.widthWeight });
     return this.addRowWithCells([txt, forward], { onSelect });

@@ -3,17 +3,12 @@
 import production from 'consts:production';
 import { assertNever, isObject } from './ts-utils.js';
 import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-utils.js';
-import { Command, CommandSummary, GetISBNsSummary, Input, RequestedInput, RequestedOutput, UI, UIRequestReceiver } from './ui-types.js';
+import { type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UI, type UIRequestReceiver } from './ui-types.js';
 import { UITableBuilder } from './uitable-builder.js';
 
-import { type EditionsService, type Fetcher, type Row, shelfInfo, AllEditionsServices, parseCSVRows, missingAndISBNs, ProgressReport, bothISBNsOf, getEditionsOf, rowsShelvedAs } from 'utils';
+import { type EditionsService, type Fetcher, type Row, shelfInfo, AllEditionsServices, parseCSVRows, missingAndISBNs, type ProgressReport, bothISBNsOf, getEditionsOf, rowsShelvedAs } from 'utils';
 import { toCSV } from 'utils';
 import { pick } from 'utils';
-
-type CommandOutput =
-  | { name: 'MissingISBNs', shelf: string, rows: Row[] }
-  | { name: 'GetISBNs', shelf: string, isbns: Set<string> }
-  ;
 
 export class Controller implements UIRequestReceiver {
   constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string) {
@@ -42,7 +37,7 @@ export class Controller implements UIRequestReceiver {
         { type: 'text', title: 'Test Mode?', align: 'left' },
         { type: 'text', title: String(this.testMode), align: 'right' },
       ], { onSelect: () => { this.testMode = !this.testMode; build() } });
-      builder.addTextRow('Test Mode makes the following changes:\n'
+      builder.addIndentRow('Test Mode makes the following changes:\n'
         + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
         + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
         , { height: 149 });
@@ -52,6 +47,8 @@ export class Controller implements UIRequestReceiver {
         { type: 'text', title: 'OL:WE status', align: 'left' },
         { type: 'text', title: olweStatus, align: 'right' },
       ], { onSelect: () => { olweToggle(); build() } });
+      builder.addIndentRow('OL:WE requires 1+N fetches/ISBN (throttled to 1 fetch/second) '
+        + 'and probably gives the same results as OL:S (which needs only 1 fetch/ISBN).', { height: 132 });
 
       reload && table.reload();
     };
@@ -73,7 +70,7 @@ export class Controller implements UIRequestReceiver {
         const clipboard = Pasteboard.pasteString();
         if (clipboard != null) { // types not quite accurate, docs say can be null if no string available
           const rows = await parseRows(clipboard);
-          return { rows, input: { type, info: await getInputInfo(rows) } };
+          return { rows, input: { type, ...await getInputInfo(rows) } };
         }
 
         const a = new Alert;
@@ -87,7 +84,7 @@ export class Controller implements UIRequestReceiver {
         const pathname = await DocumentPicker.openFile();
         const csv = await new ReadWrite(pathname).readString();
         const rows = await parseRows(csv);
-        return { rows, input: { type, displayName: basename(pathname), info: await getInputInfo(rows) } };
+        return { rows, input: { type, displayName: basename(pathname), ...await getInputInfo(rows) } };
 
       } else assertNever(type);
 
@@ -104,7 +101,7 @@ export class Controller implements UIRequestReceiver {
         throw e;
       }
     }
-    async function getInputInfo(rows: Row[]): Promise<Input['info']> {
+    async function getInputInfo(rows: Row[]): Promise<InputParseInfo> {
       const { exclusive, shelfCounts } = await shelfInfo(rows);
       const items = Array.from(exclusive).reduce((total, shelf) => total + (shelfCounts.get(shelf) ?? 0), 0);
       const shelfItems = Object.fromEntries(Array.from(shelfCounts.entries()).sort((a, b) => {
@@ -123,188 +120,30 @@ export class Controller implements UIRequestReceiver {
       return { items, shelfItems };
     }
   }
-  private abortingFetches = false;
-  private commandPromise?: Promise<void>;
-  private abortEditions?: () => void;
-  async requestCommand(ui: UI, command: Command): Promise<void> {
-    if (this.commandPromise) {
-      console.error('requested a command while one is already running');
-      return;
-    }
-    try {
-      this.abortingFetches = false;
-      this.commandPromise = this._requestCommand(ui, command);
-      await this.commandPromise;
-    } finally {
-      this.abortEditions = void 0;
-      this.commandPromise = void 0;
-    }
+  private selected?: { shelf: string, missingRows: Row[], isbns: Set<string> };
+  requestShelf(ui: UI, shelf: string): void {
+    const { missingISBN: missingRows, isbns } = missingAndISBNs(rowsShelvedAs(this.allRows, shelf));
+    this.selected = { shelf, missingRows, isbns };
+    ui.summary({ missingISBNCount: missingRows.length, isbnCount: isbns.size });
   }
-  private output?: CommandOutput;
-  private async _requestCommand(ui: UI, command: Command): Promise<void> {
-    if (this.allRows.length <= 0) throw 'requested command without first requesting input';
+  requestOutputMissing(ui: UI, kind: RequestedOutput): void {
+    if (!this.selected) throw 'requested output before anything selected';
 
-    const { missingISBN, isbns } = missingAndISBNs(rowsShelvedAs(this.allRows, command.shelf));
-    let summary: CommandSummary;
-
-    if (command.name == 'MissingISBNs') {
-
-      this.output = { name: 'MissingISBNs', shelf: command.shelf, rows: missingISBN };
-      summary = { name: 'MissingISBNs', itemsMissingISBN: missingISBN.length };
-
-    } else if (command.name == 'GetISBNs') {
-
-      let editionsInfo: GetISBNsSummary['editionsInfo'];
-
-      const getEditions = async (isbns: Set<string>, services: readonly string[]): Promise<Set<string>> => {
-
-        if (production && this.testMode || !production && !this.testMode) {
-          const x = this.testMode
-            ? {
-              title: 'Warning: Test Mode Active',
-              message: 'External services for Get ISBNs "Other Editions" will not be contacted, fake data will be returned instead.',
-              continue: 'Continue in Test Mode',
-              switch: 'Switch to Normal Mode and Continue',
-            }
-            : {
-              title: 'Warning: Test Mode Inactive',
-              message: 'Actual requests will be made to external services for Get ISBNs of "Other Editions".',
-              continue: 'Continue in Normal Mode',
-              switch: 'Switch to Test Mode and Continue',
-            };
-          const a = new Alert;
-          a.title = x.title;
-          a.message = x.message;
-          a.addAction(x.continue);
-          a.addAction(x.switch);
-          a.addCancelAction('Do Not Run Get ISBNs');
-          const action = await a.presentAlert();
-          if (action == -1) throw 'Aborted Get ISBNs after checking test mode';
-          else if (action == 1)
-            this.testMode = !this.testMode;
-        }
-
-        const fetcher: Fetcher = (fetcher => {
-          return url => {
-            if (this.abortingFetches) return Promise.reject(`aborting ${url}`);
-            return fetcher(url);
-          };
-        })(this.testMode ? fakeFetcher : realFetcher);
-
-        const log = new Log(this.logPathnamer(this.testMode));
-        const store = new Store(this.cachePathnamer(this.testMode));
-        await store.read();
-        const cacheData = (store => {
-          if (!store) return void 0;
-          if (isObject(store.data))
-            return store.data;
-          const data = {};
-          store.data = data;
-          return data;
-        })(store);
-
-        const progress = { total: 0, started: 0, done: 0, fetched: 0 };
-        const infos = new Map<EditionsService, { hits: number, queries: number, fetches: number[], firstBegan?: number, lastEnded?: number }>;
-        const infoFor = (service: EditionsService): Parameters<typeof infos.set>[1] => {
-          {
-            const info = infos.get(service);
-            if (info) return info;
-          }
-          const info = { hits: 0, queries: 0, fetches: new Array<number> };
-          infos.set(service, info);
-          return info;
-        };
-        const reporter = (report: ProgressReport) => {
-          if (this.abortingFetches) return;
-          const ev = report.event;
-          if (ev == 'abort fn') {
-            this.abortEditions = report.fn;
-          } else if (ev == 'rejection') {
-            console.warn('GetISBNS Other Editions reported rejection');
-            console.error(report.reason);
-          } else if (ev == 'service cache hit') {
-            infoFor(report.service).hits++;
-          } else if (ev == 'query plan') {
-            progress.total = Array.from(report.plan.values()).reduce((total, isbns) => total + isbns.size, 0);
-          } else if (ev == 'service query started') {
-            progress.started++;
-            ui.commandProgress(progress);
-            const info = infoFor(report.service);
-            if (!info.firstBegan) info.firstBegan = Date.now();
-            info.queries++;
-          } else if (ev == 'fetch started') {
-            console.log(`started ${report.url}`);
-          } else if (ev == 'fetch finished') {
-            infoFor(report.service).fetches.push(report.elapsed);
-            progress.fetched++;
-            ui.commandProgress(progress);
-          } else if (ev == 'service query finished') {
-            infoFor(report.service).lastEnded = Date.now();
-            progress.done++;
-            ui.commandProgress(progress);
-            report.warnings.forEach(e => {
-              console.warn(e.description);
-              log.append(e.description);
-            });
-            report.faults.forEach(e => {
-              console.warn(e.description);
-              log.append(e.description);
-            });
-          }
-        };
-
-        const valid = (s: string): s is EditionsService => (AllEditionsServices as Set<string>).has(s);
-        const enabled = (s: EditionsService) => this.enabledEditionsServices.has(s);
-
-        const editionIsbns = await getEditionsOf(isbns, {
-          services: new Set(services.filter(valid).filter(enabled)),
-          cacheData,
-          fetcher,
-          reporter
-        });
-
-        await store.write();
-        await log.flush();
-
-        const stats = (arr: number[]) => {
-          arr.sort((a, b) => a - b);
-          const median = arr.length % 2 == 1 ? arr[(arr.length - 1) / 2] : (arr[arr.length / 2 - 1] + arr[arr.length / 2]) / 2;
-          return { min: arr[0], max: arr[arr.length - 1], median };
-        };
-        editionsInfo = Object.fromEntries(Array.from(infos.entries()).map(([service, info]) => {
-          const fetchRate = info.fetches.length / (((info.lastEnded ?? 0) - (info.firstBegan ?? 0)) / 1000);
-          return [service, { cacheHits: info.hits, queries: info.queries, fetches: info.fetches.length, fetchRate, fetchStats: stats(info.fetches) }];
-        }));
-
-        return editionIsbns;
-      };
-
-      const editions: (i: typeof isbns) => Promise<typeof isbns> =
-        command.editions.length > 0 ? i => getEditions(i, command.editions) : async i => i;
-      const both: (i: typeof isbns) => typeof isbns =
-        command.both ? bothISBNsOf : i => i;
-
-      const allIsbns = both(await editions(isbns));
-
-      this.output = { name: 'GetISBNs', shelf: command.shelf, isbns: allIsbns };
-      summary = { name: 'GetISBNs', itemsWithISBN: isbns.size, totalISBNs: allIsbns.size, editionsInfo };
-
-    }
-    else summary = assertNever(command);
-
-    ui.commandSummary(summary);
+    const filename = `ISBNS missing on ${this.selected.shelf}.csv`;
+    const output = toCSV(this.selected.missingRows.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])));
+    this.output(kind, filename, output).then(() => ui.outputDone());
   }
-  async requestCancelCommand(ui: UI): Promise<void> {
-    await this.abortIfRunning();
-    ui.commandCanceled();
+  requestOutputISBNs(ui: UI, both: boolean, kind: RequestedOutput): void {
+    if (!this.selected) throw 'requested output before anything selected';
+
+    const filename = `ISBNs on ${this.selected.shelf}.txt`;
+    const isbns = both ? bothISBNsOf(this.selected.isbns) : this.selected.isbns;
+    const output = Array.from(isbns).join('\n');
+    this.output(kind, filename, output).then(() => ui.outputDone());
   }
-  async requestOutput(ui: UI, output: RequestedOutput): Promise<void> {
-    if (!this.output) {
-      console.error('requestOutput called before any output available');
-      return;
-    }
+  private async output(output: RequestedOutput, filename: string, out: string): Promise<void> {
     const type = output.type;
-    const { filename, output: out } = getOutput(this.output);
+
     if (type == 'view') {
 
       const file = localTempfile(filename, out);
@@ -333,19 +172,168 @@ export class Controller implements UIRequestReceiver {
       a.addCancelAction('Okay');
       a.presentAlert();
     }
-    function getOutput(output: CommandOutput): { filename: string, output: string } {
-      if (output.name == 'MissingISBNs') {
-        const pickedColumns = output.rows.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']));
-        return { filename: `ISBNS missing on ${output.shelf}.csv`, output: toCSV(pickedColumns) };
-      } else if (output.name == 'GetISBNs') {
-        return { filename: `ISBNs on ${output.shelf}.txt`, output: Array.from(output.isbns).join('\n') };
-      } else assertNever(output);
+  }
+  private abortingFetches = false;
+  private editionsPromise?: Promise<void>;
+  private abortEditions?: () => void;
+  private edtionsISBNs: Set<string> = new Set;
+  async requestEditions(ui: UI, services: string[]): Promise<void> {
+    if (!this.selected) throw 'requested editions before anything selected';
+
+    if (production && this.testMode || !production && !this.testMode) {
+      const x = this.testMode
+        ? {
+          title: 'Warning: Test Mode Active',
+          message: 'External services for Get ISBNs "Other Editions" will not be contacted, fake data will be returned instead.',
+          continue: 'Continue in Test Mode',
+          switch: 'Switch to Normal Mode and Continue',
+        }
+        : {
+          title: 'Warning: Test Mode Inactive',
+          message: 'Actual requests will be made to external services for Get ISBNs of "Other Editions".',
+          continue: 'Continue in Normal Mode',
+          switch: 'Switch to Test Mode and Continue',
+        };
+      const a = new Alert;
+      a.title = x.title;
+      a.message = x.message;
+      a.addAction(x.continue);
+      a.addAction(x.switch);
+      a.addCancelAction('Do Not Run Get ISBNs');
+      const action = await a.presentAlert();
+      if (action == -1) throw 'Aborted Get ISBNs after checking test mode';
+      else if (action == 1)
+        this.testMode = !this.testMode;
     }
+
+    if (this.editionsPromise) {
+      console.error('requested a editions while it is already running');
+      return;
+    }
+
+    const isbns = this.selected.isbns;
+
+    this.abortingFetches = false;
+    this.editionsPromise = (async () => {
+      const fetcher: Fetcher = (fetcher => {
+        return url => {
+          if (this.abortingFetches) return Promise.reject(`aborting ${url}`);
+          return fetcher(url);
+        };
+      })(this.testMode ? fakeFetcher : realFetcher);
+
+      const log = new Log(this.logPathnamer(this.testMode));
+      const store = new Store(this.cachePathnamer(this.testMode));
+
+      const progress = { total: 0, started: 0, done: 0, fetched: 0 };
+      const infos = new Map<EditionsService, { hits: number, queries: number, fetches: number[], firstBegan?: number, lastEnded?: number }>;
+      const infoFor = (service: EditionsService): Parameters<typeof infos.set>[1] => {
+        {
+          const info = infos.get(service);
+          if (info) return info;
+        }
+        const info = { hits: 0, queries: 0, fetches: new Array<number> };
+        infos.set(service, info);
+        return info;
+      };
+      const reporter = (report: ProgressReport) => {
+        if (this.abortingFetches) return;
+        const ev = report.event;
+        if (ev == 'abort fn') {
+          this.abortEditions = report.fn;
+        } else if (ev == 'rejection') {
+          console.warn('GetISBNS Other Editions reported rejection');
+          console.error(report.reason);
+        } else if (ev == 'service cache hit') {
+          infoFor(report.service).hits++;
+        } else if (ev == 'query plan') {
+          progress.total = Array.from(report.plan.values()).reduce((total, isbns) => total + isbns.size, 0);
+        } else if (ev == 'service query started') {
+          progress.started++;
+          ui.editionsProgress(progress);
+          const info = infoFor(report.service);
+          if (!info.firstBegan) info.firstBegan = Date.now();
+          info.queries++;
+        } else if (ev == 'fetch started') {
+          console.log(`started ${report.url}`);
+        } else if (ev == 'fetch finished') {
+          infoFor(report.service).fetches.push(report.elapsed);
+          progress.fetched++;
+          ui.editionsProgress(progress);
+        } else if (ev == 'service query finished') {
+          infoFor(report.service).lastEnded = Date.now();
+          progress.done++;
+          ui.editionsProgress(progress);
+          report.warnings.forEach(e => {
+            console.warn(e.description);
+            log.append(e.description);
+          });
+          report.faults.forEach(e => {
+            console.warn(e.description);
+            log.append(e.description);
+          });
+        }
+      };
+
+      await store.read();
+      const cacheData = (store => {
+        if (!store) return void 0;
+        if (isObject(store.data))
+          return store.data;
+        const data = {};
+        store.data = data;
+        return data;
+      })(store);
+
+      const valid = (s: string): s is EditionsService => (AllEditionsServices as Set<string>).has(s);
+      const enabled = (s: EditionsService) => this.enabledEditionsServices.has(s);
+
+      const editionsISBNs = await getEditionsOf(isbns, {
+        services: new Set(services.filter(valid).filter(enabled)),
+        cacheData,
+        fetcher,
+        reporter
+      });
+
+      await store.write();
+      await log.flush();
+
+      const stats = (arr: number[]) => {
+        arr.sort((a, b) => a - b);
+        const median = arr.length % 2 == 1 ? arr[(arr.length - 1) / 2] : (arr[arr.length / 2 - 1] + arr[arr.length / 2]) / 2;
+        return { min: arr[0], max: arr[arr.length - 1], median };
+      };
+      const editionsServicesSummary = Object.fromEntries(Array.from(infos.entries()).map(([service, info]) => {
+        const fetchRate = info.fetches.length / (((info.lastEnded ?? 0) - (info.firstBegan ?? 0)) / 1000);
+        return [service, { cacheHits: info.hits, queries: info.queries, fetches: info.fetches.length, fetchRate, fetchStats: stats(info.fetches) }];
+      }));
+
+      ui.editionsSummary({ isbns: editionsISBNs.size, editionsServicesSummary });
+      this.edtionsISBNs = editionsISBNs;
+    })();
+
+    try {
+      await this.editionsPromise;
+    } finally {
+      this.abortEditions = void 0;
+      this.editionsPromise = void 0;
+    }
+  }
+  requestCancelEditions(ui: UI): void {
+    this.abortIfRunning().then(() => ui.editionsCanceled());
+  }
+  requestOutputEditionsISBNs(ui: UI, both: boolean, kind: RequestedOutput): void {
+    if (!this.selected) throw 'requested output before anything selected';
+
+    const filename = `ISBNs of editions of ISBNs on ${this.selected.shelf}.txt`;
+    const isbns = both ? bothISBNsOf(this.edtionsISBNs) : this.edtionsISBNs;
+    const output = Array.from(isbns).join('\n');
+    this.output(kind, filename, output).then(() => ui.outputDone());
   }
   async abortIfRunning() {
     this.abortingFetches = true;
     this.abortEditions?.();
-    await this.commandPromise;
+    await this.editionsPromise;
   }
 }
 
@@ -369,7 +357,7 @@ const realFetcher = serverThrottledFetcher(async url => {
 });
 
 import { equivalentISBNs } from 'utils';
-import { type FetchResult } from 'utils';
+import type { FetchResult } from 'utils';
 
 // generate fake data for the "editions of" parsers to consume so we do not make real requests while testing
 async function fakeFetcher(url: string): Promise<FetchResult> {
