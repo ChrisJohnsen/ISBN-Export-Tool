@@ -19,7 +19,8 @@
       "extends": [ "plugin:@typescript-eslint/recommended" ],
       "rules": {
         "semi": [ "error", "always", { "omitLastInOneLineBlock": true } ],
-        "semi-style": [ "error", "last" ]
+        "semi-style": [ "error", "last" ],
+        "@typescript-eslint/consistent-type-imports": [ "error", { "fixStyle": "inline-type-imports" } ]
       }
     },
     {

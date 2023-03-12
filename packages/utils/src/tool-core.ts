@@ -1,9 +1,9 @@
 import { collect, flatPipe, filter } from './functional.js';
 import { equivalentISBNs } from './isbn.js';
-import { reduceCSV, Row } from './csv.js';
+import { reduceCSV, type Row } from './csv.js';
 import {
-  Fetcher,
-  ContentError, type EditionsISBNResults,
+  type Fetcher,
+  type ContentError, type EditionsISBNResults,
 } from './editions-common.js';
 import { otherEditionsOfISBN as otherEditionsOfISBN__OpenLibrary_WorkEditions } from './editions-openlibrary-work.js';
 import { otherEditionsOfISBN as otherEditionsOfISBN__OpenLibrary_Search } from './editions-openlibrary-search.js';

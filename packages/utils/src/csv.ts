@@ -60,8 +60,8 @@ function parseCSV(data: string, opts: ParseOpts) {
   parse(data, config);
 }
 
-import { Reducer } from './functional.js';
-export { Reducer } from './functional.js';
+import { type Reducer } from './functional.js';
+export { type Reducer } from './functional.js';
 
 export function reduceCSV<T>(csv: string, reducer: Reducer<Row, T>): Promise<T> {
   return new Promise((resolve, reject) => {

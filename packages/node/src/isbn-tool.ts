@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { type BaseContext, Builtins, Cli, Command, Option, UsageError } from 'clipanion';
-import { Fetcher, pick, toCSV } from 'utils';
+import { type Fetcher, pick, toCSV } from 'utils';
 import { missingISBNs } from 'utils';
 import { AllEditionsServices, type EditionsService, type EditionsServices, getISBNs, type CacheData, type ProgressReporter } from 'utils';
 import { version } from 'utils';
 import * as path from 'node:path';
 import { JSONFile } from 'lowdb/node';
 import { Low } from 'lowdb';
-import { WriteStream } from 'node:tty';
+import { type WriteStream } from 'node:tty';
 
 class MissingISBNs extends Command {
   static usage = Command.Usage({

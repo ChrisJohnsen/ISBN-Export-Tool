@@ -1,5 +1,5 @@
 import { describe, test, expect, jest, afterEach, beforeEach } from '@jest/globals';
-import { CacheControl, ServerThrottle, ThrottleableFetcher } from 'utils';
+import { CacheControl, ServerThrottle, type ThrottleableFetcher } from 'utils';
 
 describe('ServerThrottle', () => {
   describe('URL variations', () => {

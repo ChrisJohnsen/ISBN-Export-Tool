@@ -1,7 +1,7 @@
 import { describe, test, expect, jest } from '@jest/globals';
 import {
   normalizeISBN,
-  type Fetcher, ContentError, EditionsISBNResults,
+  type Fetcher, ContentError, type EditionsISBNResults,
   otherEditionsOfISBN__LibraryThing_ThingISBN as otherEditionsOfISBN,
 } from 'utils';
 import { join } from 'node:path';
