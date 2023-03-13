@@ -185,7 +185,7 @@ export class UITableBuilder {
     const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - chevron.widthWeight });
     return this.addRowWithCells([back, textCell], { onSelect });
   }
-  addSubtitleHelpRow(subtitle: string, helpLines?: string[]) {
+  addSubtitleHelpRow(subtitle: string, helpLines?: string) {
     const qm = symbolCell('questionmark.circle');
     const cells = [];
     let helpFn;
@@ -193,7 +193,7 @@ export class UITableBuilder {
       helpFn = () => {
         const a = new Alert;
         a.title = this.title + '\n' + subtitle + '\n';
-        a.message = helpLines.join('\n');
+        a.message = helpLines;
         a.addCancelAction('Okay');
         a.presentSheet();
       };

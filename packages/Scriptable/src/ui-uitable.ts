@@ -1,5 +1,7 @@
 // UITable-based UI uses controller to do the work
 
+import { outdent as outdentDefault } from 'outdent';
+const outdent = outdentDefault({ newline: '\n' });
 import production from 'consts:production';
 import { assertNever } from './ts-utils.js';
 import { type EditionsSummary, type Summary, type Input, type UI, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
@@ -201,27 +203,29 @@ export class UITableUI implements UI {
     this.table.addRow(empty);
   }
   private buildPickInput(): void {
-    this.builder.addSubtitleHelpRow('Input Selection', [
-      'This program reads exported book list data to let you access the ISBNs of your books in various ways:',
-      'Check exported listings for missing ISBNs, and',
-      'Extract ISBNs from exported data (optionally including ISBNS of other editions of the listed book).',
-      '',
-      'Currently, Goodreads export format (CSV with a specific set of columns) and its "shelf" system are supported.',
-      'Suggest your favorite book list format for support in future versions!',
-      '',
-      'Goodreads Export Tips',
-      'Exporting your Goodreads can be done from the Goodreads website:',
-      'Login,',
-      'If on a mobile device, tap/click the "Desktop version" link in the footer of the website,',
-      'Tap/click on the "My Books" tab,',
-      'In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link',
-      'On the Import/Export page tap/click "Export Library" button at the top of the page.',
-      'A link like "Your export from <date>" will appear when the export is ready.',
-      '',
-      'Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data and use Select All and Copy to copy it to the clipboard.',
-      '',
-      'When you have your data ready, you can tell this program where to find it using the selections on this Input screen.'
-    ]);
+    this.builder.addSubtitleHelpRow('Input Selection', outdent`
+      This program reads exported book list data to let you access the ISBNs of your listed items.
+
+      You can review the items that are missing ISBNs, and view or save the list of ISBNs (optionally including ISBNs of other editions of the listed book).
+
+      Some libraries can import such an ISBN list and use it to show which of those books they have available in their holdings (e.g. which of your "To Be Read" list is available for checkout).
+
+      Currently, Goodreads export format (CSV with a specific set of columns) and its "shelf" system are supported.
+      Suggest your favorite book list format for support in future versions!
+
+      Goodreads Export Tips
+      Exporting your Goodreads can be done from the Goodreads website:
+      Login,
+      If on a mobile device, tap/click the "Desktop version" link in the footer of the website,
+      Tap/click on the "My Books" tab,
+      In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link
+      On the Import/Export page tap/click "Export Library" button at the top of the page.
+      A link like "Your export from <date>" will appear when the export is ready.
+
+      Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data and use Select All and Copy to copy it to the clipboard.
+
+      When you have your data ready, tell this program where to find it using the selections on this Input Selection screen.
+    `);
     this.builder.addEmptyRow();
     this.builder.addTextRow('Where is your export data?');
     this.builder.addEmptyRow();
@@ -236,12 +240,11 @@ export class UITableUI implements UI {
     if (!this.state.input) throw 'tried to build shelf picker UI without input';
 
     this.builder.addBackRow('Input Selection', () => this.input());
-    this.builder.addSubtitleHelpRow('Item Selection', [
-      'Start by selecting which items from the exported data we will examine. '
-      + 'The next step will check the selection for items that are missing ISBNs.',
-      '',
-      'Currently only a whole "shelf" of items can be selected. On this screen, choose the shelf that holds the items you want to examine.',
-    ]);
+    this.builder.addSubtitleHelpRow('Item Selection', outdent`
+      Start by selecting which items from the exported data we will examine. The next step will check the selection for items that are missing ISBNs.
+
+      Currently only a whole "shelf" of items can be selected. On this screen, choose the shelf that holds the items you want to examine.
+    `);
     this.builder.addEmptyRow();
     this.builder.addTextRow(`Found ${this.state.input.items} items in export data.`);
     this.builder.addTextRow('Choose the shelf to examine.');
@@ -281,15 +284,17 @@ export class UITableUI implements UI {
     const ISBNs = (both: boolean) => Object.assign('ISBNs', { both });
     if (!summary.choosingOutput) {
       this.builder.addBackRow('Item Selection', () => this.summary());
-      this.builder.addSubtitleHelpRow('Item Summary', [
-        'Each item from the provided data that does not have an ISBN is in the "Items Missing an ISBN" list.',
-        'Likewise, each item that has an ISBN will contribute its ISBN to the "Item ISBNs" list.',
-        '',
-        'Each category can be viewed or saved by selecting its view/save option.',
-        '',
-        'You can use the "Select Editions Services" option to extend the list of ISBNs with those of other editions of the same work. '
-        + 'See the help on that screen for more information.',
-      ]);
+      this.builder.addSubtitleHelpRow('Item Summary', outdent`
+        The bulk of this program works only with ISBNs, so any item that lacks an ISBN can not be usefully processed beyond pointing out the missing ISBN.
+
+        Items missing an ISBN often occur because the default edition is an eBook or audiobook version that happens to not use an ISBN. If you did not mean to secifically select that non-ISBN edition you can usually change the listing (e.g. Goodread's Book Details) to an ISBN-bearing edition so that its ISBN can be used by the rest of this program in a future data export.
+
+        Every item from the provided data that does not have an ISBN is in the "Items Missing an ISBN" list. Likewise, every item that has an ISBN will contribute it to the "Item ISBNs" list.
+
+        Each category can be viewed or saved by selecting its view/save option.
+
+        You can use the "Select Editions Services" option to extend the list of ISBNs with those of other editions of the same work. See the help on that screen for more information.
+      `);
       this.builder.addEmptyRow();
       this.builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
       addMissingSummaryRow();
@@ -314,22 +319,28 @@ export class UITableUI implements UI {
             desc: 'Item ISBNs',
             output: (kind: RequestedOutput) => this.controller.requestOutputISBNs(this, both, kind),
             addSummaryRow: addISBNSummaryRow,
-            extras: () => this.builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, { onSelect: toggleBoth }),
+            extraOutput: () => this.builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, { onSelect: toggleBoth }),
+            extraHelp: outdent`
+
+
+              Only the ISBN-13 version of each ISBN are provided by default. Select the "Include both" option to also include the ISBN-10 version when possible (not all ISBNs have an old-style ISBN-10 version).
+            `,
           };
         } else assertNever(outputChoice);
       })(summary.choosingOutput);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { choosingOutput, ...backSummary } = summary;
       this.builder.addBackRow('Item Summary', () => this.summary(backSummary));
-      this.builder.addSubtitleHelpRow(`${choice.desc}`, [
-        'Select an output option to view or save the full output.',
-      ]);
+      console.log(`<<${choice.extraHelp}>>`);
+      this.builder.addSubtitleHelpRow(`${choice.desc}`,
+        'Select an Output Option to view or save the full output.' + (choice.extraHelp ?? ''),
+      );
       this.builder.addEmptyRow();
 
       this.builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
       choice.addSummaryRow();
 
-      this.buildSharedOutput(choice.output, choice.extras);
+      this.buildSharedOutput(choice.output, choice.extraOutput);
     }
   }
   private buildSharedOutput(output: (kind: RequestedOutput) => void, buildExtraOptionRows?: () => void) {
@@ -366,24 +377,15 @@ export class UITableUI implements UI {
     if (!this.state.editionsServices) throw 'tried to build editions services picker UI without editions services state';
 
     this.builder.addBackRow('Item Summary', () => this.setEditionsServices());
-    this.builder.addSubtitleHelpRow('Select Editions Services', [
-      'Books often have multiple editions, and thus multiple ISBNs. '
-      + 'Some book lists only let you add only one edition of a book, '
-      + 'so the data will only include (at most) one ISBN for each book.',
-      '',
-      'If you are interested in finding any edition of the books in your lists, '
-      + 'then it might be handy to be able to gather not just the ISBN of the '
-      + '(sometimes arbitrary) edition in your list, but also the ISBNs of '
-      + 'other editions of that book.',
-      '',
-      'Some book websites offer a way to find the ISBNs of other editions of a book '
-      + '(at least the editions that those services know about). '
-      + 'This program can use those services to gather those extra ISBNs.',
-      '',
-      'Requests to these services are limited to one per second, so it may take '
-      + 'some time to process a large list. The results are saved for re-use '
-      + 'though, so later queries about the same book should be faster.',
-    ]);
+    this.builder.addSubtitleHelpRow('Select Editions Services', outdent`
+      Books often have multiple editions, and thus multiple ISBNs. Some book lists only let you add one edition of a book, so the data will only include (at most) one ISBN for each book.
+
+      If you are interested in finding any edition of the books in your lists, then it might be handy to be able to gather not just the ISBN of the (sometimes arbitrary) edition in your list, but also the ISBNs of other editions of that book.
+
+      Some book websites offer a way to find the ISBNs of other editions of a book (at least the editions that those services know about). This program can use those services to gather those extra ISBNs.
+
+      Requests to these services are limited to one per second, so it may take some time to process a large list. The results are saved for re-use though, so later queries about the same book should be faster.
+    `);
     this.builder.addEmptyRow();
 
     const services = this.state.editionsServices;
@@ -499,14 +501,15 @@ export class UITableUI implements UI {
       return await a.presentAlert() != -1;
     };
     this.builder.addBackRow('Select Editions Services', async () => await confirmBack() && this.setEditionsSummary());
-    this.builder.addSubtitleHelpRow(`Other Editions Summary`, [
-      'The ISBNs of other editions of your selected items have been retrieved. '
-      + 'The queries are summarized on this screen.',
-      '',
-      'Select an Output Option to view or save the full list of ISBNs.',
-      '',
-      'The "back" option at the bottom jumps back to the input selection screen (also available through multiple taps on "back" at the top).',
-    ]);
+    this.builder.addSubtitleHelpRow(`Other Editions Summary`, outdent`
+      The ISBNs of other editions of your selected items have been retrieved. The queries are summarized on this screen.
+
+      Select an Output Option to view or save the full list of ISBNs.
+
+      Only the ISBN-13 version of each ISBN are provided by default. Select the "Include both" option to also include the ISBN-10 version when possible (not all ISBNs have an old-style ISBN-10 version).
+
+      The "back" option at the bottom jumps back to the input selection screen (also available through multiple taps on "back" at the top).
+    `);
     this.builder.addEmptyRow();
 
     const shelf = this.state.shelf;

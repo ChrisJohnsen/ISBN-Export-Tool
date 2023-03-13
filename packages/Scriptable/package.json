@@ -14,6 +14,7 @@
     "rollup-plugin-esbuild": "^5.0.0"
   },
   "dependencies": {
+    "outdent": "^0.8.0",
     "utils": "workspace:^"
   }
 }
