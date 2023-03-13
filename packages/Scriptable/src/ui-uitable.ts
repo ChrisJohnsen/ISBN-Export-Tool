@@ -213,19 +213,27 @@ export class UITableUI implements UI {
       Currently, Goodreads export format (CSV with a specific set of columns) and its "shelf" system are supported.
       Suggest your favorite book list format for support in future versions!
 
-      Goodreads Export Tips
+      When you have your data ready, tell this program where to find it using the selections on this Input Selection screen.
+    `, {
+      'Goodreads Export': outdent`
       Exporting your Goodreads can be done from the Goodreads website:
+
+
       Login,
+
       If on a mobile device, tap/click the "Desktop version" link in the footer of the website,
+
       Tap/click on the "My Books" tab,
+
       In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link
+
       On the Import/Export page tap/click "Export Library" button at the top of the page.
+
       A link like "Your export from <date>" will appear when the export is ready.
 
-      Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data and use Select All and Copy to copy it to the clipboard.
 
-      When you have your data ready, tell this program where to find it using the selections on this Input Selection screen.
-    `);
+      Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data in your web browser and use Select All and Copy to copy it to the clipboard.
+    `});
     this.builder.addEmptyRow();
     this.builder.addTextRow('Where is your export data?');
     this.builder.addEmptyRow();

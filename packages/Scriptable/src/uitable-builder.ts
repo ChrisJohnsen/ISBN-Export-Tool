@@ -185,17 +185,36 @@ export class UITableBuilder {
     const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - chevron.widthWeight });
     return this.addRowWithCells([back, textCell], { onSelect });
   }
-  addSubtitleHelpRow(subtitle: string, helpLines?: string) {
+  addSubtitleHelpRow(subtitle: string, helpLines?: string, topics?: Record<string, string | undefined>) {
     const qm = symbolCell('questionmark.circle');
     const cells = [];
     let helpFn;
-    if (helpLines && helpLines.length > 0)
-      helpFn = () => {
-        const a = new Alert;
-        a.title = this.title + '\n' + subtitle + '\n';
-        a.message = helpLines;
-        a.addCancelAction('Okay');
-        a.presentSheet();
+    if (helpLines)
+      helpFn = async () => {
+        const allTopics = new Array<[topic: string, help: string]>;
+        if (topics)
+          Object.entries(topics).forEach(([topic, help]) => {
+            if (!topic || !help) return;
+            allTopics.push([topic, help])
+          });
+        allTopics.push([subtitle, helpLines]);
+        let topic = subtitle;
+        let help = helpLines;
+        do {
+          const a = new Alert;
+          a.title = this.title + '\n' + subtitle + '\n' + (topic == subtitle ? '' : topic + '\n');
+          a.message = help;
+          const otherTopics = allTopics.filter(([nextTopic]) => nextTopic != topic);
+          otherTopics.forEach(([nextTopic]) => {
+            a.addAction(nextTopic + ' Help');
+          });
+          a.addCancelAction('Okay');
+          const pick = await a.presentSheet();
+          console.log(pick);
+          if (pick == -1) return;
+          console.log(otherTopics[pick]);
+          [topic, help] = otherTopics[pick];
+        } while (true);
       };
     if (helpFn)
       cells.push(buildCell({ type: 'text', title: '', widthWeight: qm.widthWeight }));
