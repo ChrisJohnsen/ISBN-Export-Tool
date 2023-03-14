@@ -3,7 +3,7 @@
 import production from 'consts:production';
 import { assertNever, isObject } from './ts-utils.js';
 import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-utils.js';
-import { type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UI, type UIRequestReceiver } from './ui-types.js';
+import { type EditionsProgress, type EditionsSummary, type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UIRequestReceiver } from './ui-types.js';
 import { UITableBuilder } from './uitable-builder.js';
 
 import { type EditionsService, type Fetcher, type Row, shelfInfo, AllEditionsServices, parseCSVRows, missingAndISBNs, type ProgressReport, bothISBNsOf, getEditionsOf, rowsShelvedAs } from 'utils';
@@ -16,8 +16,8 @@ export class Controller implements UIRequestReceiver {
     this.enabledEditionsServices.delete('Open Library WorkEditions');
   }
   private enabledEditionsServices: Set<EditionsService>;
-  requestEditionsServices(ui: UI): void {
-    ui.editionsServices(Array.from(this.enabledEditionsServices));
+  async requestEditionsServices() {
+    return Array.from(this.enabledEditionsServices);
   }
   private enableEditionsService(service: EditionsService, enable = true) {
     if (enable)
@@ -26,7 +26,7 @@ export class Controller implements UIRequestReceiver {
       this.enabledEditionsServices.delete(service);
   }
   private testMode = !production;
-  async debugUI(ui: UI) {
+  async debugUI() {
     const table = new UITable;
     table.showSeparators = true;
     const builder = new UITableBuilder(table, 'Debug UI');
@@ -54,14 +54,13 @@ export class Controller implements UIRequestReceiver {
     };
     build(false);
     await table.present(false);
-    ui.editionsServices(Array.from(this.enabledEditionsServices));
   }
   private allRows: Row[] = [];
-  async requestInput(ui: UI, inputReq: RequestedInput): Promise<void> {
+  async requestInput(inputReq: RequestedInput) {
 
     const { rows, input } = await getInput();
     this.allRows = rows;
-    ui.input(input);
+    return input;
 
     async function getInput(): Promise<{ rows: Row[], input: Input }> {
       const type = inputReq.type;
@@ -121,27 +120,27 @@ export class Controller implements UIRequestReceiver {
     }
   }
   private selected?: { shelf: string, missingRows: Row[], isbns: Set<string> };
-  requestShelf(ui: UI, shelf: string): void {
+  async requestShelf(shelf: string) {
     const { missingISBN: missingRows, isbns } = missingAndISBNs(rowsShelvedAs(this.allRows, shelf));
     this.selected = { shelf, missingRows, isbns };
-    ui.summary({ missingISBNCount: missingRows.length, isbnCount: isbns.size });
+    return { missingISBNCount: missingRows.length, isbnCount: isbns.size };
   }
-  requestOutputMissing(ui: UI, kind: RequestedOutput): void {
+  async requestOutputMissing(kind: RequestedOutput) {
     if (!this.selected) throw 'requested output before anything selected';
 
     const filename = `ISBNS missing on ${this.selected.shelf}.csv`;
     const output = toCSV(this.selected.missingRows.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])));
-    this.output(kind, filename, output).then(() => ui.outputDone());
+    return this.output(kind, filename, output);
   }
-  requestOutputISBNs(ui: UI, both: boolean, kind: RequestedOutput): void {
+  async requestOutputISBNs(both: boolean, kind: RequestedOutput) {
     if (!this.selected) throw 'requested output before anything selected';
 
     const filename = `ISBNs on ${this.selected.shelf}.txt`;
     const isbns = both ? bothISBNsOf(this.selected.isbns) : this.selected.isbns;
     const output = Array.from(isbns).join('\n');
-    this.output(kind, filename, output).then(() => ui.outputDone());
+    return this.output(kind, filename, output);
   }
-  private async output(output: RequestedOutput, filename: string, out: string): Promise<void> {
+  private async output(output: RequestedOutput, filename: string, out: string) {
     const type = output.type;
 
     if (type == 'view') {
@@ -174,10 +173,10 @@ export class Controller implements UIRequestReceiver {
     }
   }
   private abortingFetches = false;
-  private editionsPromise?: Promise<void>;
+  private editionsPromise?: Promise<EditionsSummary>;
   private abortEditions?: () => void;
   private edtionsISBNs: Set<string> = new Set;
-  async requestEditions(ui: UI, services: string[]): Promise<void> {
+  async requestEditions(services: string[], editionsReporter: (report: EditionsProgress) => void) {
     if (!this.selected) throw 'requested editions before anything selected';
 
     if (production && this.testMode || !production && !this.testMode) {
@@ -208,7 +207,7 @@ export class Controller implements UIRequestReceiver {
 
     if (this.editionsPromise) {
       console.error('requested a editions while it is already running');
-      return;
+      throw 'editions already running';
     }
 
     const isbns = this.selected.isbns;
@@ -250,7 +249,7 @@ export class Controller implements UIRequestReceiver {
           progress.total = Array.from(report.plan.values()).reduce((total, isbns) => total + isbns.size, 0);
         } else if (ev == 'service query started') {
           progress.started++;
-          ui.editionsProgress(progress);
+          editionsReporter(progress);
           const info = infoFor(report.service);
           if (!info.firstBegan) info.firstBegan = Date.now();
           info.queries++;
@@ -259,11 +258,11 @@ export class Controller implements UIRequestReceiver {
         } else if (ev == 'fetch finished') {
           infoFor(report.service).fetches.push(report.elapsed);
           progress.fetched++;
-          ui.editionsProgress(progress);
+          editionsReporter(progress);
         } else if (ev == 'service query finished') {
           infoFor(report.service).lastEnded = Date.now();
           progress.done++;
-          ui.editionsProgress(progress);
+          editionsReporter(progress);
           report.warnings.forEach(e => {
             console.warn(e.description);
             log.append(e.description);
@@ -308,27 +307,27 @@ export class Controller implements UIRequestReceiver {
         return [service, { cacheHits: info.hits, queries: info.queries, fetches: info.fetches.length, fetchRate, fetchStats: stats(info.fetches) }];
       }));
 
-      ui.editionsSummary({ isbns: editionsISBNs.size, editionsServicesSummary });
       this.edtionsISBNs = editionsISBNs;
+      return { isbns: editionsISBNs.size, editionsServicesSummary };
     })();
 
     try {
-      await this.editionsPromise;
+      return await this.editionsPromise;
     } finally {
       this.abortEditions = void 0;
       this.editionsPromise = void 0;
     }
   }
-  requestCancelEditions(ui: UI): void {
-    this.abortIfRunning().then(() => ui.editionsCanceled());
+  async requestCancelEditions() {
+    return this.abortIfRunning();
   }
-  requestOutputEditionsISBNs(ui: UI, both: boolean, kind: RequestedOutput): void {
+  async requestOutputEditionsISBNs(both: boolean, kind: RequestedOutput) {
     if (!this.selected) throw 'requested output before anything selected';
 
     const filename = `ISBNs of editions of ISBNs on ${this.selected.shelf}.txt`;
     const isbns = both ? bothISBNsOf(this.edtionsISBNs) : this.edtionsISBNs;
     const output = Array.from(isbns).join('\n');
-    this.output(kind, filename, output).then(() => ui.outputDone());
+    return this.output(kind, filename, output);
   }
   async abortIfRunning() {
     this.abortingFetches = true;

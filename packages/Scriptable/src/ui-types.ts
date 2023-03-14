@@ -1,7 +1,5 @@
 // platform independent definitions (maybe UI could be web-based inside a WebView)
 
-// UI interface
-
 export type InputParseInfo = { items: number, shelfItems: Record<string, number | undefined> }
 export type Input = (
   | { type: 'clipboard' }
@@ -25,29 +23,17 @@ export type EditionsSummary = {
 };
 export type EditionsProgress = { total: number, started: number, done: number, fetched: number };
 
-export interface UI {
-  editionsServices(enabledServices: readonly string[]): void,
-  input(input: Input): void,
-  summary(summary: Summary): void,
-  outputDone(): void,
-  editionsProgress(progress: EditionsProgress): void,
-  editionsCanceled(): void,
-  editionsSummary(summary: EditionsSummary): void,
-}
-
-// controller interface
-
 export type RequestedInput = { type: 'clipboard' } | { type: 'file' };
 export type RequestedOutput = RequestedInput | { type: 'view' };
 
 export interface UIRequestReceiver {
-  debugUI(ui: UI): void,
-  requestEditionsServices(ui: UI): void,
-  requestInput(ui: UI, input: RequestedInput): void,
-  requestShelf(ui: UI, shelf: string): void,
-  requestOutputMissing(ui: UI, kind: RequestedOutput): void,
-  requestOutputISBNs(ui: UI, both: boolean, kind: RequestedOutput): void,
-  requestEditions(ui: UI, services: string[]): void,
-  requestCancelEditions(ui: UI): void,
-  requestOutputEditionsISBNs(ui: UI, both: boolean, kind: RequestedOutput): void,
+  debugUI(): Promise<void>,
+  requestInput(input: RequestedInput): Promise<Input>,
+  requestShelf(shelf: string): Promise<Summary>,
+  requestOutputMissing(kind: RequestedOutput): Promise<void>,
+  requestOutputISBNs(both: boolean, kind: RequestedOutput): Promise<void>,
+  requestEditionsServices(): Promise<readonly string[]>,
+  requestEditions(services: string[], reporter: (report: EditionsProgress) => void): Promise<EditionsSummary>,
+  requestCancelEditions(): Promise<void>,
+  requestOutputEditionsISBNs(both: boolean, kind: RequestedOutput): Promise<void>,
 }

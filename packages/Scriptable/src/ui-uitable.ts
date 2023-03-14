@@ -4,7 +4,7 @@ import { outdent as outdentDefault } from 'outdent';
 const outdent = outdentDefault({ newline: '\n' });
 import production from 'consts:production';
 import { assertNever } from './ts-utils.js';
-import { type EditionsSummary, type Summary, type Input, type UI, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
+import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
 import { symbolCell, textCell, UITableBuilder } from './uitable-builder.js';
 
 type UISummary = Summary & { choosingOutput?: 'missing' | 'ISBNs' & { both: boolean } };
@@ -68,7 +68,7 @@ type UIState =
   }
   ;
 
-export class UITableUI implements UI {
+export class UITableUI {
   private table: UITable = new UITable;
   private builder = new UITableBuilder(this.table, 'ISBN Export Tool');
   private presented = false;
@@ -88,7 +88,7 @@ export class UITableUI implements UI {
     /* eslint-enable */
     if (typeof this.previousBoth != 'boo' + 'lean')
       this.previousBoth = void 0;
-    this.controller.requestEditionsServices(this);
+    this.build();
   }
   private saveData() {
     this.savePrevious();
@@ -96,15 +96,8 @@ export class UITableUI implements UI {
     this.savedDataObject.services = this.previousServices;
     this.savedDataObject.both = this.previousBoth;
   }
-  private enabledEditionsServices: Set<string> = new Set;
-  editionsServices(enabledServices: readonly string[]): void {
-    this.enabledEditionsServices = new Set(enabledServices);
-    this.savePrevious();
-    this.state = this.validateState(this.state.input, false, this.state.shelf, this.state.summary, this.state.editionsServices, this.state.editionsProgress, this.state.editionsSummary);
-    this.build();
-  }
   private state: UIState = {};
-  input(input?: Input) {
+  private input(input?: Input) {
     this.savePrevious();
     this.state = this.validateState(input, true);
     this.build();
@@ -155,9 +148,7 @@ export class UITableUI implements UI {
 
     if (restorePrevious) {
       if (this.previousServices)
-        editionsServices ??= new Set(this.previousServices.filter(s => this.enabledEditionsServices.has(s)));
-      if (!editionsServices || editionsServices.size <= 0)
-        editionsServices = new Set(this.enabledEditionsServices);
+        editionsServices ??= new Set(this.previousServices);
     }
 
     if (!editionsServices) return { input, shelf, summary };
@@ -166,7 +157,7 @@ export class UITableUI implements UI {
     return { input, shelf, summary, editionsServices, editionsProgress, editionsSummary };
 
   }
-  private build() {
+  private async build() {
     this.table.removeAllRows();
     this.table.showSeparators = true;
 
@@ -180,7 +171,7 @@ export class UITableUI implements UI {
     else if (this.state.editionsProgress)
       this.buildEditionsProgress();
     else if (this.state.editionsServices)
-      this.buildPickEditionsServices();
+      await this.buildPickEditionsServices();
     else if (this.state.summary)
       this.buildSummary();
     else if (this.state.input)
@@ -196,7 +187,7 @@ export class UITableUI implements UI {
     const button = empty.addButton(production ? ' ' : 'DEBUG');
     button.centerAligned();
     button.onTap = () => {
-      this.controller.debugUI(this);
+      this.controller.debugUI().then(() => this.build());
     };
     button.widthWeight = 2;
     empty.addText('').widthWeight = 4;
@@ -241,8 +232,8 @@ export class UITableUI implements UI {
       const prev = this.previousInput;
       this.builder.addForwardRow(textCell('already loaded', { titleColor: Color.orange() }), () => this.input(prev));
     }
-    this.builder.addForwardRow('On the clipboard', () => this.controller.requestInput(this, { type: 'clipboard' }));
-    this.builder.addForwardRow('In a saved or downloaded file', () => this.controller.requestInput(this, { type: 'file' }));
+    this.builder.addForwardRow('On the clipboard', () => this.controller.requestInput({ type: 'clipboard' }).then(i => this.input(i)));
+    this.builder.addForwardRow('In a saved or downloaded file', () => this.controller.requestInput({ type: 'file' }).then(i => this.input(i)));
   }
   private buildPickShelf(): void {
     if (!this.state.input) throw 'tried to build shelf picker UI without input';
@@ -268,13 +259,13 @@ export class UITableUI implements UI {
       .forEach(shelf => addShelfRow(shelf, String(shelfItems[shelf]),
         () => this.setShelf(shelf), shelf == this.previousShelf));
   }
-  private setShelf(shelf: string): void {
+  private setShelf(shelf: string) {
     this.savePrevious();
     this.state = this.validateState(this.state.input, false, shelf);
     if (this.state.shelf)
-      this.controller.requestShelf(this, this.state.shelf);
+      this.controller.requestShelf(this.state.shelf).then(s => this.summary(s));
   }
-  summary(summary?: UISummary) {
+  private summary(summary?: UISummary) {
     this.savePrevious();
     this.state = this.validateState(this.state.input, false, this.state.shelf, summary);
     this.build();
@@ -317,7 +308,7 @@ export class UITableUI implements UI {
         if (outputChoice == 'missing') {
           return {
             desc: 'Items Missing an ISBN',
-            output: (kind: RequestedOutput) => this.controller.requestOutputMissing(this, kind),
+            output: (kind: RequestedOutput) => this.controller.requestOutputMissing(kind).then(() => this.outputDone()),
             addSummaryRow: addMissingSummaryRow,
           };
         } else if (outputChoice == 'ISBNs') {
@@ -325,7 +316,7 @@ export class UITableUI implements UI {
           const toggleBoth = () => this.summary({ ...summary, choosingOutput: ISBNs(!both) });
           return {
             desc: 'Item ISBNs',
-            output: (kind: RequestedOutput) => this.controller.requestOutputISBNs(this, both, kind),
+            output: (kind: RequestedOutput) => this.controller.requestOutputISBNs(both, kind).then(() => this.outputDone()),
             addSummaryRow: addISBNSummaryRow,
             extraOutput: () => this.builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, { onSelect: toggleBoth }),
             extraHelp: outdent`
@@ -367,7 +358,7 @@ export class UITableUI implements UI {
     addOutputRow('Copy to the clipboard', clip, () => output({ type: 'clipboard' }));
     addOutputRow('Save to a file', file, () => output({ type: 'file' }));
   }
-  outputDone(): void {
+  private outputDone(): void {
     if (this.state.summary?.choosingOutput) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { choosingOutput, ...backSummary } = this.state.summary;
@@ -381,7 +372,8 @@ export class UITableUI implements UI {
     this.state = this.validateState(this.state.input, restorePrevious, this.state.shelf, this.state.summary, services);
     this.build();
   }
-  private buildPickEditionsServices(): void {
+  private async buildPickEditionsServices(): Promise<void> {
+
     if (!this.state.editionsServices) throw 'tried to build editions services picker UI without editions services state';
 
     this.builder.addBackRow('Item Summary', () => this.setEditionsServices());
@@ -406,7 +398,7 @@ export class UITableUI implements UI {
       this.setEditionsServices(newServices);
     };
 
-    this.enabledEditionsServices.forEach(service => {
+    (await this.controller.requestEditionsServices()).forEach(service => {
       const enabled = services.has(service);
       this.builder.addCheckableRow(service, enabled, { onSelect: () => serviceToggle(service) });
     });
@@ -441,7 +433,7 @@ export class UITableUI implements UI {
         const action = await a.presentAlert();
         if (action == -1) return;
 
-        this.controller.requestEditions(this, Array.from(services));
+        this.controller.requestEditions(Array.from(services), this.editionsProgress.bind(this)).then(s => this.editionsSummary(s));
       }, true);
       this.builder.addIndentRow('Note: Getting ISBNs of other editions will send your selected ISBNs to the above-selected third party services!', { height: 88 });
       this.builder.addIndentRow('Go back to Item Summary if you do not want to send your ISBNs to any third party services.', { height: 88 });
@@ -451,7 +443,7 @@ export class UITableUI implements UI {
       this.builder.addIndentRow('One or more editions services must be selected before we can proceed.', { height: 88 });
     }
   }
-  editionsProgress(progress: EditionsProgress): void {
+  private editionsProgress(progress: EditionsProgress): void {
     this.savePrevious();
     this.state = this.validateState(this.state.input, false, this.state.shelf, this.state.summary, this.state.editionsServices, progress);
     this.build();
@@ -469,7 +461,7 @@ export class UITableUI implements UI {
       const action = await a.presentAlert();
       console.log(`progress cancel warning result: ${action}`);
       if (action == -1) return;
-      this.controller.requestCancelEditions(this);
+      this.controller.requestCancelEditions().then(() => this.editionsCanceled());
     });
     this.builder.addSubtitleHelpRow('Other Editions Progress');
     this.builder.addEmptyRow();
@@ -483,10 +475,10 @@ export class UITableUI implements UI {
     this.builder.addTextRow(`Fetches:`);
     this.builder.addIndentRow(`${fetched}`);
   }
-  editionsCanceled(): void {
+  private editionsCanceled(): void {
     this.setEditionsServices(this.state.editionsServices);
   }
-  editionsSummary(summary: EditionsSummary): void {
+  private editionsSummary(summary: EditionsSummary): void {
     this.setEditionsSummary({ ...summary, received: Date.now(), both: this.previousBoth ?? false });
   }
   private setEditionsSummary(summary?: UIEditionsSummary): void {
@@ -545,7 +537,7 @@ export class UITableUI implements UI {
     const s = this.state.editionsSummary;
     const toggleBoth = () => this.setEditionsSummary({ ...s, both: !both });
     this.buildSharedOutput(
-      output => this.controller.requestOutputEditionsISBNs(this, both, output),
+      output => this.controller.requestOutputEditionsISBNs(both, output).then(() => this.outputDone()),
       () => this.builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, { onSelect: toggleBoth })
     );
 
