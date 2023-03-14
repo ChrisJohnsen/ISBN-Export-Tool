@@ -195,7 +195,7 @@ export class UITableBuilder {
         if (topics)
           Object.entries(topics).forEach(([topic, help]) => {
             if (!topic || !help) return;
-            allTopics.push([topic, help])
+            allTopics.push([topic, help]);
           });
         allTopics.push([subtitle, helpLines]);
         let topic = subtitle;
@@ -210,11 +210,9 @@ export class UITableBuilder {
           });
           a.addCancelAction('Okay');
           const pick = await a.presentSheet();
-          console.log(pick);
           if (pick == -1) return;
-          console.log(otherTopics[pick]);
           [topic, help] = otherTopics[pick];
-        } while (true);
+        } while (true); // eslint-disable-line no-constant-condition
       };
     if (helpFn)
       cells.push(buildCell({ type: 'text', title: '', widthWeight: qm.widthWeight }));
