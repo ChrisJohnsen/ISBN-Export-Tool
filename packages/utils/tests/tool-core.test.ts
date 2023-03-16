@@ -1,6 +1,6 @@
 import { describe, test, expect, jest, afterEach } from '@jest/globals';
 import { outdent } from 'outdent';
-import { AllEditionsServices, bothISBNsOf, CacheControl, EditionsService, equivalentISBNs, Fetcher, getEditionsOf, getISBNs, missingAndISBNs, missingISBNs, normalizeISBN, parseCSVRows, ProgressReport, Row, rowsShelvedAs, shelfInfo } from 'utils';
+import { AllEditionsServices, bothISBNsOf, CacheControl, type EditionsService, equivalentISBNs, type Fetcher, getEditionsOf, getISBNs, missingAndISBNs, missingISBNs, normalizeISBN, parseCSVRows, type ProgressReport, type Row, rowsShelvedAs, shelfInfo } from 'utils';
 
 describe('missingISBNs', () => {
 
@@ -929,7 +929,7 @@ describe('shelfInfo', () => {
       105,105000
     `);
 
-    await expect(shelfInfo(rows)).resolves.toStrictEqual({ exclusive: new Set, shelfCounts: new Map });
+    expect(shelfInfo(rows)).toStrictEqual({ exclusive: new Set, shelfCounts: new Map });
   });
 
   test('no Exclusive Shelf column', async () => {
@@ -943,7 +943,7 @@ describe('shelfInfo', () => {
       105,currently-reading
     `);
 
-    const { exclusive, shelfCounts } = await shelfInfo(rows);
+    const { exclusive, shelfCounts } = shelfInfo(rows);
 
     expect(exclusive).toStrictEqual(new Set);
     expect(shelfCounts).toStrictEqual(new Map([
@@ -967,7 +967,7 @@ describe('shelfInfo', () => {
       105,currently-reading,currently-reading
     `);
 
-    const { exclusive, shelfCounts } = await shelfInfo(rows);
+    const { exclusive, shelfCounts } = shelfInfo(rows);
 
     expect(exclusive).toStrictEqual(new Set(['to-read', 'read', 'did-not-finish', 'currently-reading']));
     expect(shelfCounts).toStrictEqual(new Map([

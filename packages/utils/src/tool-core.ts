@@ -14,7 +14,7 @@ import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
 import * as t from 'typanion';
 
-export async function shelfInfo(rows: Iterable<Row>): Promise<{ shelfCounts: Map<string, number>, exclusive: Set<string> }> {
+export function shelfInfo(rows: Iterable<Row>): { shelfCounts: Map<string, number>, exclusive: Set<string> } {
   const info = { shelfCounts: new Map<string, number>, exclusive: new Set<string> };
   for (const row of rows) {
     const { exclusive, shelves } = getShelves(row);

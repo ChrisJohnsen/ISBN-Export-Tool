@@ -101,7 +101,7 @@ export class Controller implements UIRequestReceiver {
       }
     }
     async function getInputInfo(rows: Row[]): Promise<InputParseInfo> {
-      const { exclusive, shelfCounts } = await shelfInfo(rows);
+      const { exclusive, shelfCounts } = shelfInfo(rows);
       const items = Array.from(exclusive).reduce((total, shelf) => total + (shelfCounts.get(shelf) ?? 0), 0);
       const shelfItems = Object.fromEntries(Array.from(shelfCounts.entries()).sort((a, b) => {
         if (a[0] == b[0]) return 0;
