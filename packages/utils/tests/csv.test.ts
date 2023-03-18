@@ -33,6 +33,16 @@ describe('reduceCSV', () => {
 });
 
 describe('parseCSVRows', () => {
+  test('not really CSV/TSV', async () => {
+    const csv = outdent`
+      This is just a string. It is
+      not particularly CSV-like, but it
+      might be interpreted like that.
+    `;
+
+    await expect(parseCSVRows(csv)).rejects.toBeDefined();
+  });
+
   const csv = outdent`
     a,b,c c,d
     1,-2,three,04
@@ -45,6 +55,24 @@ describe('parseCSVRows', () => {
     expect(result).toStrictEqual([
       { a: '1', b: '-2', 'c c': 'three', d: '04' },
       { a: '2', b: 'two words', 'c c': '="quotes"', d: 'k' }]);
+  });
+});
+
+describe('parseCSVRows TSV', () => {
+  const tsv = outdent`
+    a	b	c c	d
+    1	-2	three	04
+    2	two words	="quotes"	k
+    3	 three whole words 	[bracket]
+  `;
+
+  test('returns Row[]', async () => {
+    const result = await parseCSVRows(tsv);
+
+    expect(result).toStrictEqual([
+      { a: '1', b: '-2', 'c c': 'three', d: '04' },
+      { a: '2', b: 'two words', 'c c': '="quotes"', d: 'k' },
+      { a: '3', b: ' three whole words ', 'c c': '[bracket]' }]);
   });
 });
 
@@ -97,7 +125,6 @@ describe('toCSV', () => {
     const implictHeader = toCSV(rows);
 
     expect(implictHeader).toEqual(csv);
-
   });
 
   test('array of arrays, explicit header', () => {

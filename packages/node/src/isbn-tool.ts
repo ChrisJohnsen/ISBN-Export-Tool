@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { type BaseContext, Builtins, Cli, Command, Option, UsageError } from 'clipanion';
-import { type Fetcher, pick, toCSV } from 'utils';
-import { missingISBNs } from 'utils';
-import { AllEditionsServices, type EditionsService, type EditionsServices, getISBNs, type CacheData, type ProgressReporter } from 'utils';
+import { pick, parseCSVRows, toCSV } from 'utils';
+import { GoodreadsFormat } from 'utils';
+import { AllEditionsServices, type EditionsService, type EditionsServices, type Fetcher, getEditionsOf, type CacheData, type ProgressReporter } from 'utils';
+import { bothISBNsOf } from 'utils';
 import { version } from 'utils';
 import * as path from 'node:path';
 import { JSONFile } from 'lowdb/node';
@@ -30,8 +31,11 @@ class MissingISBNs extends Command {
   csvPath = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
-    const noISBNRows = await missingISBNs(csv, 'to-read');
-    const someFields = noISBNRows.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves']));
+    const rows = await parseCSVRows(csv);
+    const format = GoodreadsFormat;
+    const selectedRows = format.rowsInGroup(rows, 'Shelf', 'to-read');
+    const { missingISBN: noISBNRows } = format.missingAndISBNs(selectedRows);
+    const someFields = noISBNRows.map(pick(Array.from(format.mainColumns)));
     const csvOut = toCSV(someFields);
     this.context.stdout.write(csvOut);
     this.context.stdout.write('\n');
@@ -132,27 +136,29 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
       throw new UsageError('Effective "editions of" service list is empty!');
     }
 
-    const isbns = Array.from(await getISBNs(
-      csv,
-      this.shelf,
-      {
-        otherEditions: !!this.otherEditions && {
-          fetcher: this.context.fetcher,
-          services: editionsServices,
-          cacheData: ensureCacheData(db),
-          reporter,
-        },
-        bothISBNs: !!this.bothISBNs
-      },
-    ));
+    const rows = await parseCSVRows(csv);
+    const format = GoodreadsFormat;
+    const selectedRows = format.rowsInGroup(rows, 'Shelf', this.shelf);
+    const { isbns: extractedISBNs } = format.missingAndISBNs(selectedRows);
+    const editionsISBNs = this.otherEditions
+      ? await getEditionsOf(extractedISBNs, {
+        fetcher: this.context.fetcher,
+        services: editionsServices,
+        cacheData: ensureCacheData(db),
+        reporter,
+      })
+      : extractedISBNs;
+    const isbns = this.bothISBNs
+      ? bothISBNsOf(editionsISBNs)
+      : editionsISBNs;
 
     pw.updateProgress();
 
     await db.write();
 
-    this.context.stdout.write(isbns.join('\n'));
+    this.context.stdout.write(Array.from(isbns).join('\n'));
     this.context.stdout.write('\n');
-    this.context.stderr.write(isbns.length.toString());
+    this.context.stderr.write(isbns.size.toString());
     this.context.stderr.write('\n');
 
     if (this.otherEditions)
@@ -353,7 +359,7 @@ const makeReporter: (pw: ProgressWriter) => ProgressReporter & { summary(): void
         return pw.updateProgress(progressBarText(pw.columns, started, ++finished, total));
       }
 
-      // log fetched urls
+      // log fetched URLs
       if (event == 'fetch started') {
         summary(service).fetches++;
         return pw.writeLine(`${++fetchN}: ${service} ${report.url}`);

@@ -6,7 +6,7 @@ import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-uti
 import { type EditionsProgress, type EditionsSummary, type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UIRequestReceiver } from './ui-types.js';
 import { UITableBuilder } from './uitable-builder.js';
 
-import { type EditionsService, type Fetcher, type Row, shelfInfo, AllEditionsServices, parseCSVRows, missingAndISBNs, type ProgressReport, bothISBNsOf, getEditionsOf, rowsShelvedAs } from 'utils';
+import { type EditionsService, type Fetcher, type Row, AllEditionsServices, parseCSVRows, type ProgressReport, bothISBNsOf, getEditionsOf, guessFormat, type ExportFormat } from 'utils';
 import { toCSV } from 'utils';
 import { pick } from 'utils';
 
@@ -56,20 +56,22 @@ export class Controller implements UIRequestReceiver {
     await table.present(false);
   }
   private allRows: Row[] = [];
+  private format?: ExportFormat;
   async requestInput(inputReq: RequestedInput) {
 
-    const { rows, input } = await getInput();
+    const { rows, format, input } = await getInput();
     this.allRows = rows;
+    this.format = format;
     return input;
 
-    async function getInput(): Promise<{ rows: Row[], input: Input }> {
+    async function getInput(): Promise<{ rows: Row[], format: ExportFormat, input: Input }> {
       const type = inputReq.type;
       if (type == 'clipboard') {
 
         const clipboard = Pasteboard.pasteString();
         if (clipboard != null) { // types not quite accurate, docs say can be null if no string available
-          const rows = await parseRows(clipboard);
-          return { rows, input: { type, ...await getInputInfo(rows) } };
+          const { rows, format } = await parseRows(clipboard);
+          return { rows, format, input: { type, ...await getInputInfo(format, rows) } };
         }
 
         const a = new Alert;
@@ -82,17 +84,20 @@ export class Controller implements UIRequestReceiver {
 
         const pathname = await DocumentPicker.openFile();
         const csv = await new ReadWrite(pathname).readString();
-        const rows = await parseRows(csv);
-        return { rows, input: { type, displayName: basename(pathname), ...await getInputInfo(rows) } };
+        const { rows, format } = await parseRows(csv);
+        return { rows, format, input: { type, displayName: basename(pathname), ...await getInputInfo(format, rows) } };
 
       } else assertNever(type);
 
       throw `unhandled input request type: ${type}`;
     }
-    async function parseRows(csv: string): Promise<Row[]> {
+    async function parseRows(csv: string): Promise<{ format: ExportFormat, rows: Row[] }> {
       try {
-        return await parseCSVRows(csv);
+        const rows = await parseCSVRows(csv);
+        const format = guessFormat(rows);
+        return { rows, format };
       } catch (e) {
+        console.error(e);
         const a = new Alert;
         a.title = 'Error Parsing Input';
         a.message = 'Are you sure that was a CSV data export?';
@@ -100,42 +105,42 @@ export class Controller implements UIRequestReceiver {
         throw e;
       }
     }
-    async function getInputInfo(rows: Row[]): Promise<InputParseInfo> {
-      const { exclusive, shelfCounts } = shelfInfo(rows);
-      const items = Array.from(exclusive).reduce((total, shelf) => total + (shelfCounts.get(shelf) ?? 0), 0);
-      const shelfItems = Object.fromEntries(Array.from(shelfCounts.entries()).sort((a, b) => {
-        if (a[0] == b[0]) return 0;
-
-        // to-read first
-        if (a[0] == 'to-read') return -1;
-
-        // exclusive before normal
-        if (exclusive.has(a[0]) && !exclusive.has(b[0])) return -1;
-        if (!exclusive.has(a[0]) && exclusive.has(b[0])) return 1;
-
-        // fewer items before more items
-        return a[1] - b[1];
+    async function getInputInfo(format: ExportFormat, rows: Row[]): Promise<InputParseInfo> {
+      const groupInfo = format.groupInfo(rows);
+      const groupItems = Object.fromEntries(Array.from(groupInfo.entries()).map(([groupKind, kindInfo]) => {
+        return [groupKind, Object.fromEntries(Array.from(kindInfo.entries()).sort((a, b) => {
+          if (a[0] < b[0]) return -1;
+          if (a[0] > b[0]) return 1;
+          return a[1] - b[1];
+        }))];
+      }).sort((a, b) => {
+        if (a[0] < b[0]) return -1;
+        if (a[0] > b[0]) return 1;
+        return 0;
       }));
-      return { items, shelfItems };
+      return { items: rows.length, groupItems };
     }
   }
-  private selected?: { shelf: string, missingRows: Row[], isbns: Set<string> };
-  async requestShelf(shelf: string) {
-    const { missingISBN: missingRows, isbns } = missingAndISBNs(rowsShelvedAs(this.allRows, shelf));
-    this.selected = { shelf, missingRows, isbns };
+  private selected?: { group: { kind: string, name: string }, missingRows: Row[], isbns: Set<string> };
+  async requestGroup(kind: string, name: string) {
+    if (!this.format) throw 'requested group before format established';
+
+    const { missingISBN: missingRows, isbns } = this.format.missingAndISBNs(this.format.rowsInGroup(this.allRows, kind, name));
+    this.selected = { group: { kind, name }, missingRows, isbns };
     return { missingISBNCount: missingRows.length, isbnCount: isbns.size };
   }
   async requestOutputMissing(kind: RequestedOutput) {
+    if (!this.format) throw 'requested output before format established';
     if (!this.selected) throw 'requested output before anything selected';
 
-    const filename = `ISBNS missing on ${this.selected.shelf}.csv`;
-    const output = toCSV(this.selected.missingRows.map(pick(['Book Id', 'Title', 'Author', 'Bookshelves'])));
+    const filename = `ISBNS missing in ${this.selected.group.kind} ${this.selected.group.name}.csv`;
+    const output = toCSV(this.selected.missingRows.map(pick(Array.from(this.format.mainColumns))));
     return this.output(kind, filename, output);
   }
   async requestOutputISBNs(both: boolean, kind: RequestedOutput) {
     if (!this.selected) throw 'requested output before anything selected';
 
-    const filename = `ISBNs on ${this.selected.shelf}.txt`;
+    const filename = `ISBNs on ${this.selected.group.kind} ${this.selected.group.name}.txt`;
     const isbns = both ? bothISBNsOf(this.selected.isbns) : this.selected.isbns;
     const output = Array.from(isbns).join('\n');
     return this.output(kind, filename, output);
@@ -324,7 +329,7 @@ export class Controller implements UIRequestReceiver {
   async requestOutputEditionsISBNs(both: boolean, kind: RequestedOutput) {
     if (!this.selected) throw 'requested output before anything selected';
 
-    const filename = `ISBNs of editions of ISBNs on ${this.selected.shelf}.txt`;
+    const filename = `ISBNs of editions of ISBNs on ${this.selected.group.kind} ${this.selected.group.name}.txt`;
     const isbns = both ? bothISBNsOf(this.edtionsISBNs) : this.edtionsISBNs;
     const output = Array.from(isbns).join('\n');
     return this.output(kind, filename, output);

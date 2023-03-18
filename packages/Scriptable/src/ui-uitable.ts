@@ -21,7 +21,7 @@ function title(state: UIState): string {
 }
 
 type PreviousData = {
-  shelf?: string,
+  group?: { kind: string, name: string },
   services?: Set<string>,
   both?: boolean,
 };
@@ -33,17 +33,17 @@ export class UITableUI {
     this.table.showSeparators = true;
     const restoredData = this.savedDataObject;
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const shelf = restoredData.shelf as any;
+    const group = restoredData.group as any;
     const services = restoredData.services as any;
     const both = restoredData.both as any;
     /* eslint-enable */
-    this.previous.shelf = typeof shelf == 'string' ? shelf : void 0;
+    this.previous.group = group && typeof group == 'object' && 'kind' in group && typeof group.kind == 'string' && 'name' in group && typeof group.name == 'string' ? group : void 0;
     this.previous.services = Array.isArray(services) ? new Set(services.filter(e => typeof e == 'string')) : void 0;
     this.previous.both = typeof both == 'boo' + 'lean' ? both : void 0;
     this.build();
   }
   private saveData() {
-    this.savedDataObject.shelf = this.previous.shelf;
+    this.savedDataObject.group = this.previous.group;
     this.savedDataObject.services = this.previous.services && Array.from(this.previous.services);
     this.savedDataObject.both = this.previous.both;
   }
@@ -97,7 +97,9 @@ class PickInputState implements UIState {
 
       Some libraries can import such an ISBN list and use it to show which of those books they have available in their holdings (e.g. which of your "To Be Read" list is available for checkout).
 
-      Currently, Goodreads export format (CSV with a specific set of columns) and its "shelf" system are supported.
+      Currently supored book list export systems:
+      - Goodreads export format (CSV with a specific set of columns) and its Shelves
+      - LibraryThing TSV export and its Collections and Tags
       Suggest your favorite book list format for support in future versions!
 
       When you have your data ready, tell this program where to find it using the selections on this Input Selection screen.
@@ -145,30 +147,32 @@ class PickItemsState implements UIState {
     builder.addSubtitleHelpRow(title(this), outdent`
       Start by selecting which items from the exported data we will examine. The next step will check the selection for items that are missing ISBNs.
 
-      Currently only a whole "shelf" of items can be selected. On this screen, choose the shelf that holds the items you want to examine.
+      Currently only a whole groups of items (shelves, collections, tags) can be selected. On this screen, choose the group that holds the items you want to examine.
     `);
     builder.addEmptyRow();
     builder.addTextRow(`Found ${this.input.items} items in export data.`);
-    builder.addTextRow('Choose the shelf to examine.');
+    builder.addTextRow('Choose the group to examine.');
 
-    const pickShelf = async (shelf: string) => {
-      this.previous.shelf = shelf;
+    const pickGroup = async (kind: string, name: string) => {
+      this.previous.group = { kind, name };
       setState(new ItemsSummaryState(this, this.previous, {
         input: this.input,
-        shelf,
-        summary: await controller.requestShelf(shelf),
+        group: { kind, name },
+        summary: await controller.requestGroup(kind, name),
       }));
     };
-    const shelfItems = this.input.shelfItems;
-    const addShelfRow = (shelf: string, items: string, onSelect?: () => void, previous = false) =>
+    const groupItems = this.input.groupItems;
+    const addGroupRow = (kind: string, name: string, items: string, onSelect?: () => void, previous = false) =>
       builder.addRowWithDescribedCells([
-        { type: 'text', title: shelf, widthWeight: 85, align: 'right', titleColor: previous ? Color.orange() : void 0 },
+        { type: 'text', title: kind, widthWeight: 30, align: 'left' },
+        { type: 'text', title: name, widthWeight: 55, align: 'right', titleColor: previous ? Color.orange() : void 0 },
         { type: 'text', title: items, widthWeight: 15, align: 'left' },
       ], { onSelect, cellSpacing: 10 });
-    addShelfRow('Shelf Name', 'Items');
-    Object.getOwnPropertyNames(shelfItems)
-      .forEach(shelf => addShelfRow(shelf, String(shelfItems[shelf]),
-        () => pickShelf(shelf), shelf == this.previous.shelf));
+    addGroupRow('Kind', 'Group', 'Items');
+    Object.entries(groupItems)
+      .forEach(([kind, groupCounts]) => Object.getOwnPropertyNames(groupCounts).forEach(
+        group => addGroupRow(kind, group, String(groupItems[kind]?.[group]),
+          () => pickGroup(kind, group), kind == this.previous.group?.kind && group == this.previous.group.name)));
   }
 }
 
@@ -189,15 +193,15 @@ function buildOutput(builder: UITableBuilder, output: (kind: RequestedOutput) =>
   addOutputRow('Save to a file', file, () => output({ type: 'file' }));
 }
 
-interface InputShelfSummary {
+interface InputGroupSummary {
   get input(): Input;
-  get shelf(): string;
+  get group(): { kind: string, name: string };
   get summary(): Summary;
 }
 
 class ItemsSummaryState implements UIState {
   static readonly title = 'Item Summary';
-  constructor(private back: UIState, private previous: PreviousData, private iss: InputShelfSummary) { }
+  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
   async build(builder: UITableBuilder, setState: SetState) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -213,23 +217,23 @@ class ItemsSummaryState implements UIState {
     `);
     builder.addEmptyRow();
 
-    const shelf = this.iss.shelf;
-    const items = this.iss.input.shelfItems[shelf] ?? 0;
-    const summary = this.iss.summary;
-    builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
+    const group = this.igs.group;
+    const items = this.igs.input.groupItems[group.kind]?.[group.name] ?? 0;
+    const summary = this.igs.summary;
+    builder.addTextRow(`${items} items in selection (${group.kind} ${group.name}).`);
     builder.addTextRow(`${summary.missingISBNCount} items with no ISBN.`);
-    builder.addForwardRow('View/Save Items Missing an ISBN', () => setState(new OutputMissingISBNsState(this, this.iss)));
+    builder.addForwardRow('View/Save Items Missing an ISBN', () => setState(new OutputMissingISBNsState(this, this.igs)));
     builder.addTextRow(`${summary.isbnCount} items with an ISBN.`);
-    builder.addForwardRow('View/Save Item ISBNs', () => setState(new OutputISBNsState(this, this.previous, this.iss)));
+    builder.addForwardRow('View/Save Item ISBNs', () => setState(new OutputISBNsState(this, this.previous, this.igs)));
     builder.addEmptyRow();
     builder.addTextRow('Want to also include the ISBNs of other editions of the extracted item ISBNs?', { height: 88 });
-    builder.addForwardRow('Select Editions Services', () => setState(new PickEditionsServicesState(this, this.previous, this.iss)));
+    builder.addForwardRow('Select Editions Services', () => setState(new PickEditionsServicesState(this, this.previous, this.igs)));
   }
 }
 
 class OutputMissingISBNsState implements UIState {
   static readonly title = 'Items Missing an ISBN';
-  constructor(private back: UIState, private iss: InputShelfSummary) { }
+  constructor(private back: UIState, private igs: InputGroupSummary) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this),
@@ -237,10 +241,10 @@ class OutputMissingISBNsState implements UIState {
     );
     builder.addEmptyRow();
 
-    const shelf = this.iss.shelf;
-    const items = this.iss.input.shelfItems[shelf] ?? 0;
-    builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
-    builder.addTextRow(`${this.iss.summary.missingISBNCount} items with no ISBN.`);
+    const group = this.igs.group;
+    const items = this.igs.input.groupItems[group.kind]?.[group.name] ?? 0;
+    builder.addTextRow(`${items} items in selection (${group.kind} ${group.name}).`);
+    builder.addTextRow(`${this.igs.summary.missingISBNCount} items with no ISBN.`);
 
     buildOutput(builder, kind => controller.requestOutputMissing(kind).then(() => setState(this.back)));
   }
@@ -248,7 +252,7 @@ class OutputMissingISBNsState implements UIState {
 
 class OutputISBNsState implements UIState {
   static readonly title = 'Item ISBNs';
-  constructor(private back: UIState, private previous: PreviousData, private iss: InputShelfSummary) { }
+  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -258,15 +262,15 @@ class OutputISBNsState implements UIState {
     `);
     builder.addEmptyRow();
 
-    const shelf = this.iss.shelf;
-    const items = this.iss.input.shelfItems[shelf] ?? 0;
+    const group = this.igs.group;
+    const items = this.igs.input.groupItems[group.kind]?.[group.name] ?? 0;
     const both = this.previous.both ?? false;
     const toggleBoth = () => {
       this.previous.both = !both;
       setState(this);
     };
-    builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
-    builder.addTextRow(`${this.iss.summary.isbnCount} items with an ISBN.`);
+    builder.addTextRow(`${items} items in selection (${group.kind} ${group.name}).`);
+    builder.addTextRow(`${this.igs.summary.isbnCount} items with an ISBN.`);
 
     buildOutput(builder,
       kind => controller.requestOutputISBNs(both, kind).then(() => setState(this.back)),
@@ -276,7 +280,7 @@ class OutputISBNsState implements UIState {
 
 class PickEditionsServicesState implements UIState {
   static readonly title = 'Select Editions Services';
-  constructor(private back: UIState, private previous: PreviousData, private iss: InputShelfSummary) { }
+  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -306,7 +310,7 @@ class PickEditionsServicesState implements UIState {
     builder.addEmptyRow();
 
     if (services.size > 0) {
-      const isbns = this.iss.summary.isbnCount;
+      const isbns = this.igs.summary.isbnCount;
       builder.addForwardRow('Get Other Editions', async () => {
 
         const wv = new WebView;
@@ -334,7 +338,7 @@ class PickEditionsServicesState implements UIState {
         const action = await a.presentAlert();
         if (action == -1) return;
 
-        setState(new EditionsSummaryState(this, this.previous, this.iss,
+        setState(new EditionsSummaryState(this, this.previous, this.igs,
           await controller.requestEditions(Array.from(services), p => this.editionsProgress(setState, p))));
       }, true);
       builder.addIndentRow('Note: Getting ISBNs of other editions will send your selected ISBNs to the above-selected third party services!', { height: 88 });
@@ -348,7 +352,7 @@ class PickEditionsServicesState implements UIState {
   private progressState?: EditionsProgressState;
   private editionsProgress(setState: SetState, progress: EditionsProgress) {
     if (!this.progressState) {
-      this.progressState = new EditionsProgressState(this, this.iss.shelf, progress);
+      this.progressState = new EditionsProgressState(this, this.igs.group, progress);
       setState(this.progressState);
     } else {
       this.progressState.progress(progress);
@@ -359,7 +363,7 @@ class PickEditionsServicesState implements UIState {
 
 class EditionsProgressState implements UIState {
   static readonly title = 'Other Editions Progress';
-  constructor(private back: UIState, private shelf: string, private editionsProgress: EditionsProgress) { }
+  constructor(private back: UIState, private group: { kind: string, name: string }, private editionsProgress: EditionsProgress) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
     builder.addBackRow('Cancel Other Editions', async () => {
       const a = new Alert;
@@ -375,7 +379,7 @@ class EditionsProgressState implements UIState {
     builder.addSubtitleHelpRow(title(this));
     builder.addEmptyRow();
 
-    builder.addTextRow(`Retrieving ISBNs of other editions of ISBN-bearing items on "${this.shelf}" shelf.`, { height: 88 });
+    builder.addTextRow(`Retrieving ISBNs of other editions of ISBN-bearing items on ${this.group.kind} ${this.group.name}.`, { height: 88 });
 
     const { total, started, done, fetched } = this.editionsProgress;
     const waiting = total - started;
@@ -395,7 +399,7 @@ type UIEditionsSummary = EditionsSummary & { received: number };
 class EditionsSummaryState implements UIState {
   static readonly title = 'Other Editions Summary';
   private editionsSummary: UIEditionsSummary;
-  constructor(private back: UIState, private previous: PreviousData, private iss: InputShelfSummary, editionsSummary: EditionsSummary) {
+  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary, editionsSummary: EditionsSummary) {
     this.editionsSummary = { ...editionsSummary, received: Date.now() };
   }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
@@ -422,10 +426,10 @@ class EditionsSummaryState implements UIState {
     `);
     builder.addEmptyRow();
 
-    const shelf = this.iss.shelf;
-    const items = this.iss.input.shelfItems[shelf] ?? 0;
-    builder.addTextRow(`${items} items in selection ("${shelf}" shelf).`);
-    builder.addTextRow(`${this.iss.summary.isbnCount} items with an ISBN.`);
+    const group = this.igs.group;
+    const items = this.igs.input.groupItems[group.kind]?.[group.name] ?? 0;
+    builder.addTextRow(`${items} items in selection (${group.kind} ${group.name}).`);
+    builder.addTextRow(`${this.igs.summary.isbnCount} items with an ISBN.`);
     builder.addTextRow(`${isbns} total ISBNs after retrieving ISBNs of other editions.`, { height: 88 });
     builder.addEmptyRow();
 
@@ -455,6 +459,6 @@ class EditionsSummaryState implements UIState {
     );
 
     builder.addEmptyRow();
-    builder.addBackRow('Choose New Input', async () => await confirmBack() && setState(new PickInputState(this.previous, this.iss.input)));
+    builder.addBackRow('Choose New Input', async () => await confirmBack() && setState(new PickInputState(this.previous, this.igs.input)));
   }
 }

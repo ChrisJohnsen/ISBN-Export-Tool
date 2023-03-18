@@ -1,6 +1,5 @@
-import { collect, flatPipe, filter } from './functional.js';
 import { equivalentISBNs } from './isbn.js';
-import { reduceCSV, type Row } from './csv.js';
+import { type Row } from './csv.js';
 import {
   type Fetcher,
   type ContentError, type EditionsISBNResults,
@@ -14,88 +13,98 @@ import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
 import * as t from 'typanion';
 
-export function shelfInfo(rows: Iterable<Row>): { shelfCounts: Map<string, number>, exclusive: Set<string> } {
-  const info = { shelfCounts: new Map<string, number>, exclusive: new Set<string> };
+export interface ExportFormat {
+  readonly format: string,
+  groupInfo(rows: Iterable<Row>): Map<string, Map<string, number>>,
+  rowsInGroup(rows: Iterable<Row>, groupKind: string, groupName: string): Row[],
+  missingAndISBNs(rows: Iterable<Row>): { missingISBN: Row[], isbns: Set<string> },
+  readonly mainColumns: Set<string>,
+}
+export const GoodreadsFormat: ExportFormat = {
+  format: 'Goodreads',
+  groupInfo: groupInfo(row => groups('Shelf', Goodreads_getShelves(row).shelves)),
+  rowsInGroup: rowsInGroup((group, row) =>
+    group.kind == 'Shelf' && Goodreads_onShelf(group.name, row)),
+  missingAndISBNs: missingAndISBNs(Goodreads_rowISBNs),
+  mainColumns: new Set(['Book Id', 'Title', 'Author', 'Exclusive Shelf', 'Bookshelves']),
+};
+export const LibraryThingFormat: ExportFormat = {
+  format: 'Goodreads',
+  groupInfo: groupInfo(row =>
+    groups('Collection', LibraryThing_getCollections(row))
+      .concat(groups('Tag', LibraryThing_getTags(row)))),
+  rowsInGroup: rowsInGroup((group, row) =>
+    group.kind == 'Collection' && LibraryThing_inCollection(group.name, row)
+    || group.kind == 'Tag' && LibraryThing_taggedAs(group.name, row)),
+  missingAndISBNs: missingAndISBNs(LibraryThing_rowISBNs),
+  mainColumns: new Set(['Book Id', 'Title', 'Primary Author', 'Secondary Author', 'Collections', 'Tags']),
+};
+export function guessFormat(rows: Iterable<Row>): ExportFormat {
+  const cols = allColumns(rows);
+  const hasAll = (tests: string[]) => tests.every(c => cols.has(c));
+  if (hasAll(['Book Id', 'Title', 'Author', 'Exclusive Shelf', 'Bookshelves', 'ISBN', 'ISBN13']))
+    return GoodreadsFormat;
+  else if (hasAll(['Book Id', 'Title', 'Primary Author', 'Collections', 'Tags', 'ISBN', 'ISBNs']))
+    return LibraryThingFormat;
+  else
+    throw `unrecognized format with columns: ${Array.from(cols).join(', ')}`;
+}
+
+type Group = { kind: string, name: string };
+function groups(kind: string, names: Set<string>): Group[] {
+  return Array.from(names).map(name => ({ name, kind }));
+}
+function allColumns(rows: Iterable<Row>): Set<string> {
+  const columns = new Set<string>;
   for (const row of rows) {
-    const { exclusive, shelves } = getShelves(row);
-    if (exclusive)
-      info.exclusive.add(exclusive);
-    const update = (shelf: string) => {
-      const count = info.shelfCounts.get(shelf) ?? 0;
-      info.shelfCounts.set(shelf, count + 1);
-    };
-    shelves.forEach(update);
+    Object.getOwnPropertyNames(row).forEach(column => columns.add(column));
   }
-  return info;
+  return columns;
 }
-
-export function rowsShelvedAs(allRows: Iterable<Row>, shelf: string): Row[] {
-  const rows = new Array<Row>;
-  for (const row of allRows) {
-    if (onShelf(shelf, row))
-      rows.push(row);
-  }
-  return rows;
+function groupInfo(extractGroups: (row: Row) => Group[]): (rows: Iterable<Row>) => Map<string, Map<string, number>> {
+  return rows => {
+    const info = new Map<string, Map<string, number>>;
+    for (const row of rows) {
+      extractGroups(row).forEach(group => {
+        const kindInfo = (() => {
+          {
+            const value = info.get(group.kind);
+            if (value) return value;
+          }
+          const value = new Map<string, number>;
+          info.set(group.kind, value);
+          return value;
+        })();
+        const count = kindInfo.get(group.name) ?? 0;
+        kindInfo.set(group.name, count + 1);
+      });
+    }
+    return info;
+  };
 }
-
-export function missingAndISBNs(rows: Iterable<Row>): { missingISBN: Row[], isbns: Set<string> } {
-  const missingISBN = new Array<Row>;
-  const isbns = new Set<string>;
-  for (const row of rows) {
-    const rowIsbns = rowISBNs(row);
-    if (rowISBNs(row).length == 0)
-      missingISBN.push(row);
-    else
-      rowIsbns.forEach(isbn => isbns.add(equivalentISBNs(isbn)[0]));
-  }
-  return { missingISBN, isbns };
+function rowsInGroup(inGroup: (group: Group, row: Row) => boolean): (allRows: Iterable<Row>, groupKind: string, groupName: string) => Row[] {
+  return (allRows, kind, name) => {
+    const rows = new Array<Row>;
+    for (const row of allRows) {
+      if (inGroup({ kind, name }, row))
+        rows.push(row);
+    }
+    return rows;
+  };
 }
-
-export async function missingISBNs(csv: string, shelf: string): Promise<Row[]> {
-  return await reduceCSV(csv, collect(
-    flatPipe(
-      filter(onShelf(shelf)),
-      filter(row => rowISBNs(row).length == 0),
-    )));
-}
-
-export async function getISBNs(
-  csv: string,
-  shelf: string,
-  { bothISBNs = false, otherEditions = false }: {
-    bothISBNs?: boolean,
-    otherEditions?: {
-      fetcher: Fetcher
-      services?: EditionsServices,
-      cacheData?: CacheData,
-      reporter?: ProgressReporter,
-      throttle?: boolean,
-    } | false,
-  } = {},
-): Promise<Set<string>> {
-
-  const csvISBNs = new Set(await reduceCSV(csv, collect(
-    row => onShelf(shelf, row)
-      ? rowISBNs(row).slice(0, 1)
-      : []
-  )));
-
-  const editionISBNs =
-    !otherEditions
-      ? csvISBNs
-      : await fetchOtherEditionISBNs(csvISBNs, otherEditions.fetcher,
-        otherEditions.throttle ?? true, otherEditions.services, otherEditions.cacheData, otherEditions.reporter);
-
-  const allISBNs =
-    !bothISBNs
-      ? editionISBNs
-      : (() => {
-        const bothISBNs = new Set<string>;
-        editionISBNs.forEach(isbn => equivalentISBNs(isbn).forEach(isbn => bothISBNs.add(isbn)));
-        return bothISBNs;
-      })();
-
-  return allISBNs;
+function missingAndISBNs(extractISBNs: (row: Row) => string[]): (rows: Iterable<Row>) => { missingISBN: Row[], isbns: Set<string> } {
+  return rows => {
+    const missingISBN = new Array<Row>;
+    const isbns = new Set<string>;
+    for (const row of rows) {
+      const rowIsbns = extractISBNs(row);
+      if (rowIsbns.length == 0)
+        missingISBN.push(row);
+      else
+        rowIsbns.forEach(isbn => isbns.add(equivalentISBNs(isbn)[0]));
+    }
+    return { missingISBN, isbns };
+  };
 }
 
 export async function getEditionsOf(
@@ -120,7 +129,7 @@ export function bothISBNsOf(isbns: Iterable<string>): Set<string> {
   return bothISBNs;
 }
 
-function getShelves(row: Row): { exclusive?: string, shelves: Set<string> } {
+function Goodreads_getShelves(row: Row): { exclusive?: string, shelves: Set<string> } {
   const exclusive = row['Exclusive Shelf'];
   const bookshelves = !row.Bookshelves ? [] : row.Bookshelves.split(/\s*,\s*/);
   const shelves = new Set(bookshelves);
@@ -130,11 +139,11 @@ function getShelves(row: Row): { exclusive?: string, shelves: Set<string> } {
   return { exclusive, shelves };
 }
 
-function onShelf(shelf: string, row: Row): boolean;
-function onShelf(shelf: string): (row: Row) => boolean;
-function onShelf(shelf: string, row?: Row): ((row: Row) => boolean) | boolean {
+function Goodreads_onShelf(shelf: string, row: Row): boolean;
+function Goodreads_onShelf(shelf: string): (row: Row) => boolean;
+function Goodreads_onShelf(shelf: string, row?: Row): ((row: Row) => boolean) | boolean {
 
-  const _onShelf = (row: Row) => getShelves(row).shelves.has(shelf);
+  const _onShelf = (row: Row) => Goodreads_getShelves(row).shelves.has(shelf);
 
   if (typeof row == 'undefined')
     return _onShelf;
@@ -142,7 +151,7 @@ function onShelf(shelf: string, row?: Row): ((row: Row) => boolean) | boolean {
     return _onShelf(row);
 }
 
-function rowISBNs(row: Row): string[] {
+function Goodreads_rowISBNs(row: Row): string[] {
   return (['ISBN13', 'ISBN'] as const)
     .flatMap(isbnKey => {
       const isbnStr = row[isbnKey];
@@ -150,6 +159,41 @@ function rowISBNs(row: Row): string[] {
     })
     .map(isbnStr => isbnStr.replace(/^="(.*)"$/, '$1'))
     .filter(isbn => isbn != '');
+}
+
+function splitAndTrim(csv: string): string[] {
+  return csv.split(',').map(v => v.trim());
+}
+
+function LibraryThing_getCollections(row: Row): Set<string> {
+  const collections = row.Collections ? splitAndTrim(row.Collections) : [];
+  return new Set(collections);
+}
+
+function LibraryThing_getTags(row: Row): Set<string> {
+  const tags = row.Tags ? splitAndTrim(row.Tags) : [];
+  return new Set(tags);
+}
+
+function LibraryThing_inCollection(collection: string, row: Row): boolean {
+  if (row.Collections)
+    return splitAndTrim(row.Collections).includes(collection);
+  return false;
+}
+
+function LibraryThing_taggedAs(tag: string, row: Row): boolean {
+  if (row.Tags)
+    return splitAndTrim(row.Tags).includes(tag);
+  return false;
+}
+
+function LibraryThing_rowISBNs(row: Row): string[] {
+  const isbns = new Array<string>;
+  if (row.ISBN)
+    isbns.push(row.ISBN.replace(/^\s*\[(.*)\]\s*$/, '$1'));
+  if (row.ISBNS)
+    isbns.push(...splitAndTrim(row.ISBNS));
+  return isbns.filter(isbn => isbn != '');
 }
 
 export type CacheData = Record<string, unknown | undefined>;

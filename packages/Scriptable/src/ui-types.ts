@@ -1,6 +1,6 @@
 // platform independent definitions (maybe UI could be web-based inside a WebView)
 
-export type InputParseInfo = { items: number, shelfItems: Record<string, number | undefined> }
+export type InputParseInfo = { items: number, groupItems: Record<string, Record<string, number | undefined> | undefined> }
 export type Input = (
   | { type: 'clipboard' }
   | { type: 'file', displayName: string }
@@ -29,7 +29,7 @@ export type RequestedOutput = RequestedInput | { type: 'view' };
 export interface UIRequestReceiver {
   debugUI(): Promise<void>,
   requestInput(input: RequestedInput): Promise<Input>,
-  requestShelf(shelf: string): Promise<Summary>,
+  requestGroup(kind: string, name: string): Promise<Summary>,
   requestOutputMissing(kind: RequestedOutput): Promise<void>,
   requestOutputISBNs(both: boolean, kind: RequestedOutput): Promise<void>,
   requestEditionsServices(): Promise<readonly string[]>,
