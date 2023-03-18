@@ -45,14 +45,20 @@ class MissingISBNs extends Command {
 }
 
 const editionsServiceSpecs: Map<string, EditionsService> = new Map([
-  ['OLWE', 'Open Library WorkEditions'],
   ['OLS', 'Open Library Search'],
   ['LTTI', 'LibraryThing ThingISBN'],
+  ['OLWE', 'Open Library WorkEditions'],
 ]);
+const defaultEditionsServices: EditionsServices = new Set(AllEditionsServices);
+defaultEditionsServices.delete('Open Library WorkEditions');
 const specMaxLength = maxLength(editionsServiceSpecs.keys());
 const acceptableEditionsServiceSpecs = (): string[] =>
   Array.from(editionsServiceSpecs.entries()).map(([spec, service]) =>
-    `${pad(specMaxLength, spec)} for ${service}`);
+    `${pad(specMaxLength, spec)} for ${service}${defaultEditionsServices.has(service) ? '' : ' (disabled by default)'}`);
+const defaultEditionsServicesSpec = (): string => {
+  const m = new Map(Array.from(editionsServiceSpecs.entries()).map(([s, sn]) => [sn, s]));
+  return Array.from(defaultEditionsServices).map(sn => m.get(sn)).filter((s: string | undefined): s is string => !!s).join(',');
+};
 
 class GetISBNs extends Command<CacheContext> {
   static usage = Command.Usage({
@@ -75,6 +81,8 @@ class GetISBNs extends Command<CacheContext> {
       Acceptable service specifiers are:
 
 ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
+
+      The default services set is: ${defaultEditionsServicesSpec()}
     `,
     examples: [
       ['Get ISBNs for items shelved as `to-read`.',
@@ -115,7 +123,7 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
       if (!(editionsOption || typeof editionsOption == 'string'))
         return new Set;
       if (editionsOption == true)
-        return AllEditionsServices;
+        return defaultEditionsServices;
       const remove = editionsOption.startsWith('-');
 
       const services: EditionsServices =
@@ -128,7 +136,7 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
         }));
 
       return remove
-        ? new Set(Array.from(AllEditionsServices).filter(service => !services.has(service)))
+        ? new Set(Array.from(defaultEditionsServices).filter(service => !services.has(service)))
         : services;
     })(this.otherEditions);
 
