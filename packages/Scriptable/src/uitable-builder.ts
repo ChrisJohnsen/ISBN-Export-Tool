@@ -1,6 +1,6 @@
 // helper that builds common patterns of UITable elements
 
-import { assertNever } from "./ts-utils.js";
+import { assertNever } from 'utils';
 
 type RowOpts = { onSelect?: () => void, dismissOnSelect?: boolean, height?: number, cellSpacing?: number };
 function buildRow(opts?: RowOpts): UITableRow {

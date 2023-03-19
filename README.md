@@ -3,11 +3,13 @@
 Currently under development. Existing features:
 
 * Understands Goodreads export format (CSV with a specific set of columns) and
-  its "shelf" system.
+  its "shelves" system.
+* Understands LibraryThing export format (TSV with a specific set of columns)
+  and is "collections and tags" system.
 
     Suggest your favorite book list format for support in future versions!
 
-* List `to-read` entries that don't have ISBNs.
+* List entries that don't have ISBNs.
 
     These can happen when adding a book when its default (most popular?) edition
     is some version that does not haven an ISBN (often: eBook, audio). Such a
@@ -15,7 +17,7 @@ Currently under development. Existing features:
 
         node isbn-tool.js missing-ISBNS path/to/export.csv
 
-* Extract a list of ISBNs from shelved items.
+* Extract a list of ISBNs from items.
 
     Lists of ISBNs can be imported by some library interfaces. Doing so can let
     you review which books from your exported data are available through a
@@ -42,7 +44,7 @@ Currently under development. Existing features:
         work (maybe you saved the paperback edition, the library doesn't have
         it, but does have a hardback edition).
 
-    * Optionally include both the ISBN-13 and ISBN-10 of each shelved item:
+    * Optionally include both the ISBN-13 and ISBN-10 of each ISBN:
 
             node isbn-tool.js get-ISBNS path/to/export.csv to-read --both
 

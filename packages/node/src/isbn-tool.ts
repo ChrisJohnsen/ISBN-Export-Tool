@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { type BaseContext, Builtins, Cli, Command, Option, UsageError } from 'clipanion';
 import { pick, parseCSVRows, toCSV } from 'utils';
-import { GoodreadsFormat } from 'utils';
+import { guessFormat } from 'utils';
 import { AllEditionsServices, type EditionsService, type EditionsServices, type Fetcher, getEditionsOf, type CacheData, type ProgressReporter } from 'utils';
 import { bothISBNsOf } from 'utils';
 import { version } from 'utils';
@@ -10,30 +10,89 @@ import { JSONFile } from 'lowdb/node';
 import { Low } from 'lowdb';
 import { type WriteStream } from 'node:tty';
 
-class MissingISBNs extends Command {
-  static usage = Command.Usage({
-    description: 'Extract to-read entries without ISBNs',
-    details: `
-      Extract list of entries from the to-read shelf that lack ISBNs.
+import { groupFromName, type GroupResult, type Group } from './utils.js';
 
-      These might be eBooks, or audio books.
-      You might want to change which edition you have shelved (and re-export)
-      before using other commands that process ISBNs from the to-read shelf.
+class Groups extends Command {
+  static usage = Command.Usage({
+    description: 'Show available groups in export data',
+    details: `
+      List the group names used in the specified book list export.
+
+      The groups vary depending on the export format:
+      - Goodreads exports have shelves
+      - LibraryThing exports have collections and tags
+
+      When multiple kinds of groups are present, there is a chance for
+      name collisions. For commands that take a group name, the name
+      can be prefixed with its "kind" and a colon to disambiguate.
+      For example, If you have a collection and a tag both named
+      "library", then you can use "Collection:library" or "Tag:library"
+      to specify which you want to use.
     `,
     examples: [
       [
-        'Extract ISBN-less to-read entries from export named `export.csv`.',
+        'Show shelf names in a Goodreads export.',
         '$0 path/to/export.csv'
+      ], [
+        'Show Collection and Tag names in a LibraryThing export',
+        '$0 path/to/export.tsv'
+      ],
+    ]
+  });
+  static paths = [['groups']];
+  csvPath = Option.String();
+  group = Option.String({ required: false });
+  async execute() {
+    const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
+    const rows = await parseCSVRows(csv);
+    const format = guessFormat(rows);
+    const info = format.groupInfo(rows);
+    info.forEach((groupInfo, kind) => {
+      this.context.stderr.write(`${kind}\n`);
+      groupInfo.forEach((count, group) => {
+        this.context.stderr.write(`    ${group}\n`);
+      });
+    });
+    if (!this.group) return;
+    const { group, message } = groupMessage(groupFromName(this.group, info), this.group);
+    if (group)
+      this.context.stderr.write(`\nFound ${group.kind} ${group.name}\n`);
+    if (message)
+      this.context.stderr.write('\n' + message + '\n');
+  }
+}
+
+class MissingISBNs extends Command {
+  static usage = Command.Usage({
+    description: 'Extract entries without ISBNs',
+    details: `
+      Extract list of entries in a named group that lack ISBNs.
+
+      These might be eBooks, or audio books.
+      You might want to change which edition you have saved (and re-export)
+      before using other commands that process ISBNs from the export.
+    `,
+    examples: [
+      [
+        'Extract ISBN-less entries from the `to-read` shelf of export named `export.csv`.',
+        '$0 path/to/export.csv to-read'
+      ], [
+        'Extract ISBN-less entries from the Tag `library` of export named `export.tsv`.',
+        '$0 path/to/export.tsv Tag:library'
       ],
     ]
   });
   static paths = [['missing-ISBNs'], ['missing-isbns'], ['missing'], ['mi']];
   csvPath = Option.String();
+  group = Option.String();
   async execute() {
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
     const rows = await parseCSVRows(csv);
-    const format = GoodreadsFormat;
-    const selectedRows = format.rowsInGroup(rows, 'Shelf', 'to-read');
+    const format = guessFormat(rows);
+    const { group, message } = groupMessage(groupFromName(this.group, format.groupInfo(rows)), this.group);
+    if (message) this.context.stderr.write(message + '\n');
+    if (!group) return;
+    const selectedRows = format.rowsInGroup(rows, group.kind, group.name);
     const { missingISBN: noISBNRows } = format.missingAndISBNs(selectedRows);
     const someFields = noISBNRows.map(pick(Array.from(format.mainColumns)));
     const csvOut = toCSV(someFields);
@@ -62,9 +121,9 @@ const defaultEditionsServicesSpec = (): string => {
 
 class GetISBNs extends Command<CacheContext> {
   static usage = Command.Usage({
-    description: 'Extract ISBNs from items on specified shelf',
+    description: 'Extract ISBNs from items in specified group',
     details: `
-      For each item on the specified shelf that has an ISBN,
+      For each item in the specified group that has an ISBN,
       produce its ISBN as output.
       One ISBN is produced per line.
 
@@ -87,6 +146,8 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
     examples: [
       ['Get ISBNs for items shelved as `to-read`.',
         '$0 getISBNs path/to/export.csv to-read'],
+      ['Get ISBNs for items in collection `To read`.',
+        '$0 getISBNs path/to/export.tsv \'To read\''],
       ['Get `to-read` ISBNs in both ISBN-13 and ISBN-10 (when available) versions.',
         '$0 getISBNs --both path/to/export.csv to-read'],
       ['Using any "editions of" service, get ISBNs of other editions of `to-read` items.',
@@ -101,14 +162,14 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
   otherEditions = Option.String('--editions', false, {
     tolerateBoolean: true,
     description: `
-      Sends shelved ISBN to extenal web service(s) to produce ISBN-13s of other editions of the work.
+      Sends ISBN to extenal web service(s) to produce ISBN-13s of other editions of the work.
   `});
   bothISBNs = Option.Boolean('--both', {
     description: `
       Produce both ISBN-13 and ISBN-10 for any output ISBN that has equivalent versions (i.e. 978-prefixed ISBN-13s).
   ` });
   csvPath = Option.String();
-  shelf = Option.String();
+  group = Option.String();
   async execute() {
 
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
@@ -145,8 +206,11 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
     }
 
     const rows = await parseCSVRows(csv);
-    const format = GoodreadsFormat;
-    const selectedRows = format.rowsInGroup(rows, 'Shelf', this.shelf);
+    const format = guessFormat(rows);
+    const { group, message } = groupMessage(groupFromName(this.group, format.groupInfo(rows)), this.group);
+    if (message) this.context.stderr.write(message + '\n');
+    if (!group) return;
+    const selectedRows = format.rowsInGroup(rows, group.kind, group.name);
     const { isbns: extractedISBNs } = format.missingAndISBNs(selectedRows);
     const editionsISBNs = this.otherEditions
       ? await getEditionsOf(extractedISBNs, {
@@ -208,8 +272,27 @@ type CacheContext = BaseContext & {
   fetcher: Fetcher,
 };
 
+import { assertNever } from 'utils';
+
+function groupMessage(foundGroup: GroupResult, group: string): { group?: undefined, message: string } | { group: Group, message: string } | { group: Group, message?: undefined } {
+  if (foundGroup.status == 'not found')
+    return { message: `No group matching "${group}" found.` };
+  else if (foundGroup.status == 'ambiguous')
+    return {
+      message: `Group named "${group}" exists in multiple kinds: ${foundGroup.kinds.join(', ')}\n`
+        + `\nPrefix a kind name to disambiguate: "${foundGroup.kinds[0]}:${group}"`
+    };
+  else if (foundGroup.status == 'found as tagged, original also in kinds')
+    return { group: foundGroup.group, message: `${group} also exists in other kinds: ${foundGroup.kinds.join(', ')}` };
+  else if (foundGroup.status == 'single')
+    return { group: foundGroup.group };
+  else
+    assertNever(foundGroup);
+}
+
 const cli: Cli<CacheContext> = Cli.from([
   Builtins.HelpCommand, Builtins.VersionCommand,
+  Groups,
   MissingISBNs,
   GetISBNs,
   CacheClear,

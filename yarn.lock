@@ -4058,6 +4058,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "node@workspace:packages/node"
   dependencies:
+    "@jest/globals": "npm:^29.5.0"
     "@rollup/plugin-commonjs": "npm:^24.0.1"
     "@rollup/plugin-node-resolve": "npm:^15.0.1"
     "@rollup/plugin-terser": "npm:^0.4.0"

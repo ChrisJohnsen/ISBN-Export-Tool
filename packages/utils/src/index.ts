@@ -8,3 +8,7 @@ export { otherEditionsOfISBN as otherEditionsOfISBN__LibraryThing_ThingISBN } fr
 export * from './cache.js';
 export * from './tool-core.js';
 export * from './version.js';
+
+// TS-related stuff
+
+export function assertNever(value: never): never { throw 'assertNever called' } // eslint-disable-line @typescript-eslint/no-unused-vars

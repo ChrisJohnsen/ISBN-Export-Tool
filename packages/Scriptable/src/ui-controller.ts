@@ -1,11 +1,12 @@
 // controller interfaces with tool-core on behalf of a non-specific UI
 
 import production from 'consts:production';
-import { assertNever, isObject } from './ts-utils.js';
+import { isObject } from './ts-utils.js';
 import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-utils.js';
 import { type EditionsProgress, type EditionsSummary, type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UIRequestReceiver } from './ui-types.js';
 import { UITableBuilder } from './uitable-builder.js';
 
+import { assertNever } from 'utils';
 import { type EditionsService, type Fetcher, type Row, AllEditionsServices, parseCSVRows, type ProgressReport, bothISBNsOf, getEditionsOf, guessFormat, type ExportFormat } from 'utils';
 import { toCSV } from 'utils';
 import { pick } from 'utils';
