@@ -15,7 +15,7 @@ export function dirname(path: string) {
 
 export function localTempfile(filename: string, contents?: string | Data): ReadWrite {
   const rw = new ReadWrite(lfm.joinPath(lfm.temporaryDirectory(), filename));
-  if (contents)
+  if (contents != null)
     if (typeof contents == 'string')
       rw.writeString(contents);
     else
