@@ -105,20 +105,39 @@ class PickInputState implements UIState {
       When you have your data ready, tell this program where to find it using the selections on this Input Selection screen.
     `, {
       'Goodreads Export': outdent`
-      Exporting your Goodreads can be done from the Goodreads website:
+      Exporting from Goodreads can be done on the Goodreads website:
 
 
-      Login,
+      Login.
 
-      If on a mobile device, tap/click the "Desktop version" link in the footer of the website,
+      If on a mobile device, tap/click the "Desktop version" link in the footer of the website.
 
-      Tap/click on the "My Books" tab,
+      Tap/click on the "My Books" tab.
 
-      In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link
+      In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link.
 
       On the Import/Export page tap/click "Export Library" button at the top of the page.
 
       A link like "Your export from <date>" will appear when the export is ready.
+
+
+      Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data in your web browser and use Select All and Copy to copy it to the clipboard.
+    `,
+      'LibraryThing Export': outdent`
+      Exporting from LibraryThing can be done on the LibraryThing website:
+
+
+      Login.
+
+      Tap/click the "More" top tab (inside three horizontal lines ("hamburger" menu) in the mobile view).
+
+      In the "Useful and Fun" section, tap/click "Import/Export" link.
+
+      In the "Export from LibraryThing" section, tap/click "Export as tab-delimited text" link.
+
+      Tap/click the "Export all books" button, or fill out a filter and tap/click the "Export filtered" button.
+
+      A "Download" button will appear when the export is ready.
 
 
       Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data in your web browser and use Select All and Copy to copy it to the clipboard.
