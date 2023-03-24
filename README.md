@@ -99,7 +99,7 @@ Note: Files under `tests/` are not included in the package-level
     yarn workspace foo run --top-level rollup -c
     packages/foo> yarn run --top-level rollup -c    # cwd in workspace
 
-## Jest
+### Jest
 
 Note: A `package.json` `"script"` is used to add `--experimental-vm-modules` to
 Node's options. This lets us directly use ESM test files. If Jest is run
