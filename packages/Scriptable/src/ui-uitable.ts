@@ -24,7 +24,9 @@ type PreviousData = {
   group?: { kind: string, name: string },
   services?: Set<string>,
   both?: boolean,
+  editionsNetwork?: boolean | undefined,
 };
+type NetworkAccessPreviousKey = 'editionsNetwork';
 
 export class UITableUI {
   private table = new UITable;
@@ -36,16 +38,19 @@ export class UITableUI {
     const group = restoredData.group as any;
     const services = restoredData.services as any;
     const both = restoredData.both as any;
+    const editionsNetwork = restoredData.editionsNetwork as any;
     /* eslint-enable */
     this.previous.group = group && typeof group == 'object' && 'kind' in group && typeof group.kind == 'string' && 'name' in group && typeof group.name == 'string' ? group : void 0;
     this.previous.services = Array.isArray(services) ? new Set(services.filter(e => typeof e == 'string')) : void 0;
     this.previous.both = typeof both == 'boo' + 'lean' ? both : void 0;
+    this.previous.editionsNetwork = typeof editionsNetwork == 'boolean' ? editionsNetwork : void 0;
     this.build();
   }
   private saveData() {
     this.savedDataObject.group = this.previous.group;
     this.savedDataObject.services = this.previous.services && Array.from(this.previous.services);
     this.savedDataObject.both = this.previous.both;
+    this.savedDataObject.editionsNetwork = this.previous.editionsNetwork;
   }
   private builder = new UITableBuilder(this.table, 'ISBN Export Tool');
   private state: UIState = new PickInputState(this.previous);
@@ -328,9 +333,21 @@ class PickEditionsServicesState implements UIState {
     allServices.forEach(service => builder.addCheckableRow(service, services.has(service), { onSelect: () => serviceToggle(service) }));
     builder.addEmptyRow();
 
-    if (services.size > 0) {
+    const na = new NetworkAccess(this.previous, 'editionsNetwork', '"Get Other Editions"', 'To "Get Other Editions", this program will send your selected ISBNs to external services (Open Library and/or LibraryThing as per your selection). Only ISBNs will be sent (no personal or other information).', 132);
+    na.addRow(this, builder, setState);
+
+    if (services.size > 0 && !na.denied()) {
       const isbns = this.igs.summary.isbnCount;
       builder.addForwardRow('Get Other Editions', async () => {
+
+        if (await na.askAllowed() == false) {
+          const a = new Alert;
+          a.title = 'Network Access Disallowed!';
+          a.message = 'This program can not get other edition ISBNs without your permission to access the network.';
+          a.addCancelAction('Okay');
+          await a.presentAlert();
+          return;
+        }
 
         const wv = new WebView;
         await wv.loadHTML('');
@@ -360,12 +377,13 @@ class PickEditionsServicesState implements UIState {
         setState(new EditionsSummaryState(this, this.previous, this.igs,
           await controller.requestEditions(Array.from(services), p => this.editionsProgress(setState, p))));
       }, true);
-      builder.addIndentRow('Note: Getting ISBNs of other editions will send your selected ISBNs to the above-selected third party services!', { height: 88 });
-      builder.addIndentRow('Go back to Item Summary if you do not want to send your ISBNs to any third party services.', { height: 88 });
       builder.addBackRow(title(this.back), () => setState(this.back));
     } else {
       builder.addForwardRow('Get Other Editions', void 0, true);
-      builder.addIndentRow('One or more editions services must be selected before we can proceed.', { height: 88 });
+      if (services.size <= 0)
+        builder.addIndentRow('One or more editions services must be selected before we can proceed.', { height: 88 });
+      if (na.denied())
+        builder.addIndentRow('Network Access must not be disallowed before we can proceed.', { height: 88 });
     }
   }
   private progressState?: EditionsProgressState;
@@ -377,6 +395,84 @@ class PickEditionsServicesState implements UIState {
       this.progressState.progress(progress);
       setState(this.progressState);
     }
+  }
+}
+
+class PreviousNetworkPermission {
+  constructor(protected previous: PreviousData, private key: NetworkAccessPreviousKey) { }
+  get netPermission(): boolean | undefined {
+    return this.previous[this.key];
+  }
+  set netPermission(value: boolean | undefined) {
+    this.previous[this.key] = value;
+  }
+  denied(): boolean {
+    return this.netPermission == false;
+  }
+}
+
+class NetworkAccess {
+  private previous: PreviousNetworkPermission;
+  constructor(previous: PreviousData, key: NetworkAccessPreviousKey, private actionText: string, private text: string, private height: number) {
+    this.previous = new PreviousNetworkPermission(previous, key);
+  }
+  denied() { return this.previous.denied() }
+  addRow(back: UIState, builder: UITableBuilder, setState: SetState) {
+    const perm = this.previous.netPermission;
+    const na = perm == true
+      ? 'granted'
+      : perm == false
+        ? 'denied'
+        : 'will ask';
+    builder.addForwardRow({
+      type: 'text',
+      title: 'Network Access: ' + na,
+      titleColor: na == 'denied' ? Color.red() : void 0
+    }, () => setState(new NetworkAccessState(back, this.previous, this.actionText, this.text, this.height)));
+  }
+  async askAllowed(): Promise<boolean> {
+    const perm = this.previous.netPermission;
+    if (typeof perm == 'boolean') return perm;
+    const a = new Alert;
+    a.title = 'Allow Network Access?';
+    a.message = this.text + '\n\nUse the Network Access item to control the default permission.\n\n'
+      + 'Do you want to allow this program to use the Internet to ' + this.actionText + '?';
+    a.addAction('Yes, use the Internet');
+    a.addCancelAction('No, do not use the Internet');
+    const c = await a.presentAlert();
+    if (c == -1) // no
+      return false;
+    else if (c == 0) // yes
+      return true;
+    return false;
+  }
+}
+
+class NetworkAccessState implements UIState {
+  static readonly title = 'Network Access';
+  constructor(private back: UIState, private previous: PreviousNetworkPermission, private actionText: string, private text: string, private height: number) { }
+  async build(builder: UITableBuilder, setState: SetState): Promise<void> {
+    builder.addBackRow(title(this.back), () => setState(this.back));
+    builder.addSubtitleHelpRow(title(this), outdent`
+      Some portions of this program need to access the Internet, however it will never access any network without your permission.
+
+      By default, this program will ask for your permission each time it needs to access the Internet.
+
+      You can use this screen to grant permission (allow access without asking), reserve permission (the default: ask each time), or deny permission (deny access without asking).
+
+      You can change these settings at any time.
+    `);
+    builder.addEmptyRow();
+    builder.addTextRow(this.text, { height: this.height });
+    builder.addTextRow(`Would you like to grant, reserve, or deny permission to access the network for ${this.actionText}?`, { height: 88 });
+    const allowed = this.previous.netPermission;
+    const set = (n: typeof this.previous.netPermission) => {
+      this.previous.netPermission = n;
+      setState(this);
+    };
+    builder.addCheckableRow('Grant permission: Always allow.', allowed == true, { onSelect: () => set(true) });
+    builder.addCheckableRow('Reserve permission: Ask each time.', allowed == null, { onSelect: () => set(void 0) });
+    builder.addCheckableRow('Deny permission: Never allow.', allowed == false, { onSelect: () => set(false) });
   }
 }
 
