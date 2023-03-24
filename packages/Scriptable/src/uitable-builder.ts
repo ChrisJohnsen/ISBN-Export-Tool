@@ -82,7 +82,7 @@ export class UITableBuilder {
     this.table.addRow(row);
     return row;
   }
-  addHeightAdjuster(row: UITableRow, updated: (newHeight: number) => void): UITableRow {
+  addHeightAdjuster(row: UITableRow, updated: (newHeight: number) => void = () => this.table.reload()): UITableRow {
     const bump = (d: number) => () => { row.height += d; updated(row.height) };
     const m1 = buildCell({ type: 'button', title: '-1', align: 'left', onTap: bump(-1) });
     const m10 = buildCell({ type: 'button', title: '-10', align: 'left', onTap: bump(-10) });
