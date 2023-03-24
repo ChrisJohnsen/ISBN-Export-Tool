@@ -112,3 +112,49 @@ module` (ESM files, cached with, run again without) and `exports is not defined`
     yarn jest               # all tests in all packages
     yarn jest packages/foo  # regexp filter test pathnames
     yarn jest -t regexp     # regexp filter describe and test strings
+
+# Releases
+
+The Node tool is not currently bundled and released (if you already have Node, a
+`yarn install` and `yarn rollup -c` should get you there).
+
+The fully-bundled Scriptable tool is released on a separately-rooted ("orphan")
+branch named `released`. This pre-bundled file can be used to distribute the
+program to iOS-only Scriptable users.
+
+The Scriptable content of this branch is created with these steps:
+
+1. Commit all the desired changes and stash any incomplete changes to tracked files.
+
+    The commited changes to `packages/utils/src/version.ts` should include a new
+    (previously untagged) version number.
+
+2. Create an annotated (or annotated and signed) tag for the new release.
+
+        git tag -a v1.0
+
+    The tag's annotation text should include a summary of what has changed.
+
+3. Make sure the `released` branch is checked out in a worktree at the top of
+   the main repository. Skip this step, if it is already present.
+
+        git worktree add released
+
+4. Run the Scriptable release helper:
+
+        yarn workspace scriptable run release
+
+    Or, from inside the Scriptable package:
+
+        packages/Scriptable> yarn run release
+
+    This will check that the worktree is clean and tagged, run a release-mode
+    Rollup, and check the released file's header for a Git decription
+    annotation, production mode, and make sure it doesn't have too many newlines
+    (as a proxy for minification).
+
+5. Commit in the `released` worktree.
+
+        released> git commit -a
+
+    The commit message should mention which version is being released.

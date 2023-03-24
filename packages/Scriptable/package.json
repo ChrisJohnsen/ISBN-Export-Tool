@@ -16,5 +16,8 @@
   "dependencies": {
     "outdent": "^0.8.0",
     "utils": "workspace:^"
+  },
+  "scripts": {
+    "release": "node release.js"
   }
 }
