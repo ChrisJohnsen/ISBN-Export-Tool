@@ -1,6 +1,9 @@
 // controller interfaces with tool-core on behalf of a non-specific UI
 
 import production from 'consts:production';
+import git from 'consts:git';
+import { version } from 'utils';
+
 import { isObject } from './ts-utils.js';
 import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-utils.js';
 import { type EditionsProgress, type EditionsSummary, type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UIRequestReceiver } from './ui-types.js';
@@ -34,6 +37,10 @@ export class Controller implements UIRequestReceiver {
     const build = (reload = true) => {
       reload && table.removeAllRows();
 
+      builder.addTextRow(`Version: ${version}`);
+      builder.addTextRow(`Git: ${git.description}`);
+      builder.addTextRow(production ? 'Production Mode' : 'Development Mode');
+      builder.addEmptyRow();
       builder.addRowWithDescribedCells([
         { type: 'text', title: 'Test Mode?', align: 'left' },
         { type: 'text', title: String(this.testMode), align: 'right' },
