@@ -42,7 +42,7 @@ export class UITableUI {
     /* eslint-enable */
     this.previous.group = group && typeof group == 'object' && 'kind' in group && typeof group.kind == 'string' && 'name' in group && typeof group.name == 'string' ? group : void 0;
     this.previous.services = Array.isArray(services) ? new Set(services.filter(e => typeof e == 'string')) : void 0;
-    this.previous.both = typeof both == 'boo' + 'lean' ? both : void 0;
+    this.previous.both = typeof both == 'boolean' ? both : void 0;
     this.previous.editionsNetwork = typeof editionsNetwork == 'boolean' ? editionsNetwork : void 0;
     this.build();
   }
