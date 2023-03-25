@@ -67,6 +67,7 @@ function symbolImageAndWidth(name: string): { image: Image; width: number; } {
     'magnifyingglass': 9,
     'doc.on.clipboard': 8,
     'doc': 7,
+    'gear': 9,
   };
   return { image, width: sizes[name] ?? 10 };
 }
@@ -111,9 +112,16 @@ export class UITableBuilder {
     cells.forEach(cell => row.addCell(cell));
     return row;
   }
-  addTitleRow() {
-    const cell = buildCell({ type: 'text', title: this.title, align: 'center', titleFont: Font.title1() });
-    return this.addRowWithCells([cell]);
+  addTitleConfigRow(onSelect?: () => void) {
+    const cells = new Array<UITableCell>;
+    const gear = symbolCell('gear');
+    gear.widthWeight = gear.widthWeight * .75;
+    if (onSelect)
+      cells.push(buildCell({ type: 'text', title: '', widthWeight: gear.widthWeight }));
+    cells.push(buildCell({ type: 'text', title: this.title, align: 'center', titleFont: Font.title2(), widthWeight: 100 - 2 * gear.widthWeight }));
+    if (onSelect)
+      cells.push(buildCell({ ...gear, align: 'right' }));
+    return this.addRowWithCells(cells, { onSelect });
   }
   private addSymbolExamples() {
     const t = (n: string) => {
@@ -131,6 +139,7 @@ export class UITableBuilder {
       // magnifyingglass                  9/100 20.5
       // doc.on.clipboard                 8/100 21
       // doc                              7/100 18
+      // gear                             9/100 22
 
       const { image, width } = symbolImageAndWidth(n);
       console.log(n);
@@ -161,6 +170,7 @@ export class UITableBuilder {
     t('magnifyingglass');
     t('doc.on.clipboard');
     t('doc');
+    t('gear');
   }
   private addFontExamples() {
     ([

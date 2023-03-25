@@ -2,13 +2,13 @@
 
 import { outdent as outdentDefault } from 'outdent';
 const outdent = outdentDefault({ newline: '\n' });
-import production from 'consts:production';
 import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
 import { symbolCell, textCell, UITableBuilder } from './uitable-builder.js';
 
 type SetState = (state: UIState) => void;
 
 interface UIState {
+  readonly hideConfig?: true,
   build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void>,
 }
 // no good way to tell TS that UIState should have a static title, so...
@@ -24,6 +24,7 @@ type PreviousData = {
   group?: { kind: string, name: string },
   services?: Set<string>,
   both?: boolean,
+  editionsSlowOkay?: true | undefined,
   editionsNetwork?: boolean | undefined,
 };
 type NetworkAccessPreviousKey = 'editionsNetwork';
@@ -38,11 +39,13 @@ export class UITableUI {
     const group = restoredData.group as any;
     const services = restoredData.services as any;
     const both = restoredData.both as any;
+    const editionsSlowOkay = restoredData.editionsSlowOkay as any;
     const editionsNetwork = restoredData.editionsNetwork as any;
     /* eslint-enable */
     this.previous.group = group && typeof group == 'object' && 'kind' in group && typeof group.kind == 'string' && 'name' in group && typeof group.name == 'string' ? group : void 0;
     this.previous.services = Array.isArray(services) ? new Set(services.filter(e => typeof e == 'string')) : void 0;
     this.previous.both = typeof both == 'boolean' ? both : void 0;
+    this.previous.editionsSlowOkay = editionsSlowOkay == true ? true : void 0;
     this.previous.editionsNetwork = typeof editionsNetwork == 'boolean' ? editionsNetwork : void 0;
     this.build();
   }
@@ -50,34 +53,27 @@ export class UITableUI {
     this.savedDataObject.group = this.previous.group;
     this.savedDataObject.services = this.previous.services && Array.from(this.previous.services);
     this.savedDataObject.both = this.previous.both;
+    this.savedDataObject.editionsSlowOkay = this.previous.editionsSlowOkay;
     this.savedDataObject.editionsNetwork = this.previous.editionsNetwork;
   }
   private builder = new UITableBuilder(this.table, 'ISBN Export Tool');
   private state: UIState = new PickInputState(this.previous);
   private async build() {
     this.table.removeAllRows();
-    this.buildDebug();
-    const title = this.builder.addTitleRow();
+    const setState = (state: UIState) => {
+      this.state = state;
+      this.build();
+    };
+    const gotoConfig = (state => {
+      if (state.hideConfig) return void 0;
+      return () => setState(new ConfigurationState(state, this.previous));
+    })(this.state);
+    const title = this.builder.addTitleConfigRow(gotoConfig);
     title.isHeader = true;
     try {
-      await this.state.build(this.builder, state => {
-        this.state = state;
-        this.build();
-      }, this.controller);
+      await this.state.build(this.builder, setState, this.controller);
     } catch (e) { console.error(e) }
     if (this.presented) this.table.reload();
-  }
-  private buildDebug(): void {
-    const empty = new UITableRow;
-    empty.addText('').widthWeight = 4;
-    const button = empty.addButton(production ? ' ' : 'DEBUG');
-    button.centerAligned();
-    button.onTap = () => {
-      this.controller.debugUI().then(() => this.build());
-    };
-    button.widthWeight = 2;
-    empty.addText('').widthWeight = 4;
-    this.table.addRow(empty);
   }
   private presented = false;
   async present(...args: Parameters<UITable['present']>): ReturnType<UITable['present']> {
@@ -88,6 +84,24 @@ export class UITableUI {
       this.presented = false;
       this.saveData();
     }
+  }
+}
+
+class ConfigurationState implements UIState {
+  static title = 'Configuration';
+  readonly hideConfig = true;
+  constructor(private back: UIState, private previous: PreviousData) { }
+  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
+    builder.addBackRow(title(this.back), () => setState(this.back));
+    builder.addEmptyRow();
+    builder.addTextRow('Network Access Permissions');
+    builder.addForwardRow('Get Other Editions', () => setState(NetworkAccess.editionsOf(this.previous).uiState(this)));
+    builder.addEmptyRow();
+    builder.addTextRow('Acknowledgeable Warnings');
+    builder.addForwardRow('Get Other Editions is slow', () => setState(new EditionsAcknowledgementState(this.back, this.previous)));
+    builder.addEmptyRow();
+    builder.addTextRow('Other Settings');
+    builder.addForwardRow('debug-only stuff', () => controller.debugUI().then(() => setState(this)));
   }
 }
 
@@ -166,7 +180,7 @@ class PickInputState implements UIState {
 class PickItemsState implements UIState {
   static readonly title = 'Item Selection';
   constructor(private back: UIState, private previous: PreviousData, public input: Input) { }
-  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
+  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
       Start by selecting which items from the exported data we will examine. The next step will check the selection for items that are missing ISBNs.
@@ -305,7 +319,7 @@ class OutputISBNsState implements UIState {
 class PickEditionsServicesState implements UIState {
   static readonly title = 'Select Editions Services';
   constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
-  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
+  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
       Books often have multiple editions, and thus multiple ISBNs. Some book lists only let you add one edition of a book, so the data will only include (at most) one ISBN for each book.
@@ -361,18 +375,8 @@ class PickEditionsServicesState implements UIState {
           return;
         }
 
-        const a = new Alert;
-        a.title = 'Getting Editions May Take Some Time';
-        a.message = 'Due to using external services, we limit how quickly we issue queries for other edition ISBNs. '
-          + 'It will take approximately one second per queried ISBN to complete this command.\n'
-          + '\n'
-          + `This could be up to ${isbns} seconds for the selected items.\n`
-          + '\n'
-          + 'The query results are saved for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
-        a.addCancelAction('That is too long to wait!');
-        a.addAction('That is okay, I will wait.');
-        const action = await a.presentAlert();
-        if (action == -1) return;
+        if (!await acknowledgeEditionsIsSlow(this.previous, isbns))
+          return;
 
         setState(new EditionsSummaryState(this, this.previous, this.igs,
           await controller.requestEditions(Array.from(services), p => this.editionsProgress(setState, p))));
@@ -395,6 +399,57 @@ class PickEditionsServicesState implements UIState {
       this.progressState.progress(progress);
       setState(this.progressState);
     }
+  }
+}
+
+const editionsThrottled =
+  'Due to using external services, we limit how quickly we issue queries for other edition ISBNs. It will take approximately one second per queried ISBN to finish.';
+const editionsCached =
+  'The query results are saved for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
+
+async function acknowledgeEditionsIsSlow(previous: PreviousData, isbns: number): Promise<boolean> {
+  if (previous.editionsSlowOkay) return true;
+  const a = new Alert;
+  a.title = 'Getting Editions May Take Some Time';
+  a.message = outdent`
+      ${editionsThrottled}
+
+      This could be up to ${isbns} seconds for the selected items.
+
+      ${editionsCached}
+    `;
+  a.addAction('I will wait; do not tell me again.');
+  a.addAction('I will wait.');
+  a.addCancelAction('That is too long to wait!');
+
+  const action = await a.presentAlert();
+  if (action == 0) {
+    previous.editionsSlowOkay = true;
+    return true;
+  } else if (action == 1)
+    return true;
+  return false;
+}
+
+class EditionsAcknowledgementState implements UIState {
+  static title = '"Get Other Editions" Is Slow';
+  readonly hideConfig = true;
+  constructor(private back: UIState, private previous: PreviousData) { }
+  async build(builder: UITableBuilder, setState: SetState) {
+    builder.addBackRow(title(this.back), () => setState(this.back));
+    builder.addSubtitleHelpRow(title(this), 'You can select the "do not warn me" option here to skip the warning.');
+    builder.addEmptyRow();
+    builder.addTextRow(editionsThrottled, { height: 132 });
+    builder.addTextRow(editionsCached, { height: 88 });
+    builder.addEmptyRow();
+    builder.addTextRow('Do you want to be warned every time about this?');
+    const set = (value: true | undefined) => {
+      this.previous.editionsSlowOkay = value;
+      setState(this);
+    };
+    const acked = this.previous.editionsSlowOkay;
+    builder.addCheckableRow('Yes, warn me every time.', !acked, { onSelect: () => set(void 0) });
+    builder.addCheckableRow('No, do not warn me.', !!acked, { onSelect: () => set(true) });
   }
 }
 
@@ -421,6 +476,9 @@ class NetworkAccess {
     this.previous = new PreviousNetworkPermission(previous, key);
   }
   denied() { return this.previous.denied() }
+  uiState(back: UIState) {
+    return new NetworkAccessState(back, this.previous, this.actionText, this.text, this.height);
+  }
   addRow(back: UIState, builder: UITableBuilder, setState: SetState) {
     const perm = this.previous.netPermission;
     const na = perm == true
@@ -432,7 +490,7 @@ class NetworkAccess {
       type: 'text',
       title: 'Network Access: ' + na,
       titleColor: na == 'denied' ? Color.red() : void 0
-    }, () => setState(new NetworkAccessState(back, this.previous, this.actionText, this.text, this.height)));
+    }, () => setState(this.uiState(back)));
   }
   async askAllowed(): Promise<boolean> {
     const perm = this.previous.netPermission;
@@ -454,8 +512,9 @@ class NetworkAccess {
 
 class NetworkAccessState implements UIState {
   static readonly title = 'Network Access';
+  readonly hideConfig = true;
   constructor(private back: UIState, private previous: PreviousNetworkPermission, private actionText: string, private text: string, private height: number) { }
-  async build(builder: UITableBuilder, setState: SetState): Promise<void> {
+  async build(builder: UITableBuilder, setState: SetState) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
       Some portions of this program need to access the Internet, however it will never access any network without your permission.
@@ -483,7 +542,7 @@ class NetworkAccessState implements UIState {
 class EditionsProgressState implements UIState {
   static readonly title = 'Other Editions Progress';
   constructor(private back: UIState, private group: { kind: string, name: string }, private editionsProgress: EditionsProgress) { }
-  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
+  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow('Cancel Other Editions', async () => {
       const a = new Alert;
       a.title = 'Cancel Other Editions?';
@@ -521,7 +580,7 @@ class EditionsSummaryState implements UIState {
   constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary, editionsSummary: EditionsSummary) {
     this.editionsSummary = { ...editionsSummary, received: Date.now() };
   }
-  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
+  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     const { isbns, editionsServicesSummary: summary, received } = this.editionsSummary;
     const confirmBack: () => Promise<boolean> = async () => {
       const newish = Date.now() - received < 5000;
