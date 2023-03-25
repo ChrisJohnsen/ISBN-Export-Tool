@@ -333,7 +333,7 @@ class PickEditionsServicesState implements UIState {
     allServices.forEach(service => builder.addCheckableRow(service, services.has(service), { onSelect: () => serviceToggle(service) }));
     builder.addEmptyRow();
 
-    const na = new NetworkAccess(this.previous, 'editionsNetwork', '"Get Other Editions"', 'To "Get Other Editions", this program will send your selected ISBNs to external services (Open Library and/or LibraryThing as per your selection). Only ISBNs will be sent (no personal or other information).', 132);
+    const na = NetworkAccess.editionsOf(this.previous);
     na.addRow(this, builder, setState);
 
     if (services.size > 0 && !na.denied()) {
@@ -412,8 +412,12 @@ class PreviousNetworkPermission {
 }
 
 class NetworkAccess {
+  static editionsOf(previous: PreviousData) {
+    return new NetworkAccess(previous, 'editionsNetwork', 'get ISBNs of other editions',
+      'To "Get Other Editions", we will send your selected ISBNs to external services (Open Library and/or LibraryThing as per your selection). Only ISBNs of your selected items will be sent. No other information, personal or otherwise will be sent.', 132);
+  }
   private previous: PreviousNetworkPermission;
-  constructor(previous: PreviousData, key: NetworkAccessPreviousKey, private actionText: string, private text: string, private height: number) {
+  private constructor(previous: PreviousData, key: NetworkAccessPreviousKey, private actionText: string, private text: string, private height: number) {
     this.previous = new PreviousNetworkPermission(previous, key);
   }
   denied() { return this.previous.denied() }
@@ -464,7 +468,7 @@ class NetworkAccessState implements UIState {
     `);
     builder.addEmptyRow();
     builder.addTextRow(this.text, { height: this.height });
-    builder.addTextRow(`Would you like to grant, reserve, or deny permission to access the network for ${this.actionText}?`, { height: 88 });
+    builder.addTextRow(`Would you like to grant, reserve, or deny permission to access the Internet to ${this.actionText}?`, { height: 88 });
     const allowed = this.previous.netPermission;
     const set = (n: typeof this.previous.netPermission) => {
       this.previous.netPermission = n;
