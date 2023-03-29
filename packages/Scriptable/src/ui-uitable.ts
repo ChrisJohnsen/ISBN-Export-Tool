@@ -240,7 +240,7 @@ interface InputGroupSummary {
 class ItemsSummaryState implements UIState {
   static readonly title = 'Item Summary';
   constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
-  async build(builder: UITableBuilder, setState: SetState) {
+  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
       The bulk of this program works only with ISBNs, so any item that lacks an ISBN can not be usefully processed beyond pointing out the missing ISBN.
@@ -265,7 +265,21 @@ class ItemsSummaryState implements UIState {
     builder.addForwardRow('View/Save Item ISBNs', () => setState(new OutputISBNsState(this, this.previous, this.igs)));
     builder.addEmptyRow();
     builder.addTextRow('Want to also include the ISBNs of other editions of the extracted item ISBNs?', { height: 88 });
-    builder.addForwardRow('Select Editions Services', () => setState(new PickEditionsServicesState(this, this.previous, this.igs)));
+    const na = NetworkAccess.editionsOf(this.previous);
+    builder.addForwardRow('Select Editions Services', na.denied() ? void 0 : async () => {
+      if (await na.askAllowed() == false) {
+        const a = new Alert;
+        a.title = 'Network Access Disallowed!';
+        a.message = 'We will not be able to get other edition ISBNs without your permission to access the Internet.\n\nWe need be able to:\n ① ask whether any of the editions services should be disabled, and\n ② send your selected ISBNs to the editions services to ask them for the ISBNs of other editions.';
+        a.addCancelAction('Okay');
+        await a.presentAlert();
+        return;
+      }
+      setState(new PickEditionsServicesState(this, this.previous, this.igs, await controller.requestEditionsServices()));
+    });
+    if (na.denied())
+      builder.addIndentRow('Network Access must not be disallowed before we can proceed.', { height: 88 });
+    na.addRow(this, builder, setState);
   }
 }
 
@@ -318,7 +332,7 @@ class OutputISBNsState implements UIState {
 
 class PickEditionsServicesState implements UIState {
   static readonly title = 'Select Editions Services';
-  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
+  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary, private availableServices: readonly string[]) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -332,8 +346,7 @@ class PickEditionsServicesState implements UIState {
     `);
     builder.addEmptyRow();
 
-    const allServices = await controller.requestEditionsServices();
-    const services = this.previous.services ?? new Set(allServices);
+    const services = this.previous.services ?? new Set(this.availableServices);
     const serviceToggle = (service: string) => {
       const newServices = new Set(services);
       if (newServices.has(service))
@@ -344,25 +357,12 @@ class PickEditionsServicesState implements UIState {
       setState(this);
     };
 
-    allServices.forEach(service => builder.addCheckableRow(service, services.has(service), { onSelect: () => serviceToggle(service) }));
+    this.availableServices.forEach(service => builder.addCheckableRow(service, services.has(service), { onSelect: () => serviceToggle(service) }));
     builder.addEmptyRow();
 
-    const na = NetworkAccess.editionsOf(this.previous);
-    na.addRow(this, builder, setState);
-
-    if (services.size > 0 && !na.denied()) {
+    if (services.size > 0) {
       const isbns = this.igs.summary.isbnCount;
       builder.addForwardRow('Get Other Editions', async () => {
-
-        if (await na.askAllowed() == false) {
-          const a = new Alert;
-          a.title = 'Network Access Disallowed!';
-          a.message = 'This program can not get other edition ISBNs without your permission to access the network.';
-          a.addCancelAction('Okay');
-          await a.presentAlert();
-          return;
-        }
-
         const wv = new WebView;
         await wv.loadHTML('');
         const online = await wv.evaluateJavaScript('navigator.onLine');
@@ -386,8 +386,6 @@ class PickEditionsServicesState implements UIState {
       builder.addForwardRow('Get Other Editions', void 0, true);
       if (services.size <= 0)
         builder.addIndentRow('One or more editions services must be selected before we can proceed.', { height: 88 });
-      if (na.denied())
-        builder.addIndentRow('Network Access must not be disallowed before we can proceed.', { height: 88 });
     }
   }
   private progressState?: EditionsProgressState;
@@ -469,7 +467,7 @@ class PreviousNetworkPermission {
 class NetworkAccess {
   static editionsOf(previous: PreviousData) {
     return new NetworkAccess(previous, 'editionsNetwork', 'get ISBNs of other editions',
-      'To "Get Other Editions", we will send your selected ISBNs to external services (Open Library and/or LibraryThing as per your selection). Only ISBNs of your selected items will be sent. No other information, personal or otherwise will be sent.', 132);
+      'Before we can ask about other editions of books, we need to know if any of the services we normally use have become unavailable.\n\n❗ No personal information will be sent for this purpose, we will only request a list of affected services.\n\n\nThen, to get the ISBNs of other editions, we will send your selected ISBNs to external services (Open Library and/or LibraryThing as per your selection).\n\n❗ Only ISBNs of your selected items will be sent. No other information, personal or otherwise will be sent.', 352);
   }
   private previous: PreviousNetworkPermission;
   private constructor(previous: PreviousData, key: NetworkAccessPreviousKey, private actionText: string, private text: string, private height: number) {

@@ -11,23 +11,20 @@ import { UITableBuilder } from './uitable-builder.js';
 
 import { assertNever } from 'utils';
 import { type EditionsService, type Fetcher, type Row, AllEditionsServices, parseCSVRows, type ProgressReport, bothISBNsOf, getEditionsOf, guessFormat, type ExportFormat } from 'utils';
+import { isCheckStorage, webcheck } from 'utils';
 import { toCSV } from 'utils';
 import { pick } from 'utils';
 
 export class Controller implements UIRequestReceiver {
-  constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string) {
-    this.enabledEditionsServices = new Set(AllEditionsServices);
-    this.enabledEditionsServices.delete('Open Library WorkEditions');
-  }
-  private enabledEditionsServices: Set<EditionsService>;
-  async requestEditionsServices() {
-    return Array.from(this.enabledEditionsServices);
+  private disabledEditionsServices: Set<EditionsService>;
+  constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string, private webcheckData: Record<string, unknown>) {
+    this.disabledEditionsServices = new Set(['Open Library WorkEditions']);
   }
   private enableEditionsService(service: EditionsService, enable = true) {
     if (enable)
-      this.enabledEditionsServices.add(service);
+      this.disabledEditionsServices.delete(service);
     else
-      this.enabledEditionsServices.delete(service);
+      this.disabledEditionsServices.add(service);
   }
   private testMode = !production;
   async debugUI() {
@@ -49,8 +46,8 @@ export class Controller implements UIRequestReceiver {
         + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
         + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
         , { height: 149 });
-      const olweStatus = this.enabledEditionsServices.has('Open Library WorkEditions') ? 'enabled' : 'disabled';
-      const olweToggle = () => this.enableEditionsService('Open Library WorkEditions', !this.enabledEditionsServices.has('Open Library WorkEditions'));
+      const olweStatus = this.disabledEditionsServices.has('Open Library WorkEditions') ? 'disabled' : 'enabled';
+      const olweToggle = () => this.enableEditionsService('Open Library WorkEditions', !this.disabledEditionsServices.has('Open Library WorkEditions'));
       builder.addRowWithDescribedCells([
         { type: 'text', title: 'OL:WE status', align: 'left' },
         { type: 'text', title: olweStatus, align: 'right' },
@@ -185,12 +182,44 @@ export class Controller implements UIRequestReceiver {
       a.presentAlert();
     }
   }
+  private async refreshDisabledEditionsServices() {
+    const data = (d => {
+      if (isCheckStorage(d)) return d;
+      this.webcheckData.disabledEditionsData = void 0;
+      return void 0;
+    })(this.webcheckData.disabledEditionsData);
+
+    const newData = await webcheck(checkableFetcher,
+      // https://github.com/ChrisJohnsen/ISBN-Export-Tool/raw/released/disabled-services
+      'https://raw.githubusercontent.com/ChrisJohnsen/ISBN-Export-Tool/released/disabled-services',
+      1000 * 60 * 60 * 24 * 7,
+      data);
+    this.webcheckData.disabledEditionsData = newData;
+
+    const content = newData?.content;
+    if (!content) return new Set<EditionsService>;
+    else return new Set(content
+      .split('\n')
+      .map(s => s.trim())
+      .filter((s): s is EditionsService => (AllEditionsServices as Set<string>).has(s)));
+  }
+  private activeServices?: Set<EditionsService>;
+  async requestEditionsServices() {
+    const enabled = new Set(AllEditionsServices);
+    const disabled = await this.refreshDisabledEditionsServices();
+    disabled.forEach(s => enabled.delete(s));
+    this.disabledEditionsServices.forEach(s => enabled.delete(s));
+
+    this.activeServices = enabled;
+    return Array.from(enabled);
+  }
   private abortingFetches = false;
   private editionsPromise?: Promise<EditionsSummary>;
   private abortEditions?: () => void;
   private edtionsISBNs: Set<string> = new Set;
   async requestEditions(services: string[], editionsReporter: (report: EditionsProgress) => void) {
     if (!this.selected) throw 'requested editions before anything selected';
+    if (!this.activeServices) throw 'requested editions before services requested';
 
     if (production && this.testMode || !production && !this.testMode) {
       const x = this.testMode
@@ -298,7 +327,7 @@ export class Controller implements UIRequestReceiver {
       })(store);
 
       const valid = (s: string): s is EditionsService => (AllEditionsServices as Set<string>).has(s);
-      const enabled = (s: EditionsService) => this.enabledEditionsServices.has(s);
+      const enabled = (s: EditionsService) => this.activeServices?.has(s);
 
       const editionsISBNs = await getEditionsOf(isbns, {
         services: new Set(services.filter(valid).filter(enabled)),
@@ -407,3 +436,30 @@ async function fakeFetcher(url: string): Promise<FetchResult> {
   throw `nope: ${url}`;
 }
 
+
+import { type CheckHeaders } from 'utils';
+
+async function checkableFetcher(url: string, previousCheckHeaders?: CheckHeaders) {
+  const req = new Request(url);
+
+  const headers: Record<string, string> = {};
+  headers['User-Agent'] = fetcherUserAgent('Scriptable');
+  if (previousCheckHeaders)
+    if (previousCheckHeaders.ETag)
+      headers['If-None-Match'] = previousCheckHeaders.ETag;
+    else if (previousCheckHeaders['Last-Modified'])
+      headers['If-Modified-Since'] = previousCheckHeaders['Last-Modified'];
+  req.headers = headers;
+
+  const content = await req.loadString();
+
+  const status = (s => typeof s == 'number' ? s : parseInt(s))(req.response.statusCode);
+  const checkHeaders: CheckHeaders = (h => {
+    const map = new Map(Object.entries(h)
+      .filter((hv: [string, unknown]): hv is [string, string] => typeof hv[1] == 'string')
+      .map(([h, v]) => [h.toLowerCase(), v]));
+    return { ETag: map.get('ETag'.toLowerCase()), 'Last-Modified': map.get('Last-Modified'.toLowerCase()) };
+  })(req.response.headers);
+
+  return { status, content, checkHeaders };
+}

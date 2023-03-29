@@ -19,6 +19,8 @@ if (!store.data) store.data = {};
 if (!isObject(store.data)) throw 'restored data is not an object?';
 if (!store.data.UITableUIData) store.data.UITableUIData = {};
 if (!isObject(store.data.UITableUIData)) throw 'restored UI data is not an object?';
+if (!store.data.webcheckData) store.data.webcheckData = {};
+if (!isObject(store.data.webcheckData)) throw 'restored UI data is not an object?';
 
 const logPathname = asidePathname(module.filename, 'log');
 const testLogPathname = asidePathname(module.filename, 'log', bn => bn + ' test');
@@ -28,6 +30,7 @@ const testCachePathname = asidePathname(module.filename, 'json', bn => bn + ' te
 const controller = new Controller(
   testMode => testMode ? testLogPathname : logPathname,
   testMode => testMode ? testCachePathname : cachePathname,
+  store.data.webcheckData,
 );
 
 const ui = new UITableUI(controller, store.data.UITableUIData);
