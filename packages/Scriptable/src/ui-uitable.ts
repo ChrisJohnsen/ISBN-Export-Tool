@@ -116,12 +116,12 @@ class PickInputState implements UIState {
 
       Some libraries can import such an ISBN list and use it to show which of those books they have available in their holdings (e.g. which of your "To Be Read" list is available for checkout).
 
-      Currently supored book list export systems:
-      - Goodreads export format (CSV with a specific set of columns) and its Shelves
+      These book list export formats are currently supported:
+      - Goodreads export (CSV with a specific set of columns) and its Shelves
       - LibraryThing TSV export and its Collections and Tags
       Suggest your favorite book list format for support in future versions!
 
-      When you have your data ready, tell this program where to find it using the selections on this Input Selection screen.
+      When you have your data ready, tell us where to find it using the selections on this Input Selection screen.
     `, {
       'Goodreads Export': outdent`
       Exporting from Goodreads can be done on the Goodreads website:
@@ -135,7 +135,7 @@ class PickInputState implements UIState {
 
       In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link.
 
-      On the Import/Export page tap/click "Export Library" button at the top of the page.
+      On the Import/Export page tap/click the "Export Library" button at the top of the page.
 
       A link like "Your export from <date>" will appear when the export is ready.
 
@@ -148,11 +148,11 @@ class PickInputState implements UIState {
 
       Login.
 
-      Tap/click the "More" top tab (inside three horizontal lines ("hamburger" menu) in the mobile view).
+      Tap/click the "More" top tab (inside three-horizontal-lines ("hamburger" menu) in the mobile view).
 
-      In the "Useful and Fun" section, tap/click "Import/Export" link.
+      In the "Useful and Fun" section, tap/click the "Import/Export" link.
 
-      In the "Export from LibraryThing" section, tap/click "Export as tab-delimited text" link.
+      In the "Export from LibraryThing" section, tap/click the "Export as tab-delimited text" link.
 
       Tap/click the "Export all books" button, or fill out a filter and tap/click the "Export filtered" button.
 
@@ -245,7 +245,7 @@ class ItemsSummaryState implements UIState {
     builder.addSubtitleHelpRow(title(this), outdent`
       The bulk of this program works only with ISBNs, so any item that lacks an ISBN can not be usefully processed beyond pointing out the missing ISBN.
 
-      Items missing an ISBN often occur because the default edition is an eBook or audiobook version that happens to not use an ISBN. If you did not mean to secifically select that non-ISBN edition you can usually change the listing (e.g. Goodread's Book Details) to an ISBN-bearing edition so that its ISBN can be used by the rest of this program in a future data export.
+      Items missing an ISBN often occur because the default edition is an eBook or audiobook version that happens to not use an ISBN. If you did not mean to specifically select that non-ISBN edition you can usually change the listing (e.g. Goodread's Book Details) to an ISBN-bearing edition so that (in a future data export) its ISBN can be used by the rest of this program.
 
       Every item from the provided data that does not have an ISBN is in the "Items Missing an ISBN" list. Likewise, every item that has an ISBN will contribute it to the "Item ISBNs" list.
 
@@ -310,7 +310,7 @@ class OutputISBNsState implements UIState {
     builder.addSubtitleHelpRow(title(this), outdent`
       Select an Output Option to view or save the full output.
 
-      Only the ISBN-13 version of each ISBN are provided by default. Select the "Include both" option to also include the ISBN-10 version when possible (not all ISBNs have an old-style ISBN-10 version).
+      Only the ISBN-13 version of each ISBN is provided by default. Select the "Include both" option to also include the ISBN-10 version when possible (not all ISBNs have an old-style ISBN-10 version).
     `);
     builder.addEmptyRow();
 
@@ -340,9 +340,9 @@ class PickEditionsServicesState implements UIState {
 
       If you are interested in finding any edition of the books in your lists, then it might be handy to be able to gather not just the ISBN of the (sometimes arbitrary) edition in your list, but also the ISBNs of other editions of that book.
 
-      Some book websites offer a way to find the ISBNs of other editions of a book (at least the editions that those services know about). This program can use those services to gather those extra ISBNs.
+      Some book-data websites offer a way to find the ISBNs of other editions of a book (at least the editions that those services know about). We can use those services to gather those extra ISBNs.
 
-      Requests to these services are limited to one per second, so it may take some time to process a large list. The results are saved for re-use though, so later queries about the same book should be faster.
+      Requests to these services are limited to one per second, so it may take some time to process a large list. We save the results for re-use though, so later queries about the same book should be faster.
     `);
     builder.addEmptyRow();
 
@@ -369,7 +369,7 @@ class PickEditionsServicesState implements UIState {
         if (!online) {
           const a = new Alert;
           a.title = 'Device Offline?';
-          a.message = 'This device appears to be offline.\n\nPlease make sure you have an Internet connection before doing Get ISBNs of Other Editions.';
+          a.message = 'This device appears to be offline.\n\nPlease make sure you have an Internet connection before using "Get Other Editions".';
           a.addCancelAction('Okay');
           await a.presentAlert();
           return;
@@ -403,7 +403,7 @@ class PickEditionsServicesState implements UIState {
 const editionsThrottled =
   'Due to using external services, we limit how quickly we issue queries for other edition ISBNs. It will take approximately one second per queried ISBN to finish.';
 const editionsCached =
-  'The query results are saved for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
+  'We save the query results for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
 
 async function acknowledgeEditionsIsSlow(previous: PreviousData, isbns: number): Promise<boolean> {
   if (previous.editionsSlowOkay) return true;
@@ -596,7 +596,7 @@ class EditionsSummaryState implements UIState {
 
       Select an Output Option to view or save the full list of ISBNs.
 
-      Only the ISBN-13 version of each ISBN are provided by default. Select the "Include both" option to also include the ISBN-10 version when possible (not all ISBNs have an old-style ISBN-10 version).
+      Only the ISBN-13 version of each ISBN is provided by default. Select the "Include both" option to also include the ISBN-10 version when possible (not all ISBNs have an old-style ISBN-10 version).
 
       The "back" option at the bottom jumps back to the input selection screen (also available through multiple taps on "back" at the top).
     `);
