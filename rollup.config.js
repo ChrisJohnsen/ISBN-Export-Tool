@@ -2,7 +2,6 @@ import { loadConfigFile } from 'rollup/loadConfigFile';
 
 export default async cliOptions => {
   return (await Promise.all([
-    'papaparse',
     'utils',
     'Scriptable',
     'node',

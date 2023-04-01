@@ -1,0 +1,23 @@
+diff --git a/package.json b/package.json
+index b5b144d483c5a82d88770b7b7d8547b469d80438..1f9a2de98266341ce4b8b642a4d179670c6e215b 100644
+--- a/package.json
++++ b/package.json
+@@ -35,6 +35,10 @@
+ 	},
+ 	"license": "MIT",
+ 	"main": "papaparse.js",
++	"exports": {
++		"import": "./papaparse.mjs",
++		"require": "./papaparse.js"
++	},
+ 	"browser": "papaparse.min.js",
+ 	"devDependencies": {
+ 		"chai": "^4.2.0",
+diff --git a/papaparse.mjs b/papaparse.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..281624b9bf9f67efaab6c000c048193a44ea1af2
+--- /dev/null
++++ b/papaparse.mjs
+@@ -0,0 +1,2 @@
++import papaparse from './papaparse.js';
++export const { parse, unparse } = papaparse;
