@@ -26,10 +26,10 @@
     "rollup-plugin-ts": "^3.2.0"
   },
   "dependencies": {
-    "isbn3": "^1.1.34",
+    "isbn3": "^1.1.35",
     "p-limit": "^4.0.0",
     "p-throttle": "^5.0.0",
-    "papaparse": "patch:papaparse@npm%3A5.4.0#~/.yarn/patches/papaparse-npm-5.4.0-aa63633b8b.patch",
+    "papaparse": "patch:papaparse@npm%3A5.4.1#~/.yarn/patches/papaparse-npm-5.4.0-aa63633b8b.patch",
     "typanion": "^3.12.1"
   }
 }
