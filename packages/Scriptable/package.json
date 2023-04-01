@@ -10,8 +10,10 @@
     "@scriptable-ios/eslint-config": "^1.7.0",
     "@types/scriptable-ios": "^1.7.0",
     "esbuild": "^0.17.11",
+    "rollup": "^3.19.1",
     "rollup-plugin-consts": "^1.1.0",
-    "rollup-plugin-esbuild": "^5.0.0"
+    "rollup-plugin-esbuild": "^5.0.0",
+    "rollup-plugin-license": "^3.0.1"
   },
   "dependencies": {
     "outdent": "^0.8.0",

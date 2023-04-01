@@ -451,7 +451,10 @@ async function checkableFetcher(url: string, previousCheckHeaders?: CheckHeaders
       headers['If-Modified-Since'] = previousCheckHeaders['Last-Modified'];
   req.headers = headers;
 
+  console.log(req);
   const content = await req.loadString();
+  console.log(req.response.statusCode);
+  console.log(req.response.headers);
 
   const status = (s => typeof s == 'number' ? s : parseInt(s))(req.response.statusCode);
   const checkHeaders: CheckHeaders = (h => {

@@ -4,6 +4,8 @@ import { outdent as outdentDefault } from 'outdent';
 const outdent = outdentDefault({ newline: '\n' });
 import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
 import { symbolCell, textCell, UITableBuilder } from './uitable-builder.js';
+import production from 'consts:production';
+import dependencies from 'consts:dependencies';
 
 type SetState = (state: UIState) => void;
 
@@ -102,6 +104,36 @@ class ConfigurationState implements UIState {
     builder.addEmptyRow();
     builder.addTextRow('Other Settings');
     builder.addForwardRow('debug-only stuff', () => controller.debugUI().then(() => setState(this)));
+    if (production) {
+      builder.addEmptyRow();
+      builder.addForwardRow('Copyrights', () => setState(new CopyrightsState(this)));
+    }
+  }
+}
+
+class CopyrightsState implements UIState {
+  static title = 'Copyrights';
+  readonly hideConfig = true;
+  constructor(private back: UIState) { }
+  async build(builder: UITableBuilder, setState: SetState): Promise<void> {
+    builder.addBackRow(title(this.back), () => setState(this.back));
+    builder.addTextRow('tap a row for full license text');
+    builder.addEmptyRow();
+    const addRow = (name: string, version: string, license: string, licenseText: string) =>
+      builder.addRowWithDescribedCells([
+        { ...textCell(name), align: 'left', widthWeight: 2 },
+        { ...textCell(version), align: 'center', widthWeight: 1 },
+        { ...textCell(license), align: 'right', widthWeight: 1 }], {
+        onSelect: licenseText ? async () => {
+          const a = new Alert;
+          a.title = name + ' License';
+          a.message = licenseText;
+          a.addCancelAction('Okay');
+          await a.presentAlert();
+        } : void 0
+      });
+    addRow('Included Dependency', 'Version', 'License', '');
+    dependencies.forEach(d => addRow(d.name ?? '', d.version ?? '', d.license ?? '', d.licenseText ?? ''));
   }
 }
 
