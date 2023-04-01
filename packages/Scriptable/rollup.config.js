@@ -47,7 +47,7 @@ export default async cliOptions => {
       iCloud && { file: 'iCloud/ISBN Tool.js' },
       release && {
         file: release + '/Scriptable/ISBN Tool.js',
-        banner: `/* ${production ? 'production' : 'development'} git: ${git.description} @preserve */`,
+        banner: `/*! ${production ? 'production' : 'development'} git: ${git.description} */`,
       },
     ],
     external: [],

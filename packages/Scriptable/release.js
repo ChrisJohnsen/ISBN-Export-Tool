@@ -76,8 +76,9 @@ if (!checks.failed) {
 
   const newlineCount = [].reduce.call(chunk, (count, char) => count + (char == '\n'), 0);
   const bytesPerLine = chunk.length / newlineCount;
-  const isProduction = /\bproduction (?:.+ )?@preserve/.test(chunk);
-  const chunkDescription = chunk.match(/\bgit: (\S+) (?:.+ )?@preserve/)?.[1];
+  const bannerMatch = chunk.match(/(\S+) git: (\S+)/);
+  const isProduction = bannerMatch[1] == 'production';
+  const chunkDescription = bannerMatch[2];
 
   checks.assert(chunkDescription == description, `released file git description ${chunkDescription} != ${description}`);
   checks.assert(isProduction, 'not production');
