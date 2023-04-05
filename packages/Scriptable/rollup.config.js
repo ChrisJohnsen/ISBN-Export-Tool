@@ -1,8 +1,5 @@
 // spellcheck: off
 
-import { promisify } from 'node:util';
-import { exec as execCb } from 'node:child_process';
-const exec = promisify(execCb);
 import { stat } from 'node:fs/promises';
 const isDir = pn => stat(pn).then(s => s.isDirectory(), () => false);
 
@@ -34,10 +31,7 @@ export default async cliOptions => {
   const production = !!release || !!cliOptions.configProduction;
   const useTerser = !!release || !!cliOptions.configTerser;
 
-  const git = {
-    description: await exec('git describe --long --dirty')
-      .then(e => e.stdout.trim(), () => '(unable to run "git describe")'),
-  };
+  const git = { description: '(did not run "git-describe")' };
   /** @type { {name:string?, version:string?, license:string?, licenseText:string?}[] } */
   let dependencies = [];
   const config = {
@@ -47,7 +41,10 @@ export default async cliOptions => {
       iCloud && { file: 'iCloud/ISBN Tool.js' },
       release && {
         file: release + '/Scriptable/ISBN Tool.js',
-        banner: `/*! ${production ? 'production' : 'development'} git: ${git.description} */`,
+        banner() {
+          const mode = production ? 'production' : 'development';
+          return `/*! ${mode} git: ${git.description} */`;
+        },
       },
     ],
     external: [],
@@ -55,6 +52,7 @@ export default async cliOptions => {
       // Papaparse leaves a remnant `import x from 'stream'` that Scriptable does not understand
       // we do not use what it eventually references, so just stub it out
       virtual({ stream: 'export default {}' }),
+      gitDescription(description => git.description = description), // updates value for consts and release banner
       consts({ production, git, dependencies }),
       commonjs(), node_resolve(), esbuild({ target: "es2022" })
     ],
@@ -97,3 +95,21 @@ export default async cliOptions => {
     });
   return config;
 };
+
+import { promisify } from 'node:util';
+import { exec as execCb } from 'node:child_process';
+const exec = promisify(execCb);
+/**
+ * A tiny Rollup plugin to capture the output of `git describe --long --dirty` at `buildStart` time.
+ * The description string is reported to `fn`.
+ * @param {(description:string) => void} fn
+ * @returns {import('rollup').Plugin}
+ */
+function gitDescription(fn) {
+  return {
+    async buildStart() {
+      fn(await exec('git describe --long --dirty')
+        .then(e => e.stdout.trim(), () => '(unable to run "git describe")'));
+    }
+  };
+}
