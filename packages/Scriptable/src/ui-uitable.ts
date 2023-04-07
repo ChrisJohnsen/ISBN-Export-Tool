@@ -72,8 +72,10 @@ export class UITableUI {
   private async build() {
     this.table.removeAllRows();
     const setState = (state: UIState) => {
-      this.state = state;
-      this.build();
+      defer(() => {
+        this.state = state;
+        this.build();
+      });
     };
     const gotoConfig = (state => {
       if (state.hideConfig) return void 0;
@@ -192,13 +194,11 @@ class UpdateState implements UIState {
   private justUpdated = false;
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
     const pickInput = () => setState(new PickInputState(this.previous));
-    // defer setState to avoid recurring into UITableUI.build and to present alerts after (instead of before, then "under") UITableUI
-    const defer = (fn: () => void): void => void Timer.schedule(0, false, fn);
 
-    if (!production) return defer(pickInput);
+    if (!production) return pickInput();
 
     if (Date.now() < this.firstRun() + 1000 * 60 * 60 * 24 * 7)
-      return defer(pickInput);
+      return pickInput();
 
     if (this.justUpdated)
       return void builder.addTextRow('Update installed. Will restart in 5 seconds.');
@@ -208,10 +208,10 @@ class UpdateState implements UIState {
     const na = NetworkAccess.updates(this.previous);
     const status = controller.updateStatus();
     if (status == 'dormant')
-      return defer(pickInput);
+      return pickInput();
     else if (status == 'pending') {
       builder.addTextRow('An update is ready for installation.');
-      return defer(async () => {
+      return defer(async () => { // defer to keep Alert "above" initial UITable
         if (await askUpdateInstall(na, controller)) {
           this.justUpdated = true;
           setState(this);
@@ -220,9 +220,9 @@ class UpdateState implements UIState {
       });
     } else if (status == 'expired') {
       if (na.denied())
-        return defer(pickInput);
+        return pickInput();
       builder.addTextRow('Checking for update (up to 10 seconds)…');
-      return defer(async () => {
+      return defer(async () => { // defer to keep Alert "above" initial UITable
         if (await na.askAllowed(true)
           && await Promise.race([
             controller.requestUpdateCheck(),
@@ -782,4 +782,8 @@ class EditionsSummaryState implements UIState {
     builder.addEmptyRow();
     builder.addBackRow('Choose New Input', async () => await confirmBack() && setState(new PickInputState(this.previous, this.igs.input)));
   }
+}
+
+function defer(fn: () => void): void {
+  Timer.schedule(0, false, fn);
 }
