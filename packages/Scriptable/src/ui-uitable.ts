@@ -23,7 +23,7 @@ function title(state: UIState): string {
   return `< ${ctor.name} >`;
 }
 
-type PreviousData = {
+type SavableData = {
   group?: { kind: string, name: string },
   services?: Set<string>,
   both?: boolean,
@@ -36,7 +36,7 @@ type NetworkAccessPreviousKey = 'editionsNetwork' | 'updatesNetwork';
 
 export class UITableUI {
   private table = new UITable;
-  private previous: PreviousData = {};
+  private savable: SavableData = {};
   constructor(private controller: UIRequestReceiver, private savedDataObject: Record<string, unknown>) {
     this.table.showSeparators = true;
     const restoredData = this.savedDataObject;
@@ -49,26 +49,26 @@ export class UITableUI {
     const updatesNetwork = restoredData.updatesNetwork as any;
     const firstRun = restoredData.firstRun as any;
     /* eslint-enable */
-    this.previous.group = group && typeof group == 'object' && 'kind' in group && typeof group.kind == 'string' && 'name' in group && typeof group.name == 'string' ? group : void 0;
-    this.previous.services = Array.isArray(services) ? new Set(services.filter(e => typeof e == 'string')) : void 0;
-    this.previous.both = typeof both == 'boolean' ? both : void 0;
-    this.previous.editionsSlowOkay = editionsSlowOkay == true ? true : void 0;
-    this.previous.editionsNetwork = typeof editionsNetwork == 'boolean' ? editionsNetwork : void 0;
-    this.previous.updatesNetwork = typeof updatesNetwork == 'boolean' ? updatesNetwork : void 0;
-    this.previous.firstRun = typeof firstRun == 'number' ? firstRun : void 0;
+    this.savable.group = group && typeof group == 'object' && 'kind' in group && typeof group.kind == 'string' && 'name' in group && typeof group.name == 'string' ? group : void 0;
+    this.savable.services = Array.isArray(services) ? new Set(services.filter(e => typeof e == 'string')) : void 0;
+    this.savable.both = typeof both == 'boolean' ? both : void 0;
+    this.savable.editionsSlowOkay = editionsSlowOkay == true ? true : void 0;
+    this.savable.editionsNetwork = typeof editionsNetwork == 'boolean' ? editionsNetwork : void 0;
+    this.savable.updatesNetwork = typeof updatesNetwork == 'boolean' ? updatesNetwork : void 0;
+    this.savable.firstRun = typeof firstRun == 'number' ? firstRun : void 0;
     this.build();
   }
   private saveData() {
-    this.savedDataObject.group = this.previous.group;
-    this.savedDataObject.services = this.previous.services && Array.from(this.previous.services);
-    this.savedDataObject.both = this.previous.both;
-    this.savedDataObject.editionsSlowOkay = this.previous.editionsSlowOkay;
-    this.savedDataObject.editionsNetwork = this.previous.editionsNetwork;
-    this.savedDataObject.updatesNetwork = this.previous.updatesNetwork;
-    this.savedDataObject.firstRun = this.previous.firstRun;
+    this.savedDataObject.group = this.savable.group;
+    this.savedDataObject.services = this.savable.services && Array.from(this.savable.services);
+    this.savedDataObject.both = this.savable.both;
+    this.savedDataObject.editionsSlowOkay = this.savable.editionsSlowOkay;
+    this.savedDataObject.editionsNetwork = this.savable.editionsNetwork;
+    this.savedDataObject.updatesNetwork = this.savable.updatesNetwork;
+    this.savedDataObject.firstRun = this.savable.firstRun;
   }
   private builder = new UITableBuilder(this.table, 'ISBN Export Tool');
-  private state: UIState = new UpdateState(this.previous);
+  private state: UIState = new UpdateState(this.savable);
   private async build() {
     this.table.removeAllRows();
     const setState = (state: UIState) => {
@@ -79,7 +79,7 @@ export class UITableUI {
     };
     const gotoConfig = (state => {
       if (state.hideConfig) return void 0;
-      return () => setState(new ConfigurationState(state, this.previous));
+      return () => setState(new ConfigurationState(state, this.savable));
     })(this.state);
     const title = this.builder.addTitleConfigRow(gotoConfig);
     title.isHeader = true;
@@ -103,7 +103,7 @@ export class UITableUI {
 class ConfigurationState implements UIState {
   static title = 'Configuration';
   readonly hideConfig = true;
-  constructor(private back: UIState, private previous: PreviousData) { }
+  constructor(private back: UIState, private savable: SavableData) { }
   private justUpdated = false;
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     if (this.justUpdated)
@@ -112,8 +112,8 @@ class ConfigurationState implements UIState {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addEmptyRow();
     builder.addTextRow('Network Access Permissions');
-    builder.addForwardRow('Get Other Editions', () => setState(NetworkAccess.editionsOf(this.previous).uiState(this)));
-    const una = NetworkAccess.updates(this.previous);
+    builder.addForwardRow('Get Other Editions', () => setState(NetworkAccess.editionsOf(this.savable).uiState(this)));
+    const una = NetworkAccess.updates(this.savable);
     builder.addForwardRow('Updates', () => setState(una.uiState(this)));
     builder.addEmptyRow();
     builder.addForwardRow('check for updates now', async () => {
@@ -130,7 +130,7 @@ class ConfigurationState implements UIState {
     });
     builder.addEmptyRow();
     builder.addTextRow('Acknowledgeable Warnings');
-    builder.addForwardRow('Get Other Editions is slow', () => setState(new EditionsAcknowledgementState(this.back, this.previous)));
+    builder.addForwardRow('Get Other Editions is slow', () => setState(new EditionsAcknowledgementState(this.back, this.savable)));
     builder.addEmptyRow();
     builder.addTextRow('Other Settings');
     builder.addForwardRow('debug-only stuff', () => controller.debugUI().then(() => setState(this)));
@@ -190,10 +190,10 @@ async function askUpdateInstall(na: NetworkAccess, controller: UIRequestReceiver
 class UpdateState implements UIState {
   static readonly title = 'Starting…'; // not "Update Check" or similar to avoid confusion if update network permission is denied
   readonly hideConfig = true;
-  constructor(private previous: PreviousData) { }
+  constructor(private savable: SavableData) { }
   private justUpdated = false;
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
-    const pickInput = () => setState(new PickInputState(this.previous));
+    const pickInput = () => setState(new PickInputState(this.savable));
 
     if (!production) return pickInput();
 
@@ -205,7 +205,7 @@ class UpdateState implements UIState {
 
     builder.addSubtitleHelpRow(title(this));
 
-    const na = NetworkAccess.updates(this.previous);
+    const na = NetworkAccess.updates(this.savable);
     const status = controller.updateStatus();
     if (status == 'dormant')
       return pickInput();
@@ -236,15 +236,15 @@ class UpdateState implements UIState {
     } else assertNever(status);
   }
   private firstRun(): number {
-    if (typeof this.previous.firstRun == 'undefined')
-      this.previous.firstRun = Date.now();
-    return this.previous.firstRun;
+    if (typeof this.savable.firstRun == 'undefined')
+      this.savable.firstRun = Date.now();
+    return this.savable.firstRun;
   }
 }
 
 class PickInputState implements UIState {
   static readonly title = 'Input Selection';
-  constructor(private previous: PreviousData, private previousInput?: Input) { }
+  constructor(private savable: SavableData, private previousInput?: Input) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addSubtitleHelpRow(title(this), outdent`
       This program reads exported book list data to let you access the ISBNs of your listed items.
@@ -303,7 +303,7 @@ class PickInputState implements UIState {
     builder.addEmptyRow();
     const useInput = (input: Input) => {
       this.previousInput = input;
-      setState(new PickItemsState(this, this.previous, input));
+      setState(new PickItemsState(this, this.savable, input));
     };
     if (this.previousInput) {
       const prev = this.previousInput;
@@ -316,7 +316,7 @@ class PickInputState implements UIState {
 
 class PickItemsState implements UIState {
   static readonly title = 'Item Selection';
-  constructor(private back: UIState, private previous: PreviousData, public input: Input) { }
+  constructor(private back: UIState, private savable: SavableData, public input: Input) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -329,25 +329,25 @@ class PickItemsState implements UIState {
     builder.addTextRow('Choose the group to examine.');
 
     const pickGroup = async (kind: string, name: string) => {
-      this.previous.group = { kind, name };
-      setState(new ItemsSummaryState(this, this.previous, {
+      this.savable.group = { kind, name };
+      setState(new ItemsSummaryState(this, this.savable, {
         input: this.input,
         group: { kind, name },
         summary: await controller.requestGroup(kind, name),
       }));
     };
     const groupItems = this.input.groupItems;
-    const addGroupRow = (kind: string, name: string, items: string, onSelect?: () => void, previous = false) =>
+    const addGroupRow = (kind: string, name: string, items: string, onSelect?: () => void, savable = false) =>
       builder.addRowWithDescribedCells([
         { type: 'text', title: kind, widthWeight: 30, align: 'left' },
-        { type: 'text', title: name, widthWeight: 55, align: 'right', titleColor: previous ? Color.orange() : void 0 },
+        { type: 'text', title: name, widthWeight: 55, align: 'right', titleColor: savable ? Color.orange() : void 0 },
         { type: 'text', title: items, widthWeight: 15, align: 'left' },
       ], { onSelect, cellSpacing: 10 });
     addGroupRow('Kind', 'Group', 'Items');
     Object.entries(groupItems)
       .forEach(([kind, groupCounts]) => Object.getOwnPropertyNames(groupCounts).forEach(
         group => addGroupRow(kind, group, String(groupItems[kind]?.[group]),
-          () => pickGroup(kind, group), kind == this.previous.group?.kind && group == this.previous.group.name)));
+          () => pickGroup(kind, group), kind == this.savable.group?.kind && group == this.savable.group.name)));
   }
 }
 
@@ -376,7 +376,7 @@ interface InputGroupSummary {
 
 class ItemsSummaryState implements UIState {
   static readonly title = 'Item Summary';
-  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
+  constructor(private back: UIState, private savable: SavableData, private igs: InputGroupSummary) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -399,10 +399,10 @@ class ItemsSummaryState implements UIState {
     builder.addTextRow(`${summary.missingISBNCount} items with no ISBN.`);
     builder.addForwardRow('View/Save Items Missing an ISBN', () => setState(new OutputMissingISBNsState(this, this.igs)));
     builder.addTextRow(`${summary.isbnCount} items with an ISBN.`);
-    builder.addForwardRow('View/Save Item ISBNs', () => setState(new OutputISBNsState(this, this.previous, this.igs)));
+    builder.addForwardRow('View/Save Item ISBNs', () => setState(new OutputISBNsState(this, this.savable, this.igs)));
     builder.addEmptyRow();
     builder.addTextRow('Want to also include the ISBNs of other editions of the extracted item ISBNs?', { height: 88 });
-    const na = NetworkAccess.editionsOf(this.previous);
+    const na = NetworkAccess.editionsOf(this.savable);
     builder.addForwardRow('Select Editions Services', na.denied() ? void 0 : async () => {
       if (await na.askAllowed() == false) {
         const a = new Alert;
@@ -412,7 +412,7 @@ class ItemsSummaryState implements UIState {
         await a.presentAlert();
         return;
       }
-      setState(new PickEditionsServicesState(this, this.previous, this.igs, await controller.requestEditionsServices()));
+      setState(new PickEditionsServicesState(this, this.savable, this.igs, await controller.requestEditionsServices()));
     });
     if (na.denied())
       builder.addIndentRow('Network Access must not be disallowed before we can proceed.', { height: 88 });
@@ -441,7 +441,7 @@ class OutputMissingISBNsState implements UIState {
 
 class OutputISBNsState implements UIState {
   static readonly title = 'Item ISBNs';
-  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary) { }
+  constructor(private back: UIState, private savable: SavableData, private igs: InputGroupSummary) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -453,9 +453,9 @@ class OutputISBNsState implements UIState {
 
     const group = this.igs.group;
     const items = this.igs.input.groupItems[group.kind]?.[group.name] ?? 0;
-    const both = this.previous.both ?? false;
+    const both = this.savable.both ?? false;
     const toggleBoth = () => {
-      this.previous.both = !both;
+      this.savable.both = !both;
       setState(this);
     };
     builder.addTextRow(`${items} items in selection (${group.kind} ${group.name}).`);
@@ -469,7 +469,7 @@ class OutputISBNsState implements UIState {
 
 class PickEditionsServicesState implements UIState {
   static readonly title = 'Select Editions Services';
-  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary, private availableServices: readonly string[]) { }
+  constructor(private back: UIState, private savable: SavableData, private igs: InputGroupSummary, private availableServices: readonly string[]) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -483,14 +483,14 @@ class PickEditionsServicesState implements UIState {
     `);
     builder.addEmptyRow();
 
-    const services = this.previous.services ?? new Set(this.availableServices);
+    const services = this.savable.services ?? new Set(this.availableServices);
     const serviceToggle = (service: string) => {
       const newServices = new Set(services);
       if (newServices.has(service))
         newServices.delete(service);
       else
         newServices.add(service);
-      this.previous.services = newServices;
+      this.savable.services = newServices;
       setState(this);
     };
 
@@ -512,10 +512,10 @@ class PickEditionsServicesState implements UIState {
           return;
         }
 
-        if (!await acknowledgeEditionsIsSlow(this.previous, isbns))
+        if (!await acknowledgeEditionsIsSlow(this.savable, isbns))
           return;
 
-        setState(new EditionsSummaryState(this, this.previous, this.igs,
+        setState(new EditionsSummaryState(this, this.savable, this.igs,
           await controller.requestEditions(Array.from(services), p => this.editionsProgress(setState, p))));
       }, true);
       builder.addBackRow(title(this.back), () => setState(this.back));
@@ -542,8 +542,8 @@ const editionsThrottled =
 const editionsCached =
   'We save the query results for later re-use, so subsequent runs will be faster (assuming some recurring ISBNs).';
 
-async function acknowledgeEditionsIsSlow(previous: PreviousData, isbns: number): Promise<boolean> {
-  if (previous.editionsSlowOkay) return true;
+async function acknowledgeEditionsIsSlow(savable: SavableData, isbns: number): Promise<boolean> {
+  if (savable.editionsSlowOkay) return true;
   const a = new Alert;
   a.title = 'Getting Editions May Take Some Time';
   a.message = outdent`
@@ -559,7 +559,7 @@ async function acknowledgeEditionsIsSlow(previous: PreviousData, isbns: number):
 
   const action = await a.presentAlert();
   if (action == 0) {
-    previous.editionsSlowOkay = true;
+    savable.editionsSlowOkay = true;
     return true;
   } else if (action == 1)
     return true;
@@ -569,7 +569,7 @@ async function acknowledgeEditionsIsSlow(previous: PreviousData, isbns: number):
 class EditionsAcknowledgementState implements UIState {
   static title = '"Get Other Editions" Is Slow';
   readonly hideConfig = true;
-  constructor(private back: UIState, private previous: PreviousData) { }
+  constructor(private back: UIState, private savable: SavableData) { }
   async build(builder: UITableBuilder, setState: SetState) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), 'You can select the "do not warn me" option here to skip the warning.');
@@ -579,22 +579,22 @@ class EditionsAcknowledgementState implements UIState {
     builder.addEmptyRow();
     builder.addTextRow('Do you want to be warned every time about this?');
     const set = (value: true | undefined) => {
-      this.previous.editionsSlowOkay = value;
+      this.savable.editionsSlowOkay = value;
       setState(this);
     };
-    const acked = this.previous.editionsSlowOkay;
+    const acked = this.savable.editionsSlowOkay;
     builder.addCheckableRow('Yes, warn me every time.', !acked, { onSelect: () => set(void 0) });
     builder.addCheckableRow('No, do not warn me.', !!acked, { onSelect: () => set(true) });
   }
 }
 
 class PreviousNetworkPermission {
-  constructor(protected previous: PreviousData, private key: NetworkAccessPreviousKey) { }
+  constructor(protected savable: SavableData, private key: NetworkAccessPreviousKey) { }
   get netPermission(): boolean | undefined {
-    return this.previous[this.key];
+    return this.savable[this.key];
   }
   set netPermission(value: boolean | undefined) {
-    this.previous[this.key] = value;
+    this.savable[this.key] = value;
   }
   denied(): boolean {
     return this.netPermission == false;
@@ -602,25 +602,25 @@ class PreviousNetworkPermission {
 }
 
 class NetworkAccess {
-  static editionsOf(previous: PreviousData) {
-    return new NetworkAccess(previous, 'editionsNetwork', 'get ISBNs of other editions',
+  static editionsOf(savable: SavableData) {
+    return new NetworkAccess(savable, 'editionsNetwork', 'get ISBNs of other editions',
       'Before we can ask about other editions of books, we need to know if any of the services we normally use have become unavailable.\n\n❗ No personal information will be sent for this purpose, we will only request a list of affected services.\n\n\nThen, to get the ISBNs of other editions, we will send your selected ISBNs to external services (Open Library and/or LibraryThing as per your selection).\n\n❗ Only ISBNs of your selected items will be sent. No other information, personal or otherwise will be sent.', 352);
   }
-  static updates(previous: PreviousData) {
-    return new NetworkAccess(previous, 'updatesNetwork', 'check for updates',
+  static updates(savable: SavableData) {
+    return new NetworkAccess(savable, 'updatesNetwork', 'check for updates',
       'We can periodically check for updates to this program.\n\n❗ No personal information will be sent for this purpose, we will only request the most recent version of this program.', 132);
   }
-  private previous: PreviousNetworkPermission;
-  private constructor(previous: PreviousData, key: NetworkAccessPreviousKey, private actionText: string, private text: string, private height: number) {
-    this.previous = new PreviousNetworkPermission(previous, key);
+  private savable: PreviousNetworkPermission;
+  private constructor(savable: SavableData, key: NetworkAccessPreviousKey, private actionText: string, private text: string, private height: number) {
+    this.savable = new PreviousNetworkPermission(savable, key);
   }
-  denied() { return this.previous.denied() }
-  set(value: boolean | undefined) { this.previous.netPermission = value }
+  denied() { return this.savable.denied() }
+  set(value: boolean | undefined) { this.savable.netPermission = value }
   uiState(back: UIState) {
-    return new NetworkAccessState(back, this.previous, this.actionText, this.text, this.height);
+    return new NetworkAccessState(back, this.savable, this.actionText, this.text, this.height);
   }
   addRow(back: UIState, builder: UITableBuilder, setState: SetState) {
-    const perm = this.previous.netPermission;
+    const perm = this.savable.netPermission;
     const na = perm == true
       ? 'granted'
       : perm == false
@@ -633,7 +633,7 @@ class NetworkAccess {
     }, () => setState(this.uiState(back)));
   }
   async askAllowed(configOnly = false): Promise<boolean> {
-    const perm = this.previous.netPermission;
+    const perm = this.savable.netPermission;
     if (typeof perm == 'boolean') return perm;
     const a = new Alert;
     a.title = 'Allow Network Access?';
@@ -656,7 +656,7 @@ class NetworkAccess {
 class NetworkAccessState implements UIState {
   static readonly title = 'Network Access';
   readonly hideConfig = true;
-  constructor(private back: UIState, private previous: PreviousNetworkPermission, private actionText: string, private text: string, private height: number) { }
+  constructor(private back: UIState, private savable: PreviousNetworkPermission, private actionText: string, private text: string, private height: number) { }
   async build(builder: UITableBuilder, setState: SetState) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
@@ -671,9 +671,9 @@ class NetworkAccessState implements UIState {
     builder.addEmptyRow();
     builder.addTextRow(this.text, { height: this.height });
     builder.addTextRow(`Would you like to grant, reserve, or deny permission to access the Internet to ${this.actionText}?`, { height: 88 });
-    const allowed = this.previous.netPermission;
-    const set = (n: typeof this.previous.netPermission) => {
-      this.previous.netPermission = n;
+    const allowed = this.savable.netPermission;
+    const set = (n: typeof this.savable.netPermission) => {
+      this.savable.netPermission = n;
       setState(this);
     };
     builder.addCheckableRow('Grant permission: Always allow.', allowed == true, { onSelect: () => set(true) });
@@ -720,7 +720,7 @@ type UIEditionsSummary = EditionsSummary & { received: number };
 class EditionsSummaryState implements UIState {
   static readonly title = 'Other Editions Summary';
   private editionsSummary: UIEditionsSummary;
-  constructor(private back: UIState, private previous: PreviousData, private igs: InputGroupSummary, editionsSummary: EditionsSummary) {
+  constructor(private back: UIState, private savable: SavableData, private igs: InputGroupSummary, editionsSummary: EditionsSummary) {
     this.editionsSummary = { ...editionsSummary, received: Date.now() };
   }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
@@ -770,17 +770,17 @@ class EditionsSummaryState implements UIState {
 
     builder.addEmptyRow();
     const toggleBoth = () => {
-      this.previous.both = !this.previous.both;
+      this.savable.both = !this.savable.both;
       setState(this);
     };
     buildOutput(
       builder,
-      output => controller.requestOutputEditionsISBNs(!!this.previous.both, output),
-      () => builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', !!this.previous.both, { onSelect: toggleBoth })
+      output => controller.requestOutputEditionsISBNs(!!this.savable.both, output),
+      () => builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', !!this.savable.both, { onSelect: toggleBoth })
     );
 
     builder.addEmptyRow();
-    builder.addBackRow('Choose New Input', async () => await confirmBack() && setState(new PickInputState(this.previous, this.igs.input)));
+    builder.addBackRow('Choose New Input', async () => await confirmBack() && setState(new PickInputState(this.savable, this.igs.input)));
   }
 }
 
