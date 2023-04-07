@@ -19,15 +19,16 @@ export async function webcheck(
   url: string,
   forMillis: number,
   value: CheckStorage,
+  freshContent: (content: string) => string = c => c,
 ): Promise<CheckStorage> {
 
-  if (value && Date.now() < value.expires)
+  if (!webcheckExpired(value))
     return value;
 
   const { status, content, checkHeaders } = await fetcher(url, value);
 
   if (status == 200)
-    return { content, expires: Date.now() + forMillis, ...checkHeaders };
+    return { content: freshContent(content), expires: Date.now() + forMillis, ...checkHeaders };
   else if (status == 304) {
     if (value) {
       return { ...value, expires: Date.now() + forMillis };
@@ -39,4 +40,8 @@ export async function webcheck(
     console.error(`HTTP status ${status} for ${url}`);
     return value;
   }
+}
+
+export function webcheckExpired(value: CheckStorage): boolean {
+  return !value || value.expires <= Date.now();
 }

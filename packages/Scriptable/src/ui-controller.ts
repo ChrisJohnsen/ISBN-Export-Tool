@@ -11,13 +11,13 @@ import { UITableBuilder } from './uitable-builder.js';
 
 import { assertNever } from 'utils';
 import { type EditionsService, type Fetcher, type Row, AllEditionsServices, parseCSVRows, type ProgressReport, bothISBNsOf, getEditionsOf, guessFormat, type ExportFormat } from 'utils';
-import { isCheckStorage, webcheck } from 'utils';
+import { type CheckStorage, isCheckStorage, webcheck, webcheckExpired } from 'utils';
 import { toCSV } from 'utils';
 import { pick } from 'utils';
 
 export class Controller implements UIRequestReceiver {
   private disabledEditionsServices: Set<EditionsService>;
-  constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string, private webcheckData: Record<string, unknown>) {
+  constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string, private webcheckData: Record<string, unknown>, private saveData: () => Promise<void>) {
     this.disabledEditionsServices = new Set(['Open Library WorkEditions']);
   }
   private enableEditionsService(service: EditionsService, enable = true) {
@@ -59,6 +59,62 @@ export class Controller implements UIRequestReceiver {
     };
     build(false);
     await table.present(false);
+  }
+  private get pendingUpdate(): string | undefined {
+    const content = this.webcheckData.updateContent;
+    if (typeof content == 'string') return content;
+    this.webcheckData.updateContent = void 0;
+    return void 0;
+  }
+  private set pendingUpdate(content: string | undefined) {
+    this.webcheckData.updateContent = content;
+  }
+  private get updatesData(): CheckStorage {
+    const d = this.webcheckData.updatesData;
+    if (isCheckStorage(d)) return d;
+    this.webcheckData.updatesData = void 0;
+    return void 0;
+  }
+  private set updatesData(data: CheckStorage) {
+    this.webcheckData.updatesData = data;
+  }
+  updateStatus() {
+    if (webcheckExpired(this.updatesData))
+      return 'expired';
+    if (this.pendingUpdate)
+      return 'pending';
+    return 'dormant';
+  }
+  async requestUpdateCheck(force = false) {
+    const data = this.updatesData;
+    if (force && data) data.expires = Date.now() - 1000;
+
+    this.updatesData = await webcheck(checkableFetcher,
+      // https://github.com/ChrisJohnsen/ISBN-Export-Tool/raw/released/Scriptable/ISBN%20Tool.js
+      'https://raw.githubusercontent.com/ChrisJohnsen/ISBN-Export-Tool/released/Scriptable/ISBN%20Tool.js',
+      1000 * 60 * 60 * 24 * 30,
+      data,
+      s => {
+        const gitMatch = s.match(/\bgit: (\S+)/);
+        const description = gitMatch?.[1] ?? '<no description found>';
+        this.pendingUpdate = s && description != git.description
+          ? s : void 0;
+        return description;
+      });
+    return !!this.pendingUpdate;
+  }
+  async requestUpdateInstall() {
+    if (this.pendingUpdate) {
+      FileManager.local().writeString(module.filename, this.pendingUpdate);
+      this.pendingUpdate = void 0;
+      await this.saveData();
+      Timer.schedule(5 * 1000, false, () => Safari.open(URLScheme.forRunningScript()));
+      return true;
+    }
+    return false;
+  }
+  clearPendingUpdate() {
+    this.pendingUpdate = void 0;
   }
   private allRows: Row[] = [];
   private format?: ExportFormat;
@@ -451,10 +507,7 @@ async function checkableFetcher(url: string, previousCheckHeaders?: CheckHeaders
       headers['If-Modified-Since'] = previousCheckHeaders['Last-Modified'];
   req.headers = headers;
 
-  console.log(req);
   const content = await req.loadString();
-  console.log(req.response.statusCode);
-  console.log(req.response.headers);
 
   const status = (s => typeof s == 'number' ? s : parseInt(s))(req.response.statusCode);
   const checkHeaders: CheckHeaders = (h => {

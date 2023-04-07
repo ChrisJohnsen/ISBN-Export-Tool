@@ -28,6 +28,10 @@ export type RequestedOutput = RequestedInput | { type: 'view' };
 
 export interface UIRequestReceiver {
   debugUI(): Promise<void>,
+  updateStatus(): 'expired' | 'pending' | 'dormant',
+  requestUpdateCheck(force?: boolean): Promise<boolean>,
+  requestUpdateInstall(): Promise<boolean>,
+  clearPendingUpdate(): void,
   requestInput(input: RequestedInput): Promise<Input>,
   requestGroup(kind: string, name: string): Promise<Summary>,
   requestOutputMissing(kind: RequestedOutput): Promise<void>,

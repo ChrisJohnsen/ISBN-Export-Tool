@@ -6,6 +6,7 @@ import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver,
 import { symbolCell, textCell, UITableBuilder } from './uitable-builder.js';
 import production from 'consts:production';
 import dependencies from 'consts:dependencies';
+import { assertNever } from 'utils';
 
 type SetState = (state: UIState) => void;
 
@@ -28,8 +29,10 @@ type PreviousData = {
   both?: boolean,
   editionsSlowOkay?: true | undefined,
   editionsNetwork?: boolean | undefined,
+  updatesNetwork?: boolean | undefined,
+  firstRun?: number,
 };
-type NetworkAccessPreviousKey = 'editionsNetwork';
+type NetworkAccessPreviousKey = 'editionsNetwork' | 'updatesNetwork';
 
 export class UITableUI {
   private table = new UITable;
@@ -43,12 +46,16 @@ export class UITableUI {
     const both = restoredData.both as any;
     const editionsSlowOkay = restoredData.editionsSlowOkay as any;
     const editionsNetwork = restoredData.editionsNetwork as any;
+    const updatesNetwork = restoredData.updatesNetwork as any;
+    const firstRun = restoredData.firstRun as any;
     /* eslint-enable */
     this.previous.group = group && typeof group == 'object' && 'kind' in group && typeof group.kind == 'string' && 'name' in group && typeof group.name == 'string' ? group : void 0;
     this.previous.services = Array.isArray(services) ? new Set(services.filter(e => typeof e == 'string')) : void 0;
     this.previous.both = typeof both == 'boolean' ? both : void 0;
     this.previous.editionsSlowOkay = editionsSlowOkay == true ? true : void 0;
     this.previous.editionsNetwork = typeof editionsNetwork == 'boolean' ? editionsNetwork : void 0;
+    this.previous.updatesNetwork = typeof updatesNetwork == 'boolean' ? updatesNetwork : void 0;
+    this.previous.firstRun = typeof firstRun == 'number' ? firstRun : void 0;
     this.build();
   }
   private saveData() {
@@ -57,9 +64,11 @@ export class UITableUI {
     this.savedDataObject.both = this.previous.both;
     this.savedDataObject.editionsSlowOkay = this.previous.editionsSlowOkay;
     this.savedDataObject.editionsNetwork = this.previous.editionsNetwork;
+    this.savedDataObject.updatesNetwork = this.previous.updatesNetwork;
+    this.savedDataObject.firstRun = this.previous.firstRun;
   }
   private builder = new UITableBuilder(this.table, 'ISBN Export Tool');
-  private state: UIState = new PickInputState(this.previous);
+  private state: UIState = new UpdateState(this.previous);
   private async build() {
     this.table.removeAllRows();
     const setState = (state: UIState) => {
@@ -93,11 +102,30 @@ class ConfigurationState implements UIState {
   static title = 'Configuration';
   readonly hideConfig = true;
   constructor(private back: UIState, private previous: PreviousData) { }
+  private justUpdated = false;
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
+    if (this.justUpdated)
+      return void builder.addTextRow('Update installed. Will restart in 5 seconds.');
+
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addEmptyRow();
     builder.addTextRow('Network Access Permissions');
     builder.addForwardRow('Get Other Editions', () => setState(NetworkAccess.editionsOf(this.previous).uiState(this)));
+    const una = NetworkAccess.updates(this.previous);
+    builder.addForwardRow('Updates', () => setState(una.uiState(this)));
+    builder.addEmptyRow();
+    builder.addForwardRow('check for updates now', async () => {
+      if (!await controller.requestUpdateCheck(true)) {
+        const a = new Alert;
+        a.title = 'No Update Available';
+        a.message = 'No update for this program is currently available.';
+        a.addCancelAction('Okay');
+        a.presentAlert();
+      } else if (await askUpdateInstall(una, controller)) {
+        this.justUpdated = true;
+        setState(this);
+      }
+    });
     builder.addEmptyRow();
     builder.addTextRow('Acknowledgeable Warnings');
     builder.addForwardRow('Get Other Editions is slow', () => setState(new EditionsAcknowledgementState(this.back, this.previous)));
@@ -134,6 +162,83 @@ class CopyrightsState implements UIState {
       });
     addRow('Included Dependency', 'Version', 'License', '');
     dependencies.forEach(d => addRow(d.name ?? '', d.version ?? '', d.license ?? '', d.licenseText ?? ''));
+  }
+}
+
+async function askUpdateInstall(na: NetworkAccess, controller: UIRequestReceiver): Promise<boolean> {
+  const a = new Alert;
+  a.title = 'Install Update?';
+  a.message = 'An updated version of this program is ready to be installed.\n\nAutomatic checks for updates can be disabled in the configuration settings (gear icon on the title row).\n\nDo you want to install this update now?\nBefore the update can be launched, you will need to exit the current session, and close the JavaScript code view if it is open.';
+  a.addAction('Yes'); // 0
+  a.addCancelAction('Not now');
+  a.addAction('Never'); // 1
+  const s = await a.presentAlert();
+
+  if (s == -1) // not now
+    return false;
+  else if (s == 0) // yes
+    return await controller.requestUpdateInstall();
+  else if (s == 1) { // never
+    na.set(false);
+    controller.clearPendingUpdate();
+    return false;
+  }
+  return false;
+}
+class UpdateState implements UIState {
+  static readonly title = 'Starting…'; // not "Update Check" or similar to avoid confusion if update network permission is denied
+  readonly hideConfig = true;
+  constructor(private previous: PreviousData) { }
+  private justUpdated = false;
+  async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver): Promise<void> {
+    const pickInput = () => setState(new PickInputState(this.previous));
+    // defer setState to avoid recurring into UITableUI.build and to present alerts after (instead of before, then "under") UITableUI
+    const defer = (fn: () => void): void => void Timer.schedule(0, false, fn);
+
+    if (!production) return defer(pickInput);
+
+    if (Date.now() < this.firstRun() + 1000 * 60 * 60 * 24 * 7)
+      return defer(pickInput);
+
+    if (this.justUpdated)
+      return void builder.addTextRow('Update installed. Will restart in 5 seconds.');
+
+    builder.addSubtitleHelpRow(title(this));
+
+    const na = NetworkAccess.updates(this.previous);
+    const status = controller.updateStatus();
+    if (status == 'dormant')
+      return defer(pickInput);
+    else if (status == 'pending') {
+      builder.addTextRow('An update is ready for installation.');
+      return defer(async () => {
+        if (await askUpdateInstall(na, controller)) {
+          this.justUpdated = true;
+          setState(this);
+        } else
+          pickInput();
+      });
+    } else if (status == 'expired') {
+      if (na.denied())
+        return defer(pickInput);
+      builder.addTextRow('Checking for update (up to 10 seconds)…');
+      return defer(async () => {
+        if (await na.askAllowed(true)
+          && await Promise.race([
+            controller.requestUpdateCheck(),
+            new Promise(resolve => Timer.schedule(10 * 1000, false, () => resolve(false)))
+          ])
+          && controller.updateStatus() == 'pending')
+          setState(this);
+        else
+          pickInput();
+      });
+    } else assertNever(status);
+  }
+  private firstRun(): number {
+    if (typeof this.previous.firstRun == 'undefined')
+      this.previous.firstRun = Date.now();
+    return this.previous.firstRun;
   }
 }
 
@@ -501,11 +606,16 @@ class NetworkAccess {
     return new NetworkAccess(previous, 'editionsNetwork', 'get ISBNs of other editions',
       'Before we can ask about other editions of books, we need to know if any of the services we normally use have become unavailable.\n\n❗ No personal information will be sent for this purpose, we will only request a list of affected services.\n\n\nThen, to get the ISBNs of other editions, we will send your selected ISBNs to external services (Open Library and/or LibraryThing as per your selection).\n\n❗ Only ISBNs of your selected items will be sent. No other information, personal or otherwise will be sent.', 352);
   }
+  static updates(previous: PreviousData) {
+    return new NetworkAccess(previous, 'updatesNetwork', 'check for updates',
+      'We can periodically check for updates to this program.\n\n❗ No personal information will be sent for this purpose, we will only request the most recent version of this program.', 132);
+  }
   private previous: PreviousNetworkPermission;
   private constructor(previous: PreviousData, key: NetworkAccessPreviousKey, private actionText: string, private text: string, private height: number) {
     this.previous = new PreviousNetworkPermission(previous, key);
   }
   denied() { return this.previous.denied() }
+  set(value: boolean | undefined) { this.previous.netPermission = value }
   uiState(back: UIState) {
     return new NetworkAccessState(back, this.previous, this.actionText, this.text, this.height);
   }
@@ -522,12 +632,15 @@ class NetworkAccess {
       titleColor: na == 'denied' ? Color.red() : void 0
     }, () => setState(this.uiState(back)));
   }
-  async askAllowed(): Promise<boolean> {
+  async askAllowed(configOnly = false): Promise<boolean> {
     const perm = this.previous.netPermission;
     if (typeof perm == 'boolean') return perm;
     const a = new Alert;
     a.title = 'Allow Network Access?';
-    a.message = this.text + '\n\nUse the Network Access item to control the default permission.\n\n'
+    const controlText = configOnly
+      ? 'Use the gear icon on the title to control the default permission.'
+      : 'Use the Network Access item (or the gear icon on the title) to control the default permission.';
+    a.message = this.text + '\n\n' + controlText + '\n\n'
       + 'Do you want to allow this program to use the Internet to ' + this.actionText + '?';
     a.addAction('Yes, use the Internet');
     a.addCancelAction('No, do not use the Internet');

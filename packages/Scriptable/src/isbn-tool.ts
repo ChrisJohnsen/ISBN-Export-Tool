@@ -21,6 +21,7 @@ if (!store.data.UITableUIData) store.data.UITableUIData = {};
 if (!isObject(store.data.UITableUIData)) throw 'restored UI data is not an object?';
 if (!store.data.webcheckData) store.data.webcheckData = {};
 if (!isObject(store.data.webcheckData)) throw 'restored UI data is not an object?';
+const saveStore = () => store.write();
 
 const logPathname = asidePathname(module.filename, 'log');
 const testLogPathname = asidePathname(module.filename, 'log', bn => bn + ' test');
@@ -31,10 +32,11 @@ const controller = new Controller(
   testMode => testMode ? testLogPathname : logPathname,
   testMode => testMode ? testCachePathname : cachePathname,
   store.data.webcheckData,
+  saveStore,
 );
 
 const ui = new UITableUI(controller, store.data.UITableUIData);
 await ui.present(true);
 await controller.abortIfRunning();
 
-await store.write();
+await saveStore();
