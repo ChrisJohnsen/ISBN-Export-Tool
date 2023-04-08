@@ -265,7 +265,7 @@ export class UITableBuilder {
     const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - symbol.widthWeight });
     return this.addRowWithCells([disclosure, textCell], opts);
   }
-  addCheckableRow(text: string, checked: boolean | undefined, opts: RowOpts = {}) {
+  addCheckableRow(text: string, checked: boolean | undefined, onSelect: () => void) {
     const mark = buildCell((() => {
       const check = symbolCell('checkmark.square');
       const uncheck = symbolCell('square');
@@ -275,7 +275,7 @@ export class UITableBuilder {
       return { ...symbol, align: 'left', widthWeight };
     })());
     const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - mark.widthWeight });
-    return this.addRowWithCells([textCell, mark], opts);
+    return this.addRowWithCells([textCell, mark], { onSelect });
   }
   addRowWithDescribedCells(cellDescs: readonly CellOpts[], opts: RowOpts = {}) {
     this.addRowWithCells(cellDescs.map(buildCell), opts);

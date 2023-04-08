@@ -463,7 +463,7 @@ class OutputISBNsState implements UIState {
 
     buildOutput(builder,
       kind => controller.requestOutputISBNs(both, kind).then(() => setState(this.back)),
-      () => builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, { onSelect: toggleBoth }));
+      () => builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', both, toggleBoth));
   }
 }
 
@@ -494,7 +494,7 @@ class PickEditionsServicesState implements UIState {
       setState(this);
     };
 
-    this.availableServices.forEach(service => builder.addCheckableRow(service, services.has(service), { onSelect: () => serviceToggle(service) }));
+    this.availableServices.forEach(service => builder.addCheckableRow(service, services.has(service), () => serviceToggle(service)));
     builder.addEmptyRow();
 
     if (services.size > 0) {
@@ -583,8 +583,8 @@ class EditionsAcknowledgementState implements UIState {
       setState(this);
     };
     const acked = this.savable.editionsSlowOkay;
-    builder.addCheckableRow('Yes, warn me every time.', !acked, { onSelect: () => set(void 0) });
-    builder.addCheckableRow('No, do not warn me.', !!acked, { onSelect: () => set(true) });
+    builder.addCheckableRow('Yes, warn me every time.', !acked, () => set(void 0));
+    builder.addCheckableRow('No, do not warn me.', !!acked, () => set(true));
   }
 }
 
@@ -676,9 +676,9 @@ class NetworkAccessState implements UIState {
       this.savable.netPermission = n;
       setState(this);
     };
-    builder.addCheckableRow('Grant permission: Always allow.', allowed == true, { onSelect: () => set(true) });
-    builder.addCheckableRow('Reserve permission: Ask each time.', allowed == null, { onSelect: () => set(void 0) });
-    builder.addCheckableRow('Deny permission: Never allow.', allowed == false, { onSelect: () => set(false) });
+    builder.addCheckableRow('Grant permission: Always allow.', allowed == true, () => set(true));
+    builder.addCheckableRow('Reserve permission: Ask each time.', allowed == null, () => set(void 0));
+    builder.addCheckableRow('Deny permission: Never allow.', allowed == false, () => set(false));
   }
 }
 
@@ -776,7 +776,7 @@ class EditionsSummaryState implements UIState {
     buildOutput(
       builder,
       output => controller.requestOutputEditionsISBNs(!!this.savable.both, output),
-      () => builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', !!this.savable.both, { onSelect: toggleBoth })
+      () => builder.addCheckableRow('Include both ISBN-10 and ISBN-13?', !!this.savable.both, toggleBoth)
     );
 
     builder.addEmptyRow();
