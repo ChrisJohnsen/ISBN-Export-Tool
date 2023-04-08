@@ -517,10 +517,10 @@ class PickEditionsServicesState implements UIState {
 
         setState(new EditionsSummaryState(this, this.savable, this.igs,
           await controller.requestEditions(Array.from(services), p => this.editionsProgress(setState, p))));
-      }, true);
+      });
       builder.addBackRow(title(this.back), () => setState(this.back));
     } else {
-      builder.addForwardRow('Get Other Editions', void 0, true);
+      builder.addForwardRow('Get Other Editions', void 0);
       if (services.size <= 0)
         builder.addIndentRow('One or more editions services must be selected before we can proceed.', { height: 88 });
     }

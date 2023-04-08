@@ -76,6 +76,11 @@ export function symbolCell(name: string): WeightedCellOpts {
   const { image, width: widthWeight } = symbolImageAndWidth(name);
   return { type: 'image', image, widthWeight };
 }
+function alternateSymbols(names: string[]): WeightedCellOpts[] {
+  const symbols = names.map(symbolCell);
+  const max = Math.max(...symbols.map(s => s.widthWeight));
+  return Array.from(symbols).map(s => ({ ...s, widthWeight: max }));
+}
 
 export class UITableBuilder {
   constructor(private table: UITable, private title: string) { }
@@ -250,11 +255,9 @@ export class UITableBuilder {
     const main = buildCell({ type: 'text', title: text, widthWeight: 9 });
     return this.addRowWithCells([indent, main], opts);
   }
-  addForwardRow(text: string | TextCell, onSelect: (() => void) | undefined, constantSymbolWidth = false) {
-    const symbols = ['xmark', 'chevron.forward'].map(symbolCell);
+  addForwardRow(text: string | TextCell, onSelect: (() => void) | undefined) {
+    const symbols = alternateSymbols(['xmark', 'chevron.forward']);
     const image = symbols[Number(!!onSelect)];
-    if (constantSymbolWidth)
-      image.widthWeight = Math.max(...symbols.map(i => i.widthWeight));
     const forward = buildCell({ ...image, align: 'left' });
     const txt = buildCell({ ...textCell(text), align: 'right', widthWeight: 100 - image.widthWeight });
     return this.addRowWithCells([txt, forward], { onSelect });
@@ -273,13 +276,11 @@ export class UITableBuilder {
     return this.addRowWithCells([disclosure, textCell], opts);
   }
   addCheckableRow(text: string, checked: boolean | undefined, onSelect: () => void) {
+    const [check, uncheck] = alternateSymbols(['checkmark.square', 'square']);
     const mark = buildCell((() => {
-      const check = symbolCell('checkmark.square');
-      const uncheck = symbolCell('square');
-      const widthWeight = Math.max(check.widthWeight, uncheck.widthWeight);
-      if (typeof checked == 'undefined') return { type: 'text', title: '', widthWeight };
+      if (typeof checked == 'undefined') return { type: 'text', title: '', widthWeight: check.widthWeight };
       const symbol = checked ? check : uncheck;
-      return { ...symbol, align: 'left', widthWeight };
+      return { ...symbol, align: 'left' };
     })());
     const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - mark.widthWeight });
     return this.addRowWithCells([textCell, mark], { onSelect });
