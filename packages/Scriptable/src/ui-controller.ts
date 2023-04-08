@@ -96,10 +96,10 @@ export class Controller implements UIRequestReceiver {
       data,
       s => {
         const gitMatch = s.match(/\bgit: (\S+)/);
-        const description = gitMatch?.[1] ?? '<no description found>';
-        this.pendingUpdate = s && description != git.description
+        const description = gitMatch?.[1];
+        this.pendingUpdate = description && description != git.description
           ? s : void 0;
-        return description;
+        return description ?? '<no description found>';
       });
     return !!this.pendingUpdate;
   }
