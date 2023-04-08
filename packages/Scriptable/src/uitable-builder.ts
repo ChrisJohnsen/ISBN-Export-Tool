@@ -262,26 +262,9 @@ export class UITableBuilder {
     const txt = buildCell({ ...textCell(text), align: 'right', widthWeight: 100 - image.widthWeight });
     return this.addRowWithCells([txt, forward], { onSelect });
   }
-  addClosedDisclosureRow(text: string, value: string, opts: RowOpts = {}) {
-    const symbol = symbolCell('arrowtriangle.right.square.fill');
-    const disclosure = buildCell({ ...symbol, align: 'left' });
-    const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 45 });
-    const valueCell = buildCell({ type: 'text', title: value, align: 'right', widthWeight: 100 - 45 - symbol.widthWeight });
-    return this.addRowWithCells([disclosure, textCell, valueCell], opts);
-  }
-  addOpenedDisclosureRow(text: string, opts: RowOpts = {}) {
-    const symbol = symbolCell('arrowtriangle.down.square.fill');
-    const disclosure = buildCell({ ...symbol, align: 'left' });
-    const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - symbol.widthWeight });
-    return this.addRowWithCells([disclosure, textCell], opts);
-  }
-  addCheckableRow(text: string, checked: boolean | undefined, onSelect: () => void) {
+  addCheckableRow(text: string, checked: boolean, onSelect: () => void) {
     const [check, uncheck] = alternateSymbols(['checkmark.square', 'square']);
-    const mark = buildCell((() => {
-      if (typeof checked == 'undefined') return { type: 'text', title: '', widthWeight: check.widthWeight };
-      const symbol = checked ? check : uncheck;
-      return { ...symbol, align: 'left' };
-    })());
+    const mark = buildCell({ ...checked ? check : uncheck, align: 'left' });
     const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - mark.widthWeight });
     return this.addRowWithCells([textCell, mark], { onSelect });
   }
