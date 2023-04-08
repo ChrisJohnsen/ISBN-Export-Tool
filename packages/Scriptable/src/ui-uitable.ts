@@ -3,7 +3,7 @@
 import { outdent as outdentDefault } from 'outdent';
 const outdent = outdentDefault({ newline: '\n' });
 import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
-import { symbolCell, textCell, UITableBuilder } from './uitable-builder.js';
+import { textCell, UITableBuilder } from './uitable-builder.js';
 import production from 'consts:production';
 import dependencies from 'consts:dependencies';
 import { assertNever } from 'utils';
@@ -354,18 +354,10 @@ class PickItemsState implements UIState {
 function buildOutput(builder: UITableBuilder, output: (kind: RequestedOutput) => void, buildExtraOptionRows?: () => void) {
   builder.addTextRow('Output Options');
   buildExtraOptionRows?.();
-  const view = symbolCell('magnifyingglass');
-  const clip = symbolCell('doc.on.clipboard');
-  const file = symbolCell('doc');
-  const max = Math.max(...[view, clip, file].map(s => s.widthWeight));
-  [view, clip, file].forEach(s => s.widthWeight = max);
-  const addOutputRow = (title: string, symbol: typeof view, onSelect: () => void) => {
-    const widthWeight = 100 - symbol.widthWeight;
-    builder.addRowWithDescribedCells([{ type: 'text', title, align: 'right', widthWeight }, { ...symbol, align: 'center' }], { onSelect });
-  };
-  addOutputRow('View', view, () => output({ type: 'view' }));
-  addOutputRow('Copy to the clipboard', clip, () => output({ type: 'clipboard' }));
-  addOutputRow('Save to a file', file, () => output({ type: 'file' }));
+  const addOutputRow = builder.adderForTextWithIconRow(['magnifyingglass', 'doc.on.clipboard', 'doc']);
+  addOutputRow('View', 0, () => output({ type: 'view' }));
+  addOutputRow('Copy to the clipboard', 1, () => output({ type: 'clipboard' }));
+  addOutputRow('Save to a file', 2, () => output({ type: 'file' }));
 }
 
 interface InputGroupSummary {

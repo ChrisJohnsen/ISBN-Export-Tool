@@ -72,7 +72,7 @@ function symbolImageAndWidth(name: string): { image: Image; width: number; } {
   };
   return { image, width: sizes[name] ?? 10 };
 }
-export function symbolCell(name: string): WeightedCellOpts {
+function symbolCell(name: string): WeightedCellOpts {
   const { image, width: widthWeight } = symbolImageAndWidth(name);
   return { type: 'image', image, widthWeight };
 }
@@ -268,8 +268,14 @@ export class UITableBuilder {
     const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - mark.widthWeight });
     return this.addRowWithCells([textCell, mark], { onSelect });
   }
+  adderForTextWithIconRow(iconNames: string[]) {
+    const icons: WeightedCellOpts[] = alternateSymbols(iconNames).map(s => ({ ...s, align: 'right' }));
+    return (text: string, iconNumber: number, onSelect: () => void) => {
+      const t = buildCell({ ...textCell(text), align: 'right', widthWeight: 100 - icons[iconNumber].widthWeight });
+      return this.addRowWithCells([t, buildCell(icons[iconNumber])], { onSelect });
+    };
+  }
   addRowWithDescribedCells(cellDescs: readonly CellOpts[], opts: RowOpts = {}) {
     this.addRowWithCells(cellDescs.map(buildCell), opts);
   }
 }
-
