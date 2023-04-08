@@ -577,8 +577,8 @@ class EditionsAcknowledgementState implements UIState {
       setState(this);
     };
     const acked = this.savable.editionsSlowOkay;
-    builder.addCheckableRow('Yes, warn me every time.', !acked, () => set(void 0));
-    builder.addCheckableRow('No, do not warn me.', !!acked, () => set(true));
+    builder.addCheckableRow('Yes, warn me every time.', !acked, () => set(void 0), false);
+    builder.addCheckableRow('No, do not warn me.', !!acked, () => set(true), false);
   }
 }
 
@@ -669,9 +669,9 @@ class NetworkAccessState implements UIState {
       this.savable.netPermission = n;
       setState(this);
     };
-    builder.addCheckableRow('Grant permission: Always allow.', allowed == true, () => set(true));
-    builder.addCheckableRow('Reserve permission: Ask each time.', allowed == null, () => set(void 0));
-    builder.addCheckableRow('Deny permission: Never allow.', allowed == false, () => set(false));
+    builder.addCheckableRow('Grant permission: Always allow.', allowed == true, () => set(true), false);
+    builder.addCheckableRow('Reserve permission: Ask each time.', allowed == null, () => set(void 0), false);
+    builder.addCheckableRow('Deny permission: Never allow.', allowed == false, () => set(false), false);
   }
 }
 

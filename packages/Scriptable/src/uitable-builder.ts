@@ -70,6 +70,8 @@ function symbolImageAndWidth(name: string): { image: Image; width: number; } {
     'doc.on.clipboard': 8,
     'doc': 7,
     'gear': 9,
+    'largecircle.fill.circle': 9,
+    'circle': 9,
   };
   return { image, width: sizes[name] ?? 10 };
 }
@@ -190,6 +192,8 @@ export class UITableBuilder {
     t('doc.on.clipboard');
     t('doc');
     t('gear');
+    t('largecircle.fill.circle');
+    t('circle');
   }
   private addFontExamples() {
     ([
@@ -263,8 +267,10 @@ export class UITableBuilder {
     const txt = buildCell({ ...textCell(text), align: 'right', widthWeight: 100 - image.widthWeight });
     return this.addRowWithCells([txt, forward], { onSelect });
   }
-  addCheckableRow(text: string, checked: boolean, onSelect: () => void) {
-    const [check, uncheck] = alternateSymbols(['checkmark.square', 'square']);
+  addCheckableRow(text: string, checked: boolean, onSelect: () => void, multiselect = true) {
+    const [check, uncheck] = multiselect
+      ? alternateSymbols(['checkmark.square', 'square'])
+      : alternateSymbols(['largecircle.fill.circle', 'circle']);
     const mark = buildCell({ ...checked ? check : uncheck, align: 'left' });
     const textCell = buildCell({ type: 'text', title: text, align: 'right', widthWeight: 100 - mark.widthWeight });
     return this.addRowWithCells([textCell, mark], { onSelect });
