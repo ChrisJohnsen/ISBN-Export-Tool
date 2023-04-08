@@ -62,7 +62,7 @@ export default async cliOptions => {
     },
   };
 
-  if (release) {
+  if (production) {
     const { rollup } = await import('rollup');
     const license = (await import('rollup-plugin-license')).default;
     /** @type import('rollup-plugin-license').Dependency[] */
