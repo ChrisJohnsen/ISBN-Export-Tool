@@ -149,11 +149,13 @@ class CopyrightsState implements UIState {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addTextRow('tap a row for full license text');
     builder.addEmptyRow();
+    const addTableRow = builder.adderForTableRow([
+      { align: 'left', widthWeight: 2 },
+      { align: 'center', widthWeight: 1 },
+      { align: 'right', widthWeight: 1 },
+    ]);
     const addRow = (name: string, version: string, license: string, licenseText: string) =>
-      builder.addRowWithDescribedCells([
-        { ...textCell(name), align: 'left', widthWeight: 2 },
-        { ...textCell(version), align: 'center', widthWeight: 1 },
-        { ...textCell(license), align: 'right', widthWeight: 1 }], {
+      addTableRow([name, version, license], {
         onSelect: licenseText ? async () => {
           const a = new Alert;
           a.title = name + ' License';
@@ -162,7 +164,7 @@ class CopyrightsState implements UIState {
           await a.presentAlert();
         } : void 0
       });
-    addRow('Included Dependency', 'Version', 'License', '');
+    addTableRow(['Included Dependency', 'Version', 'License']);
     dependencies.forEach(d => addRow(d.name ?? '', d.version ?? '', d.license ?? '', d.licenseText ?? ''));
   }
 }
@@ -337,12 +339,13 @@ class PickItemsState implements UIState {
       }));
     };
     const groupItems = this.input.groupItems;
-    const addGroupRow = (kind: string, name: string, items: string, onSelect?: () => void, savable = false) =>
-      builder.addRowWithDescribedCells([
-        { type: 'text', title: kind, widthWeight: 30, align: 'left' },
-        { type: 'text', title: name, widthWeight: 55, align: 'right', titleColor: savable ? Color.orange() : void 0 },
-        { type: 'text', title: items, widthWeight: 15, align: 'left' },
-      ], { onSelect, cellSpacing: 10 });
+    const addTableRow = builder.adderForTableRow([
+      { widthWeight: 30, align: 'left' },
+      { widthWeight: 55, align: 'right' },
+      { widthWeight: 15, align: 'left' },
+    ]);
+    const addGroupRow = (kind: string, name: string, items: string, onSelect?: () => void, previous = false) =>
+      addTableRow([kind, { title: name, titleColor: previous ? Color.orange() : void 0 }, items], { onSelect, cellSpacing: 10 });
     addGroupRow('Kind', 'Group', 'Items');
     Object.entries(groupItems)
       .forEach(([kind, groupCounts]) => Object.getOwnPropertyNames(groupCounts).forEach(

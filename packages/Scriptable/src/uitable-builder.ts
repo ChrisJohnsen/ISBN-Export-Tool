@@ -17,12 +17,13 @@ function buildRow(opts?: RowOpts): UITableRow {
     row.cellSpacing = opts.cellSpacing;
   return row;
 }
+type AlignOpts = { align?: 'left' | 'center' | 'right', widthWeight?: number };
 type TextCell = { title: string, subtitle?: string, titleFont?: Font, titleColor?: Color /* font+color for subtitle */ };
 type CellOpts = (
   | { type: 'text' } & TextCell
   | { type: 'button', title: string, onTap: () => void }
   | { type: 'image', image: Image }
-) & { align?: 'left' | 'center' | 'right', widthWeight?: number };
+) & AlignOpts;
 type WeightedCellOpts = CellOpts & { widthWeight: number };
 export function textCell(text: string | TextCell, opts: Omit<TextCell, 'title'> = {}): { type: 'text' } & TextCell {
   return typeof text == 'string'
@@ -273,6 +274,15 @@ export class UITableBuilder {
     return (text: string, iconNumber: number, onSelect: () => void) => {
       const t = buildCell({ ...textCell(text), align: 'right', widthWeight: 100 - icons[iconNumber].widthWeight });
       return this.addRowWithCells([t, buildCell(icons[iconNumber])], { onSelect });
+    };
+  }
+  adderForTableRow(columnInfo: Required<AlignOpts>[]) {
+    return (texts: (string | TextCell)[], opts: RowOpts = {}) => {
+      if (texts.length != columnInfo.length)
+        throw `expected ${columnInfo.length} columns, got ${texts.length}`;
+      const cells = new Array<UITableCell>;
+      texts.forEach((text, i) => cells.push(buildCell({ ...textCell(text), ...columnInfo[i] })));
+      this.addRowWithCells(cells, opts);
     };
   }
   addRowWithDescribedCells(cellDescs: readonly CellOpts[], opts: RowOpts = {}) {
