@@ -17,16 +17,17 @@ function buildRow(opts?: RowOpts): UITableRow {
     row.cellSpacing = opts.cellSpacing;
   return row;
 }
-type TextCell = { type: 'text', title: string, subtitle?: string, titleFont?: Font, titleColor?: Color /* font+color for subtitle */ };
+type TextCell = { title: string, subtitle?: string, titleFont?: Font, titleColor?: Color /* font+color for subtitle */ };
 type CellOpts = (
-  | TextCell
+  | { type: 'text' } & TextCell
   | { type: 'button', title: string, onTap: () => void }
   | { type: 'image', image: Image }
 ) & { align?: 'left' | 'center' | 'right', widthWeight?: number };
-export function textCell(text: string | TextCell, opts: Omit<TextCell, 'type' | 'title'> = {}): TextCell {
+type WeightedCellOpts = CellOpts & { widthWeight: number };
+export function textCell(text: string | TextCell, opts: Omit<TextCell, 'title'> = {}): { type: 'text' } & TextCell {
   return typeof text == 'string'
     ? { type: 'text', title: text, ...opts }
-    : { ...text, ...opts };
+    : { type: 'text', ...text, ...opts };
 }
 function buildCell(opts: CellOpts): UITableCell {
   const cell = (() => {
@@ -71,7 +72,7 @@ function symbolImageAndWidth(name: string): { image: Image; width: number; } {
   };
   return { image, width: sizes[name] ?? 10 };
 }
-export function symbolCell(name: string): CellOpts & { widthWeight: number } {
+export function symbolCell(name: string): WeightedCellOpts {
   const { image, width: widthWeight } = symbolImageAndWidth(name);
   return { type: 'image', image, widthWeight };
 }
@@ -112,16 +113,28 @@ export class UITableBuilder {
     cells.forEach(cell => row.addCell(cell));
     return row;
   }
-  addTitleConfigRow(onSelect?: () => void) {
+  private addCenteredTextWithExtrasRow(text: string | Omit<TextCell, 'type'>, left?: WeightedCellOpts, right?: WeightedCellOpts, opts?: RowOpts) {
     const cells = new Array<UITableCell>;
+    const sideWidth = Math.max(left?.widthWeight ?? 0, right?.widthWeight ?? 0);
+
+    if (left)
+      cells.push(buildCell({ ...left, align: 'left', widthWeight: sideWidth }));
+    else if (sideWidth > 0)
+      cells.push(buildCell({ type: 'text', title: '', widthWeight: sideWidth }));
+
+    cells.push(buildCell({ ...textCell(text), align: 'center', widthWeight: 100 - 2 * sideWidth }));
+
+    if (right)
+      cells.push(buildCell({ ...right, align: 'right', widthWeight: sideWidth }));
+    else if (sideWidth > 0)
+      cells.push(buildCell({ type: 'text', title: '', widthWeight: sideWidth }));
+
+    return this.addRowWithCells(cells, opts);
+  }
+  addTitleConfigRow(onSelect?: () => void) {
     const gear = symbolCell('gear');
     gear.widthWeight = gear.widthWeight * .75;
-    if (onSelect)
-      cells.push(buildCell({ type: 'text', title: '', widthWeight: gear.widthWeight }));
-    cells.push(buildCell({ type: 'text', title: this.title, align: 'center', titleFont: Font.title2(), widthWeight: 100 - 2 * gear.widthWeight }));
-    if (onSelect)
-      cells.push(buildCell({ ...gear, align: 'right' }));
-    return this.addRowWithCells(cells, { onSelect });
+    return this.addCenteredTextWithExtrasRow({ title: this.title, titleFont: Font.title2(), }, void 0, onSelect ? gear : void 0, { onSelect });
   }
   private addSymbolExamples() {
     const t = (n: string) => {
@@ -197,7 +210,6 @@ export class UITableBuilder {
   }
   addSubtitleHelpRow(subtitle: string, helpLines?: string, topics?: Record<string, string | undefined>) {
     const qm = symbolCell('questionmark.circle');
-    const cells = [];
     let helpFn;
     if (helpLines)
       helpFn = async () => {
@@ -224,12 +236,7 @@ export class UITableBuilder {
           [topic, help] = otherTopics[pick];
         } while (true); // eslint-disable-line no-constant-condition
       };
-    if (helpFn)
-      cells.push(buildCell({ type: 'text', title: '', widthWeight: qm.widthWeight }));
-    cells.push(buildCell({ type: 'text', title: subtitle, align: 'center', titleFont: Font.title2(), widthWeight: 100 - 2 * qm.widthWeight }));
-    if (helpFn)
-      cells.push(buildCell({ ...qm, align: 'right' }));
-    return this.addRowWithCells(cells, { onSelect: helpFn });
+    return this.addCenteredTextWithExtrasRow({ title: subtitle, titleFont: Font.title2(), }, void 0, helpFn ? qm : void 0, { onSelect: helpFn });
   }
   addEmptyRow() {
     return this.addRow();

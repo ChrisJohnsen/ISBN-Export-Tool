@@ -627,7 +627,6 @@ class NetworkAccess {
         ? 'denied'
         : 'will ask';
     builder.addForwardRow({
-      type: 'text',
       title: 'Network Access: ' + na,
       titleColor: na == 'denied' ? Color.red() : void 0
     }, () => setState(this.uiState(back)));
