@@ -8,7 +8,7 @@ import { Controller } from './ui-controller.js';
 // setTimeout and clearTimeout used by throttle
 declare const globalThis: Record<PropertyKey, unknown>;
 globalThis.setTimeout = <A extends unknown[]>(fn: (...args: A) => void, ms: number, ...args: A): Timer => {
-  if (typeof fn == 'string') throw 'setTimeout with uncompiled code argument not supported';
+  if (typeof fn == 'string') throw 'setTimeout with un-compiled code argument not supported';
   return Timer.schedule(ms, false, () => fn(...args));
 };
 globalThis.clearTimeout = (timer: Timer): void => timer.invalidate();

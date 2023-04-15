@@ -1,5 +1,3 @@
-// spellcheck: off
-
 import { defaults as jestDefaults } from 'jest-config';
 
 /*

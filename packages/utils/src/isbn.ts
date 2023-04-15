@@ -4,6 +4,7 @@
  * Strip spaces and hyphens, and convert to uppercase. Does not check for
  * validity.
  */
+// spell-checker:ignore isbnish
 export function normalizeISBN(isbnish: string): string {
   return isbnish.replace(/\s|-/g, '').toUpperCase();
 }

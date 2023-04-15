@@ -287,6 +287,7 @@ async function fetchOtherEditionISBNs(
   }
 }
 
+// spell-checker:ignore wrappee
 const beforeAndAfter = <A extends unknown[], R>(
   before: (args: A) => void,
   wrappee: (...args: A) => Promise<R>,
@@ -327,6 +328,7 @@ export const AllEditionsServices: Readonly<EditionsServices> = Object.freeze(new
   'LibraryThing ThingISBN',
 ]));
 
+// spell-checker:ignore limitn
 function editionsOfServices(
   limitn: number,
   fetcher: Fetcher,
@@ -427,6 +429,7 @@ function editionsOfServices(
     // limit parallelism
     const limited = (isbn: string) => limit(cacher, isbn);
 
+    // spell-checker:words abortable
     // provide a way to "abort"  calls abandoned via limit.clearQueue()
     const abortable = (isbn: string) => Promise.race([limited(isbn), limitAbortPromise]);
 

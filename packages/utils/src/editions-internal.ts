@@ -26,6 +26,7 @@ function fetcherResponseOrFault(identifier: string, response: BareFetchResult): 
   return { temporary: `${identifier} ${blurb} HTTP status ${statusStr}` };
 }
 
+// spell-checker:ignore ccfr
 export async function processFetcherResult<R extends StringsAndFaults>(
   identifier: string,
   ccfr: FetchResult,

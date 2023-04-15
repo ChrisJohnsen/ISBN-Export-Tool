@@ -160,7 +160,7 @@ describe('cachePromisor', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  test('saveCache() marshalling and restore unmarshalling', async () => {
+  test('saveCache() marshalling and restore un-marshalling', async () => {
     const fn = jest.fn<(arg: string) => Promise<number>>()
       .mockResolvedValueOnce(18)
       .mockResolvedValueOnce(19);

@@ -54,6 +54,7 @@ export function otherEditionsOfISBN(fetch: Fetcher, isbn?: string): Promise<Edit
 
     if (isbns.set.size < 1) {
 
+      // spell-checker:ignore jsons
       const newFault = new ContentError(`no valid ISBNs among all editions.jsons for all ${isbn} works`);
 
       return isbns.addTemporaryFault(newFault).asEditionsISBNResults();

@@ -357,6 +357,7 @@ class PickItemsState implements UIState {
 function buildOutput(builder: UITableBuilder, output: (kind: RequestedOutput) => void, buildExtraOptionRows?: () => void) {
   builder.addTextRow('Output Options');
   buildExtraOptionRows?.();
+  // spell-checker:words magnifyingglass
   const addOutputRow = builder.adderForTextWithIconRow(['magnifyingglass', 'doc.on.clipboard', 'doc']);
   addOutputRow('View', 0, () => output({ type: 'view' }));
   addOutputRow('Copy to the clipboard', 1, () => output({ type: 'clipboard' }));
@@ -377,7 +378,7 @@ class ItemsSummaryState implements UIState {
     builder.addSubtitleHelpRow(title(this), outdent`
       The bulk of this program works only with ISBNs, so any item that lacks an ISBN can not be usefully processed beyond pointing out the missing ISBN.
 
-      Items missing an ISBN often occur because the default edition is an eBook or audiobook version that happens to not use an ISBN. If you did not mean to specifically select that non-ISBN edition you can usually change the listing (e.g. Goodread's Book Details) to an ISBN-bearing edition so that (in a future data export) its ISBN can be used by the rest of this program.
+      Items missing an ISBN often occur because the default edition is an eBook or audio book version that happens to not use an ISBN. If you did not mean to specifically select that non-ISBN edition you can usually change the listing (e.g. Goodreads' Book Details) to an ISBN-bearing edition so that (in a future data export) its ISBN can be used by the rest of this program.
 
       Every item from the provided data that does not have an ISBN is in the "Items Missing an ISBN" list. Likewise, every item that has an ISBN will contribute it to the "Item ISBNs" list.
 
@@ -576,6 +577,7 @@ class EditionsAcknowledgementState implements UIState {
       this.savable.editionsSlowOkay = value;
       setState(this);
     };
+    // spell-checker:ignore acked
     const acked = this.savable.editionsSlowOkay;
     builder.addCheckableRow('Yes, warn me every time.', !acked, () => set(void 0), false);
     builder.addCheckableRow('No, do not warn me.', !!acked, () => set(true), false);

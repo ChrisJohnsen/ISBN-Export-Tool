@@ -13,7 +13,7 @@ Currently under development. Existing features:
 
     These can happen when adding a book when its default (most popular?) edition
     is some version that does not haven an ISBN (often: eBook, audio). Such a
-    list could be used to manaully "fix" the active edition.
+    list could be used to manually "fix" the active edition.
 
         node isbn-tool.js missing-ISBNS path/to/export.csv
 
@@ -126,7 +126,7 @@ The Scriptable content of this branch is created with these steps:
 
 1. Commit all the desired changes and stash any incomplete changes to tracked files.
 
-    The commited changes to `packages/utils/src/version.ts` should include a new
+    The committed changes to `packages/utils/src/version.ts` should include a new
     (previously untagged) version number.
 
 2. Create an annotated (or annotated and signed) tag for the new release.
@@ -149,7 +149,7 @@ The Scriptable content of this branch is created with these steps:
         packages/Scriptable> yarn run release
 
     This will check that the worktree is clean and tagged, run a release-mode
-    Rollup, and check the released file's header for a Git decription
+    Rollup, and check the released file's header for a Git description
     annotation, production mode, and make sure it doesn't have too many newlines
     (as a proxy for minification).
 

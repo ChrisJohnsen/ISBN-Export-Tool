@@ -59,9 +59,9 @@ const isRestorableV2 = t.isObject({
  *
  * If `saveCache` was previously given a marshaling argument, its output was
  * `SavedCache<As,Rs>` (where `As` and `Rs` were specified by the user-provided
- * marshalling functions). Such input will need to be unmarshalled before it can
+ * marshalling functions). Such input will need to be un-marshalled before it can
  * be imported as a new cache for the original function. Pass the previously
- * saved value as the `import` property and appropriate unmarshalling functions
+ * saved value as the `import` property and appropriate un-marshalling functions
  * for the `restoreArgument` and `restoreResolution` properties.
  */
 export type ImportCacheOptions<A, R> = SavedCache<A, R> | {
@@ -121,6 +121,7 @@ export function cacheEditionsPromisor(
   // transformedCache: cache of (possibly) merged resolutions; if merged, expiration is the earliest of contributing resolutions
   const transformedCache = new Map<string, { resolution: Set<string>, expiration: number }>;
 
+  // spell-checker:ignore newfn
   const newfn = _cachePromisor(
     fn,
     saved,
@@ -327,6 +328,7 @@ function _cachePromisor<A, R>(
       if (cached.hit) return Promise.resolve(cached.value);
     }
 
+    // spell-checker:ignore ccfn
     // call the wrapped function
     const promise = ccfn(argument)
       .then(({ value: resolution, expiration }) => {

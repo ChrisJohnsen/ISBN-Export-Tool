@@ -58,7 +58,6 @@ async function thingISBNsOfISBN(fetch: Fetcher, isbn: string): Promise<EditionsR
 }
 
 async function _thingISBNsOfISBN(fetched: string, urlTail: string): Promise<EditionsResult> {
-
   // the XML looks like <?xml ...><idlist><isbn>1234</isbn>...more isbn elements...</idlist>
   // extract the ISBNs with a simple matchAll
   return Array.from(fetched.matchAll(/<isbn>([^<]*)<\/isbn>/g))

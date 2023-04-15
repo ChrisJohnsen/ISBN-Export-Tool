@@ -122,14 +122,14 @@ describe('toCSV', () => {
   `;
 
   test('array of arrays', () => {
-    const implictHeader = toCSV(rows);
+    const implicitHeader = toCSV(rows);
 
-    expect(implictHeader).toEqual(csv);
+    expect(implicitHeader).toEqual(csv);
   });
 
   test('array of arrays, explicit header', () => {
-    const explicitHeadder = toCSV({ header: rows[0], rows: rows.slice(1) });
+    const explicitHeader = toCSV({ header: rows[0], rows: rows.slice(1) });
 
-    expect(explicitHeadder).toEqual(csv);
+    expect(explicitHeader).toEqual(csv);
   });
 });

@@ -55,6 +55,7 @@ function symbolImageAndWidth(name: string): { image: Image; width: number; } {
   const image = SFSymbol.named(name).image;
   const sizes: Record<string, number | undefined> = {
     // out of 100 total widthWeight in a UITable presented full-screen in a UITableRow with cellSpacing:0 on a 414pt width screen (828@2x)
+    // spell-checker:words xmark checkmark questionmark arrowtriangle magnifyingglass largecircle
     'xmark': 9,
     'checkmark': 9,
     'checkmark.square': 9,
@@ -100,7 +101,7 @@ export class UITableBuilder {
       type: 'button', title: 'show/set', align: 'center', onTap: async () => {
         const a = new Alert;
         a.title = 'Current Height';
-        a.message = `The curret ehight is ${row.height}.\n\nEnter a new height:`;
+        a.message = `The current height is ${row.height}.\n\nEnter a new height:`;
         const t = a.addTextField('new height', String(row.height));
         t.setNumberPadKeyboard();
         a.addCancelAction('Okay');
@@ -173,6 +174,7 @@ export class UITableBuilder {
       const dw = sw * width / 100;
       console.log(dw / imageWidth);
 
+      // spell-checker:ignore descs
       const descs: CellOpts[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(w => ({ type: 'image', image, widthWeight: w }));
       const used = descs.reduce((a, d) => a + (d.widthWeight ?? 0), 0);
       this.addRowWithDescribedCells([...descs, { type: 'text', title: 'R', widthWeight: 100 - used }], { cellSpacing: 0 });
@@ -196,6 +198,7 @@ export class UITableBuilder {
     t('circle');
   }
   private addFontExamples() {
+    // spell-checker:words subheadline
     ([
       'largeTitle',
       'title1',

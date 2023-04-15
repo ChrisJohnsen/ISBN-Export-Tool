@@ -1,5 +1,3 @@
-// spellcheck: off
-
 import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
 import esbuild from 'rollup-plugin-esbuild';

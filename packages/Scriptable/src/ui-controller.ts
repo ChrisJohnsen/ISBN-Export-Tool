@@ -17,6 +17,7 @@ import { pick } from 'utils';
 
 export class Controller implements UIRequestReceiver {
   private disabledEditionsServices: Set<EditionsService>;
+  // spell-checker:ignore Pathnamer
   constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string, private webcheckData: Record<string, unknown>, private saveData: () => Promise<void>) {
     this.disabledEditionsServices = new Set(['Open Library WorkEditions']);
   }
@@ -46,6 +47,7 @@ export class Controller implements UIRequestReceiver {
         + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
         + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
         , { height: 149 });
+      // spell-checker:ignore olwe
       const olweStatus = this.disabledEditionsServices.has('Open Library WorkEditions') ? 'disabled' : 'enabled';
       const olweToggle = () => this.enableEditionsService('Open Library WorkEditions', !this.disabledEditionsServices.has('Open Library WorkEditions'));
       builder.addRowWithDescribedCells([
@@ -272,7 +274,7 @@ export class Controller implements UIRequestReceiver {
   private abortingFetches = false;
   private editionsPromise?: Promise<EditionsSummary>;
   private abortEditions?: () => void;
-  private edtionsISBNs: Set<string> = new Set;
+  private editionsISBNs: Set<string> = new Set;
   async requestEditions(services: string[], editionsReporter: (report: EditionsProgress) => void) {
     if (!this.selected) throw 'requested editions before anything selected';
     if (!this.activeServices) throw 'requested editions before services requested';
@@ -405,7 +407,7 @@ export class Controller implements UIRequestReceiver {
         return [service, { cacheHits: info.hits, queries: info.queries, fetches: info.fetches.length, fetchRate, fetchStats: stats(info.fetches) }];
       }));
 
-      this.edtionsISBNs = editionsISBNs;
+      this.editionsISBNs = editionsISBNs;
       return { isbns: editionsISBNs.size, editionsServicesSummary };
     })();
 
@@ -423,7 +425,7 @@ export class Controller implements UIRequestReceiver {
     if (!this.selected) throw 'requested output before anything selected';
 
     const filename = `ISBNs of editions of ISBNs on ${this.selected.group.kind} ${this.selected.group.name}.txt`;
-    const isbns = both ? bothISBNsOf(this.edtionsISBNs) : this.edtionsISBNs;
+    const isbns = both ? bothISBNsOf(this.editionsISBNs) : this.editionsISBNs;
     const output = Array.from(isbns).join('\n');
     return this.output(kind, filename, output);
   }

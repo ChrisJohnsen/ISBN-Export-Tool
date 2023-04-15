@@ -1,0 +1,30 @@
+{
+  "version": "0.2",
+  "ignorePaths": [ ],
+  "dictionaryDefinitions": [ ],
+  "dictionaries": [ ],
+  "words": [
+    "Cacheable",
+    "cacher",
+    "clipanion",
+    "consts",
+    "Goodreads",
+    "idlist",
+    "isbns",
+    "LibraryThing",
+    "Millis",
+    "OpenLibrary",
+    "papaparse",
+    "Scriptable",
+    "Tempfile",
+    "ThingISBN",
+    "Throttleable",
+    "typanion",
+    "uitable",
+    "unparse",
+    "webcheck",
+    "worktree"
+  ],
+  "ignoreWords": [ ],
+  "import": [ ]
+}

@@ -1,5 +1,3 @@
-// spellcheck: off
-
 import { stat } from 'node:fs/promises';
 const isDir = pn => stat(pn).then(s => s.isDirectory(), () => false);
 

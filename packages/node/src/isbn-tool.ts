@@ -104,6 +104,7 @@ class MissingISBNs extends Command {
 }
 
 const editionsServiceSpecs: Map<string, EditionsService> = new Map([
+  // spell-checker:ignore OLS LTTI OLWE
   ['OLS', 'Open Library Search'],
   ['LTTI', 'LibraryThing ThingISBN'],
   ['OLWE', 'Open Library WorkEditions'],
@@ -162,7 +163,7 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
   otherEditions = Option.String('--editions', false, {
     tolerateBoolean: true,
     description: `
-      Sends ISBN to extenal web service(s) to produce ISBN-13s of other editions of the work.
+      Sends ISBN to external web service(s) to produce ISBN-13s of other editions of the work.
   `});
   bothISBNs = Option.Boolean('--both', {
     description: `
@@ -249,7 +250,7 @@ class CacheClear extends Command<CacheContext> {
       This lets future operations avoid having to make the same remote
       requests and wait for the (same) replies.
 
-      Some opertations will take longer to run after clearing the cache.
+      Some operations will take longer to run after clearing the cache.
     `,
     examples: [
       ['Clear the contents of the cache.',
@@ -508,12 +509,12 @@ const makeReporter: (pw: ProgressWriter) => ProgressReporter & { summary(): void
 // compress the bar if there aren't enough columns to hold them
 function progressBarText(columns: number, started: number, finished: number, total: number | undefined): string {
   const active = started - finished;
-  const wokingTotal = total ?? started;
-  const remaining = wokingTotal - started;
+  const workingTotal = total ?? started;
+  const remaining = workingTotal - started;
   const summary = total ? ` ${finished} + ${active} + ${remaining} = ${total}` : ` ${finished} + ${active}`;
   const maxWidth = columns - (summary.length + 1);
-  const width = Math.min(wokingTotal ?? 40, maxWidth);
-  const bit = width / wokingTotal;
+  const width = Math.min(workingTotal ?? 40, maxWidth);
+  const bit = width / workingTotal;
   const rep = (c: string, n: number) => Array(Math.max(n > 0 ? 1 : 0, Math.trunc(n))).fill(c).join('');
   const fin = rep('O', bit * finished);
   const rem = rep('.', bit * remaining);

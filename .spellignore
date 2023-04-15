@@ -1,5 +1,0 @@
-# ignore a bunch of generated files
-/.yarn/
-# especially large ones that we might want to occasionally look at
-/.pnp.*
-/yarn.lock
