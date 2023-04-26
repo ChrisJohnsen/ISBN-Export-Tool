@@ -1,0 +1,14 @@
+diff --git a/index.d.ts b/index.d.ts
+index 8235604c51fca029503fe9a367e1b2d98d405d68..d1351f3d68e6919155b149f21cf83c9d855ed7b0 100644
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -1,3 +1,4 @@
++declare module "magic-string" {
+ export interface BundleOptions {
+   intro?: string;
+   separator?: string;
+@@ -260,3 +261,4 @@ export default class MagicString {
+    */
+   toString(): string;
+ }
++}

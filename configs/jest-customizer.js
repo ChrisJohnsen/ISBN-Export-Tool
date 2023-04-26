@@ -13,7 +13,7 @@ export default function customizeConfig(preset = {}) {
       ['ts', 'js', 'cjs', ...(preset.moduleFileExtensions ?? jestDefaults.moduleFileExtensions)])),
     extensionsToTreatAsEsm: ['.ts'],
     testMatch: [
-      '**/tests/**/*.@(ts|js|cjs)'
+      '**/tests/**/*.test.@(ts|js|cjs)'
     ],
     transform: {
       '\\.ts$': ['<rootDir>/../../configs/jest-esbuild.js', { /* options passed to esbuild */ }]

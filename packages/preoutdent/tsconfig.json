@@ -1,0 +1,10 @@
+{
+  "include": [ "src/**/*" ],
+  "compilerOptions": {
+    "checkJs": true,
+    "moduleResolution": "node16",
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "extends": "../../configs/tsconfig-node"
+}
