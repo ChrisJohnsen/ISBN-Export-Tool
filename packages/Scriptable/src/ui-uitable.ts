@@ -541,6 +541,7 @@ async function acknowledgeEditionsIsSlow(savable: SavableData, isbns: number): P
   const a = new Alert;
   a.title = 'Getting Editions May Take Some Time';
   a.message = outdent`
+      ${outdent}
       ${editionsThrottled}
 
       This could be up to ${isbns} seconds for the selected items.
