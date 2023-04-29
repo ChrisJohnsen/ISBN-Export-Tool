@@ -4385,7 +4385,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"preoutdent@workspace:packages/preoutdent":
+"preoutdent@workspace:^, preoutdent@workspace:packages/preoutdent":
   version: 0.0.0-use.local
   resolution: "preoutdent@workspace:packages/preoutdent"
   dependencies:
@@ -4715,6 +4715,7 @@ __metadata:
     "@types/scriptable-ios": "npm:^1.7.0"
     esbuild: "npm:^0.17.15"
     outdent: "npm:^0.8.0"
+    preoutdent: "workspace:^"
     rollup: "npm:^3.20.2"
     rollup-plugin-consts: "npm:^1.1.0"
     rollup-plugin-esbuild: "npm:^5.0.0"

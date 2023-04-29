@@ -6,6 +6,7 @@ import node_resolve from '@rollup/plugin-node-resolve';
 import esbuild from 'rollup-plugin-esbuild';
 import virtual from '@rollup/plugin-virtual';
 import consts from 'rollup-plugin-consts';
+import outdent from 'preoutdent';
 
 export default async cliOptions => {
   const iCloud = cliOptions.configiCloud; // spell-checker:ignore configiCloud
