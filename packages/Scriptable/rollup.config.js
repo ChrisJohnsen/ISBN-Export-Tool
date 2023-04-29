@@ -8,20 +8,20 @@ import virtual from '@rollup/plugin-virtual';
 import consts from 'rollup-plugin-consts';
 
 export default async cliOptions => {
-  const iCloud = cliOptions.configiCloud;
+  const iCloud = cliOptions.configiCloud; // spell-checker:ignore configiCloud
   const release = await (async release => {
     if (typeof release == 'undefined') return false;
     if (release == true) {
-      console.error('--configRelease must be given a path: output will the written to <path>/Scriptable/');
+      console.error('--configRelease must be given a path: output will be written to <path>/Scriptable/');
       return false;
     }
     const releaseStr = String(release);
     if (!releaseStr) {
-      console.error('--configRelease must be given a non-empty path: output will the written to <path>/Scriptable/');
+      console.error('--configRelease must be given a non-empty path: output will be written to <path>/Scriptable/');
       return false;
     }
     if (!await isDir(releaseStr)) {
-      console.error('--configRelease must be given a path to an existing directory: output will the written to <path>/Scriptable/');
+      console.error('--configRelease must be given a path to an existing directory: output will be written to <path>/Scriptable/');
       return false;
     }
     return releaseStr;
@@ -52,7 +52,8 @@ export default async cliOptions => {
       virtual({ stream: 'export default {}' }),
       gitDescription(description => git.description = description), // updates value for consts and release banner
       consts({ production, git, dependencies }),
-      commonjs(), node_resolve(), esbuild({ target: "es2022" })
+      commonjs(), node_resolve(), esbuild({ target: 'es2022' }),
+      outdent(),
     ],
     watch: {
       clearScreen: false,
