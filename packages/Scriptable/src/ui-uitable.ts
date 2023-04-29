@@ -1,7 +1,6 @@
 // UITable-based UI uses controller to do the work
 
-import { outdent as outdentDefault } from 'outdent';
-const outdent = outdentDefault({ newline: '\n' });
+import { outdent } from 'outdent';
 import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver, type EditionsProgress, type RequestedOutput } from './ui-types.js';
 import { textCell, UITableBuilder } from './uitable-builder.js';
 import production from 'consts:production';
