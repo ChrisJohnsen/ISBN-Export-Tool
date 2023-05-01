@@ -175,7 +175,7 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
 
     const csv = await readFile(this.csvPath, { encoding: 'utf-8' });
 
-    const db = new Low<CacheData>(new JSONFile(this.context.cachePath));
+    const db = new Low<CacheData>(new JSONFile(this.context.cachePath), {});
     await db.read().catch(() => void 0);
 
     const pw = new ProgressWriter(this.context.stderr as WriteStream);
@@ -217,7 +217,7 @@ ${acceptableEditionsServiceSpecs().map(s => '      - ' + s).join('\n')}
       ? await getEditionsOf(extractedISBNs, {
         fetcher: this.context.fetcher,
         services: editionsServices,
-        cacheData: ensureCacheData(db),
+        cacheData: db.data,
         reporter,
       })
       : extractedISBNs;
@@ -260,9 +260,8 @@ class CacheClear extends Command<CacheContext> {
   static paths = [['cache', 'clear']];
   async execute() {
     const path = this.context.cachePath;
-    const db = new Low<CacheData>(new JSONFile(path));
-    db.data = null;
-    ensureCacheData(db);
+    const db = new Low<CacheData>(new JSONFile(path), {});
+    db.data = {};
     await db.write();
     this.context.stderr.write(`cache cleared in ${path}\n`);
   }
@@ -341,14 +340,6 @@ async function fakeFetcher(url: string): Promise<FetchResult> {
   }
 
   throw `nope: ${url}`;
-}
-
-function ensureCacheData(db: Low<CacheData>): CacheData {
-
-  if (!db.data || typeof db.data != 'object')
-    db.data = {};
-
-  return db.data;
 }
 
 // let other normal output lines be written above an updatable "progress line"
