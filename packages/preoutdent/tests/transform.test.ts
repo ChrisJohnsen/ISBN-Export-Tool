@@ -703,9 +703,8 @@ describe('transform: first expression that can not be marker', () => {
     expect(transform(o)).toBe(p);
   });
 
-  test('AssignmentExpression, not =', () => {
+  test('AssignmentExpression, not [=, ||=, &&=, ??=]', () => {
     // += -= *= /= %= <<= >>= >>>= |= ^= &=
-    // ||= &&= ??=
     const o = `(() => {
       let x = 0;
       return ${ttl`outdent``
@@ -808,23 +807,6 @@ describe('transform: first expression that can not be marker', () => {
     expect(transform(o)).toBe(p);
   });
 
-  test('LogicalExpression', () => {
-    const f = false;
-    void f; // used in eval
-    const o = ttl`outdent``
-      ${nq`f || 1`}
-      2
-    `;
-    const p = tl`${nq`f || 1`}
-2`;
-    const xo = '1\n2';
-    const eo = eval(o);
-
-    expect(eo).toBe(xo);
-    expect(eval(p)).toBe(eo);
-    expect(transform(o)).toBe(p);
-  });
-
   test('ObjectExpression', () => {
     const o = ttl`outdent``
       ${nq`{ toString() { return 1 } }`}
@@ -912,6 +894,54 @@ ${nq`x = outdent`}
 2
 `};
       })()`],
+    ['AssignmentExpression, ||=',
+      `(() => {
+        let x;
+        return ${ttl`outdent``   \
+
+          ${nq`x ||= outdent`}
+          2
+        `};
+      })()`,
+      `(() => {
+        let x;
+        return ${ttl`outdent``
+${nq`x ||= outdent`}
+2
+`};
+      })()`],
+    ['AssignmentExpression, &&=',
+      `(() => {
+        let x = true;
+        return ${ttl`outdent``   \
+
+          ${nq`x &&= outdent`}
+          2
+        `};
+      })()`,
+      `(() => {
+        let x = true;
+        return ${ttl`outdent``
+${nq`x &&= outdent`}
+2
+`};
+      })()`],
+    ['AssignmentExpression, ??=',
+      `(() => {
+        let x;
+        return ${ttl`outdent``   \
+
+          ${nq`x ??= outdent`}
+          2
+        `};
+      })()`,
+      `(() => {
+        let x;
+        return ${ttl`outdent``
+${nq`x ??= outdent`}
+2
+`};
+      })()`],
     ['CallExpression',
       ttl`outdent``   \
 
@@ -960,6 +990,23 @@ ${nq`true ? outdent : void 0`}
         let x = outdent;
         return ${ttl`outdent``
 ${nq`x`}
+2
+`};
+      })()`],
+    ['LogicalExpression',
+      // falsy ||, truthy &&, nullish ??
+      `(() => {
+        const x = false;
+        return ${ttl`outdent``   \
+
+        ${nq`x || outdent`}
+        2
+      `};
+      })()`,
+      `(() => {
+        const x = false;
+        return ${ttl`outdent``
+${nq`x || outdent`}
 2
 `};
       })()`],

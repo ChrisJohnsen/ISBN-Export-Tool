@@ -353,13 +353,30 @@ const makeParseState = (() => {
         if (false
           || expr.type == 'ArrayExpression'
           || expr.type == 'ArrowFunctionExpression'
-          || expr.type == 'AssignmentExpression' && expr.operator != '='
+          || expr.type == 'AssignmentExpression' && (false
+            || expr.operator == '+='
+            || expr.operator == '-='
+            || expr.operator == '*='
+            || expr.operator == '/='
+            || expr.operator == '%='
+            || expr.operator == '**='
+            || expr.operator == '<<='
+            || expr.operator == '>>='
+            || expr.operator == '>>>='
+            || expr.operator == '|='
+            || expr.operator == '^='
+            || expr.operator == '&='
+            // plain assignment and boolean assignments can evaluate to an indentation marker
+            // || expr.operator == '='    // x=outdent
+            // || expr.operator == '||='  // x=falsy; ... x||=outdent
+            // || expr.operator == '&&='  // x=truthy; ... x&&=outdent
+            // || expr.operator == '??='  // x=nullish; ... x??=outdent
+          )
           || expr.type == 'BinaryExpression'
           || expr.type == 'ClassExpression'
           || expr.type == 'FunctionExpression'
           || expr.type == 'ImportExpression'
           || expr.type == 'Literal'
-          || expr.type == 'LogicalExpression'
           || expr.type == 'ObjectExpression'
           || expr.type == 'TemplateLiteral'
           || expr.type == 'UnaryExpression'
@@ -370,6 +387,7 @@ const makeParseState = (() => {
           // || node.type == 'ChainExpression'          // x={o:outdent}; ... ${x?.o}
           // || node.type == 'ConditionalExpression'    // ${true?outdent:outdent}
           // || node.type == 'Identifier'               // let o=outdent; ... ${o} we don't track all possible bindings, so keep tag for unrecognized identifiers
+          // || expr.type == 'LogicalExpression'        // falsy||outdent, truthy&&outdent, nullish??outdent
           // || node.type == 'MemberExpression'         // x={o:outdent}; ... ${x.o}
           // || node.type == 'MetaProperty'             // ${import.meta} unlikely, but maybe some environment could arrange (e.g.) import.meta to be outdent?
           // || node.type == 'NewExpression'            // ${new (function(){return outdent}()}
