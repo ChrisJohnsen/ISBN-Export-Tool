@@ -3,6 +3,7 @@ import { loadConfigFile } from 'rollup/loadConfigFile';
 export default async cliOptions => {
   return (await Promise.all([
     'utils',
+    'preoutdent',
     'Scriptable',
     'node',
   ].map(async packagesDir => {

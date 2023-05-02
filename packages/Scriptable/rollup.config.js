@@ -6,7 +6,7 @@ import node_resolve from '@rollup/plugin-node-resolve';
 import esbuild from 'rollup-plugin-esbuild';
 import virtual from '@rollup/plugin-virtual';
 import consts from 'rollup-plugin-consts';
-import outdent from 'preoutdent';
+const outdent = deferPlugin('rollup-plugin-outdent', 'preoutdent');
 
 export default async cliOptions => {
   const iCloud = cliOptions.configiCloud; // spell-checker:ignore configiCloud
@@ -111,5 +111,56 @@ function gitDescription(fn) {
       fn(await exec('git describe --long --dirty')
         .then(e => e.stdout.trim(), () => '(unable to run "git describe")'));
     }
+  };
+}
+
+/**
+ * Defer loading a Rollup plugin until the last second (`options` get).
+ *
+ * We need this here because the top-level Rollup config loads all the workspace
+ * Rollup configs. But _this_ workspace Rollup config depends on one of the
+ * other workspace modules (the plugin). So...
+ *
+ * Fake having created the plugin until the last minute (when Rollup asks for
+ * `options` property), then load the actual module, build the actual plugin and
+ * start proxy-ing to it. Rollup's flexibility with Promise-like return values
+ * is really handy here! (our "deferred" plugin's `options` is async whether the
+ * real one is or not)
+ *
+ * _This is probably wildly unreliable!_
+ *
+ * This worked okay in testing where the only property gets before `options`
+ * were a few `then`s.
+ *
+ * @param {string} pluginName
+ * @param {string} pluginModule
+ *
+ * @returns {import('rollup').PluginImpl} a plugin creation function that creates a "deferred" plugin object
+ */
+// All this to avoid having to publish the plugin (or just document that it
+// has to be built separately, first)...
+function deferPlugin(pluginName, pluginModule) {
+  return (...args) => {
+    const fake = { name: pluginName + '-deferred' };
+    let real;
+    return new Proxy(fake, {
+      get(target, property, receiver) {
+        if (real != null)
+          return Reflect.get(real, property, receiver);
+        else if (property == 'options')
+          return async () => {
+            try {
+              const mod = await import(pluginModule);
+              real = await mod.default(...args);
+              return Reflect.get(real, property, receiver);
+            } catch (e) {
+              console.warn(`failed to load deferred ${pluginName} plugin`);
+              return Reflect.get(target, property, receiver);
+            }
+          };
+        else
+          return Reflect.get(target, property, receiver);
+      },
+    });
   };
 }
