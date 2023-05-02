@@ -2,8 +2,9 @@
   "include": [ "src/**/*" ],
   "compilerOptions": {
     "checkJs": true,
+    "declaration": true,
+    "declarationMap": true,
     "moduleResolution": "node16",
-    "esModuleInterop": true,
     "skipLibCheck": true
   },
   "extends": "../../configs/tsconfig-node"

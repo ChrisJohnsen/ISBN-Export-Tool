@@ -1,6 +1,8 @@
 import node_resolve from '@rollup/plugin-node-resolve';
-import esbuild from 'rollup-plugin-esbuild';
-// XXX switch to rollup-plugin-ts to generate .d.ts
+import typescript from 'rollup-plugin-ts';
+
+import { fileURLToPath, URL } from "node:url";
+const cwd = fileURLToPath(new URL('.', import.meta.url));
 
 export default async () => {
   return {
@@ -11,7 +13,7 @@ export default async () => {
     ],
     external: ['@rollup/pluginutils', 'magic-string', 'estree-walker'],
     plugins: [
-      node_resolve(), esbuild({ target: "es2022" })
+      node_resolve(), typescript({ tsconfig: `${cwd}/tsconfig.json` }),
     ],
     watch: {
       clearScreen: false,

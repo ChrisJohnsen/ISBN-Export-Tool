@@ -8,7 +8,7 @@ export interface Options {
   isOutdent?: string | RegExp | ((moduleSource: string) => boolean),
 }
 
-const plugin: PluginImpl = (options: Options = {}) => {
+const plugin: PluginImpl<Options> = (options: Options = {}) => {
   const filter = createFilter(options.include, options.exclude);
   const isOutdent = (s: string) => {
     const test = options.isOutdent;
