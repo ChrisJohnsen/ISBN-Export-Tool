@@ -1,56 +1,34 @@
-# ISBN export tools
+Using a book list app or service is a great way to track books you have read and those you want to read. Unfortunately it is quite easy for your "to be read" list to grow until it is difficult to review while browsing books.
 
-Currently under development. Existing features:
+Many book sources (libraries, stores, etc.) will let you maintain lists (or wishlists), but there may be no good way to import your "to be read" list from your book list service.
 
-* Understands Goodreads export format (CSV with a specific set of columns) and
-  its "shelves" system.
-* Understands LibraryThing export format (TSV with a specific set of columns)
-  and is "collections and tags" system.
+This programs in this repository aim to bridge that gap for services that can import a list of ISBNs. Starting with an export from your book list service, they can:
 
-    Suggest your favorite book list format for support in future versions!
+1. select a portion of your book list entries (e.g. your "to be read" list)
+2. review entries that are missing ISBNs (some eBooks and audio books do not use ISBNs and book list services sometimes use these as the default edition of a book if you do not pick a different one),
+3. extract the ISBNs of your book entries,
+4. optionally add the ISBNs of other editions of your books (using external services),
+5. produce the extracted (and, optionally, expanded) list of ISBNs.
 
-* List entries that don't have ISBNs.
+Then you can upload this list of ISBNs to a book source (i.e. library or book store) to find out which books they have available.
 
-    These can happen when adding a book when its default (most popular?) edition
-    is some version that does not haven an ISBN (often: eBook, audio). Such a
-    list could be used to manually "fix" the active edition.
+# Platforms
 
-        node isbn-tool.js missing-ISBNS path/to/export.csv
+This repository has a Node program for command-line use on "PC" systems
+(Windows/Mac), and a Scriptable program for use on iOS devices.
 
-* Extract a list of ISBNs from items.
+# Supported Book List Services
 
-    Lists of ISBNs can be imported by some library interfaces. Doing so can let
-    you review which books from your exported data are available through a
-    particular library.
+The programs understand these services' export formats:
 
-        node isbn-tool.js get-ISBNS path/to/export.csv to-read
+* Goodreads
+    * CSV with its specific set of columns
+    * its "shelves" system
+* LibraryThing
+    * TSV with its specific set of columns
+    * its "collections and tags" system
 
-    ISBN-13 values are preferred over ISBN-10 values.
-
-    * Optionally ask external web services for the ISBNs of other editions of
-      the ISBN that was extracted from the exported data. The supported web
-      services are Open Library (two methods, probably equivalent), and
-      LibraryThing (one method). Requests are rate limited, so it may take a
-      second or two to retrieve the result ISBNs.
-
-            node isbn-tool.js get-ISBNS path/to/export.csv to-read --editions
-
-        This only produces ISBN-13s, but can be combined with `--both` if you
-        want both of them. The "editions of" relation is cached locally to avoid
-        spamming the web services.
-
-        This can be handy if the system to which you'll be giving the extracted
-        ISBNs does not automatically look for other editions of a particular
-        work (maybe you saved the paperback edition, the library doesn't have
-        it, but does have a hardback edition).
-
-    * Optionally include both the ISBN-13 and ISBN-10 of each ISBN:
-
-            node isbn-tool.js get-ISBNS path/to/export.csv to-read --both
-
-        ISBN-10s are a proper subset of ISBN-13s, so there usually isn't a need
-        for both, but maybe the system you want to send the generated list to
-        doesn't know (how) to convert between them.
+Suggest your favorite book list format for support in future versions!
 
 # Development
 
