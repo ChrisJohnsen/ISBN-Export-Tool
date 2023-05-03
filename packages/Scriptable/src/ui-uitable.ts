@@ -248,11 +248,19 @@ class PickInputState implements UIState {
   constructor(private savable: SavableData, private previousInput?: Input) { }
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addSubtitleHelpRow(title(this), outdent`
-      This program reads exported book list data to let you access the ISBNs of your listed items.
+      Using a book list app or service is a great way to track books you have read and those you want to read. Unfortunately it is quite easy for your "to be read" list to grow until it is difficult to review while browsing books.
 
-      You can review the items that are missing ISBNs, and view or save the list of ISBNs (optionally including ISBNs of other editions of the listed book).
+      Many book sources (libraries, stores, etc.) will let you maintain lists (or wishlists), but there may be no good way to import your "to be read" list from your book list service.
 
-      Some libraries can import such an ISBN list and use it to show which of those books they have available in their holdings (e.g. which of your "To Be Read" list is available for checkout).
+      This program aims to bridge that gap for services that can import a list of ISBNs. Starting with an export from your book list service, it can:
+
+      1. select a portion of your book list entries (e.g. your "to be read" list)
+      2. review entries that are missing ISBNs (some eBooks and audio books do not use ISBNs and book list services sometimes use these as the default edition of a book if you do not pick a different one),
+      3. extract the ISBNs of your book entries,
+      4. optionally add the ISBNs of other editions of your books (using external services),
+      5. produce the extracted (and, optionally, expanded) list of ISBNS.
+
+      Then you can upload this list of ISBNs to a book source (i.e. library or book store) to find out which books they have available.
 
       These book list export formats are currently supported:
       - Goodreads export (CSV with a specific set of columns) and its Shelves
@@ -468,13 +476,19 @@ class PickEditionsServicesState implements UIState {
   async build(builder: UITableBuilder, setState: SetState, controller: UIRequestReceiver) {
     builder.addBackRow(title(this.back), () => setState(this.back));
     builder.addSubtitleHelpRow(title(this), outdent`
-      Books often have multiple editions, and thus multiple ISBNs. Some book lists only let you add one edition of a book, so the data will only include (at most) one ISBN for each book.
+      Books often have multiple editions, and thus multiple ISBNs. Some book lists only let you add one edition of a book, so the directly extracted data will only include (at most) one ISBN for each book.
 
       If you are interested in finding any edition of the books in your lists, then it might be handy to be able to gather not just the ISBN of the (sometimes arbitrary) edition in your list, but also the ISBNs of other editions of that book.
 
-      Some book-data websites offer a way to find the ISBNs of other editions of a book (at least the editions that those services know about). We can use those services to gather those extra ISBNs.
+      This program knows how to ask multiple different book-data services about the ISBNs of other editions of a book.
 
-      Requests to these services are limited to one per second, so it may take some time to process a large list. We save the results for re-use though, so later queries about the same book should be faster.
+      To be nice to these helpful services, we rate-limit our queries to each service (one per second per service), and save the answers so that we will not repeatedly ask a service about the same ISBN (we do ask again if our saved answers are "old" though, otherwise we might never learn about new editions of current publications).
+
+      This means it may take some time to process a large list of ISBNs for which we do not yet have any saved data.
+
+      Using multiple services can speed up processing your list of books since we can ask each service about a portion of your ISBNs and talk to all the selected services at the same time (each with their own one query per second rate limit).
+
+      The query distribution among the services is different each time editions are requested. This avoids getting stuck with empty or incomplete answers. When we have seen answers from multiple services we merge them together to try to give a more complete list of edition ISBNs (no database like this is 100% complete, so these services might return different results).
     `);
     builder.addEmptyRow();
 
