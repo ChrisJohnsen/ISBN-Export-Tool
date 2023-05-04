@@ -5,16 +5,17 @@ import esbuild from 'rollup-plugin-esbuild';
 const plugins = [node_resolve(), commonjs(), esbuild({ target: "es2022" })];
 
 export default async cliOptions => {
+  const modifyPath = p => cliOptions.configPathPrefix?.concat('/', p) ?? p;
   const config = {
-    input: 'src/isbn-tool.ts',
+    input: modifyPath('src/isbn-tool.ts'),
     output: [
       {
-        file: 'dist/isbn-tool-bundled.mjs',
+        file: modifyPath('dist/isbn-tool-bundled.mjs'),
         inlineDynamicImports: true,
         sourcemap: true,
       },
       {
-        file: 'dist/isbn-tool-bundled.cjs',
+        file: modifyPath('dist/isbn-tool-bundled.cjs'),
         format: 'cjs',
         inlineDynamicImports: true,
         sourcemap: true,

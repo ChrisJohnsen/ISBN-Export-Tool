@@ -1,19 +1,17 @@
 import node_resolve from '@rollup/plugin-node-resolve';
 import typescript from 'rollup-plugin-ts';
 
-import { fileURLToPath, URL } from "node:url";
-const cwd = fileURLToPath(new URL('.', import.meta.url));
-
-export default async () => {
+export default async cliOptions => {
+  const modifyPath = p => cliOptions.configPathPrefix?.concat('/', p) ?? p;
   return {
-    input: 'src/rollup-plugin.ts',
+    input: modifyPath('src/rollup-plugin.ts'),
     output: [
-      { file: 'dist/index.js' },
-      { file: 'dist/index.cjs', format: 'cjs', },
+      { file: modifyPath('dist/index.js') },
+      { file: modifyPath('dist/index.cjs'), format: 'cjs', },
     ],
     external: ['@rollup/pluginutils', 'magic-string', 'estree-walker'],
     plugins: [
-      node_resolve(), typescript({ tsconfig: `${cwd}/tsconfig.json` }),
+      node_resolve(), typescript({ tsconfig: modifyPath('tsconfig.json') }),
     ],
     watch: {
       clearScreen: false,

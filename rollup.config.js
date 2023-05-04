@@ -11,11 +11,12 @@ export default async cliOptions => {
     const emptyConfig = { watch: { clearScreen: false } };
 
     const dir = `packages/${packagesDir}`;
+    const configFile = `${dir}/rollup.config.js`;
+    const cliOpts = { ...cliOptions, configPathPrefix: dir };
 
-    const configFile = `./${dir}/rollup.config.js`;
     const config = await (async () => {
       try {
-        const { options, warnings } = await loadConfigFile(configFile, cliOptions);
+        const { options, warnings } = await loadConfigFile(configFile, cliOpts);
         warnings.flush();
         return options;
       } catch (e) {
@@ -27,7 +28,7 @@ export default async cliOptions => {
     if (config === emptyConfig) return config;
 
     try {
-      return modifyConfig(dir, config, configFile);
+      return modifyConfig(config, configFile);
     } catch (e) {
       console.error(e);
       return emptyConfig;
@@ -35,37 +36,12 @@ export default async cliOptions => {
   }))).flat();
 };
 
-function modifyConfig(pathTo, rawConfig, configFile) {
+function modifyConfig(rawConfig, configFile) {
 
   if (Array.isArray(rawConfig))
-    return rawConfig.map(config => modifyConfig(pathTo, config, configFile));
+    return rawConfig.map(config => modifyConfig(config, configFile));
 
   const newConfig = { ...rawConfig };
-
-  if (typeof newConfig.input != 'string')
-    throw 'expected .input to be string';
-
-  newConfig.input = modifyPath(newConfig.input);
-
-  if (!Array.isArray(newConfig.output))
-    throw 'expected .output to be array';
-
-  newConfig.output.forEach((output, n) => {
-    if (typeof output != 'object' && output)
-      throw `expected .output[${n}] to be object`;
-
-    if ('file' in output && output.file != null) {
-      if (typeof output.file != 'string')
-        throw `expected .output[${n}].file to be string`;
-      output.file = modifyPath(output.file);
-    }
-
-    if ('dir' in output && output.dir != null) {
-      if (typeof output.dir != 'string')
-        throw `expected .output[${n}].dir to be string`;
-      output.dir = modifyPath(output.dir);
-    }
-  });
 
   if (!Array.isArray(newConfig.plugins)) {
     console.warn('.plugins is not an array; unable to add watch-included-config plugin');
@@ -80,7 +56,4 @@ function modifyConfig(pathTo, rawConfig, configFile) {
 
   return newConfig;
 
-  function modifyPath(path) {
-    return pathTo + '/' + path;
-  }
 }

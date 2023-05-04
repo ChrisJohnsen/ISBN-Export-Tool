@@ -9,6 +9,7 @@ import consts from 'rollup-plugin-consts';
 const outdent = deferPlugin('rollup-plugin-outdent', 'preoutdent');
 
 export default async cliOptions => {
+  const modifyPath = p => cliOptions.configPathPrefix?.concat('/', p) ?? p;
   const iCloud = cliOptions.configiCloud; // spell-checker:ignore configiCloud
   const release = await (async release => {
     if (typeof release == 'undefined') return false;
@@ -34,10 +35,10 @@ export default async cliOptions => {
   /** @type { {name:string?, version:string?, license:string?, licenseText:string?}[] } */
   let dependencies = [];
   const config = {
-    input: 'src/isbn-tool.ts',
+    input: modifyPath('src/isbn-tool.ts'),
     output: [
-      { file: 'dist/isbn-tool.js' },
-      iCloud && { file: 'iCloud/ISBN Tool.js' },
+      { file: modifyPath('dist/isbn-tool.js') },
+      iCloud && { file: modifyPath('iCloud/ISBN Tool.js') },
       release && {
         file: release + '/Scriptable/ISBN Tool.js',
         banner() {
@@ -64,7 +65,7 @@ export default async cliOptions => {
 
   try {
     if (production) {
-      // XXX this does not work from top-level rollup because the config it uses doesn't have its paths adjusted for top-level cwd...
+      // XXX this does not work for fresh builds (no packages/utils/dist) since this will try to use utils...
       const { rollup } = await import('rollup');
       const license = (await import('rollup-plugin-license')).default;
       /** @type import('rollup-plugin-license').Dependency[] */

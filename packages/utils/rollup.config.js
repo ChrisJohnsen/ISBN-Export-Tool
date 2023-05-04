@@ -2,20 +2,16 @@ import commonjs from '@rollup/plugin-commonjs';
 import node_resolve from '@rollup/plugin-node-resolve';
 import typescript from 'rollup-plugin-ts';
 
-import { fileURLToPath, URL } from "node:url";
-const cwd = fileURLToPath(new URL('.', import.meta.url));
-
-const plugins = [node_resolve(), commonjs(), typescript({ tsconfig: `${cwd}/tsconfig.json` })];
-
-export default [
-  {
-    input: 'src/index.ts',
-    output: { preserveModules: true, dir: 'dist' },
+export default async cliOptions => {
+  const modifyPath = p => cliOptions.configPathPrefix?.concat('/', p) ?? p;
+  return {
+    input: modifyPath('src/index.ts'),
+    output: { preserveModules: true, dir: modifyPath('dist') },
     external: ['papaparse', 'isbn3', 'typanion', 'p-throttle', 'p-limit'],
-    plugins,
+    plugins: [node_resolve(), commonjs(), typescript({ tsconfig: modifyPath('tsconfig.json') })],
     watch: {
       clearScreen: false,
       buildDelay: 50, // helps prevent immediate rebuild
     },
-  },
-];
+  };
+};
