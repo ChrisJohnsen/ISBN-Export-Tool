@@ -1,6 +1,5 @@
 // Common definitions for all "editions of" retrievers
 
-import { version } from './version.js';
 import { CacheControl, type MaybeCacheControl } from './cache.js';
 
 // types for simplified data retrieval
@@ -10,9 +9,6 @@ export type Fetcher = (url: string) => Promise<FetchResult>;
 export type BareFetchResult = string | { status: number, statusText: string };
 export type FetchResult = MaybeCacheControl<BareFetchResult>;
 
-export function fetcherUserAgent(platform?: string) {
-  return `ISBNExportTool/${version} (${platform ? platform + '; ' : ''}+https://github.com/ChrisJohnsen/ISBN-Export-Tool)`;
-}
 
 export class ServerThrottle {
   private throttles = new Map<string, number>;

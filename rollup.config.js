@@ -37,10 +37,17 @@ function modifyConfig(pathTo, rawConfig, configFile) {
     if (typeof output != 'object' && output)
       throw `expected .output[${n}] to be object`;
 
-    if (typeof output.file != 'string')
-      throw `expected .output[${n}].file to be string`;
+    if ('file' in output && output.file != null) {
+      if (typeof output.file != 'string')
+        throw `expected .output[${n}].file to be string`;
+      output.file = modifyPath(output.file);
+    }
 
-    output.file = modifyPath(output.file);
+    if ('dir' in output && output.dir != null) {
+      if (typeof output.dir != 'string')
+        throw `expected .output[${n}].dir to be string`;
+      output.dir = modifyPath(output.dir);
+    }
   });
 
   if (!Array.isArray(newConfig.plugins)) {

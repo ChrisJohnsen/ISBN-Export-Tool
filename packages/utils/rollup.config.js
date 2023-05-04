@@ -10,10 +10,7 @@ const plugins = [node_resolve(), commonjs(), typescript({ tsconfig: `${cwd}/tsco
 export default [
   {
     input: 'src/index.ts',
-    output: [
-      { file: 'dist/index.js' },
-      { file: 'dist/index.cjs', format: 'cjs' },
-    ],
+    output: { preserveModules: true, dir: 'dist' },
     external: ['papaparse', 'isbn3', 'typanion', 'p-throttle', 'p-limit'],
     plugins,
     watch: {
