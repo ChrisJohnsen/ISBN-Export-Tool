@@ -8,13 +8,30 @@ export default async cliOptions => {
     'node',
   ].map(async packagesDir => {
 
+    const emptyConfig = { watch: { clearScreen: false } };
+
     const dir = `packages/${packagesDir}`;
 
     const configFile = `./${dir}/rollup.config.js`;
-    const { options: config, warnings } = await loadConfigFile(configFile, cliOptions);
-    warnings.flush();
+    const config = await (async () => {
+      try {
+        const { options, warnings } = await loadConfigFile(configFile, cliOptions);
+        warnings.flush();
+        return options;
+      } catch (e) {
+        console.error('unable to load config', configFile, e.message ? e.message : e);
+        return emptyConfig;
+      }
+    })();
 
-    return modifyConfig(dir, config, configFile);
+    if (config === emptyConfig) return config;
+
+    try {
+      return modifyConfig(dir, config, configFile);
+    } catch (e) {
+      console.error(e);
+      return emptyConfig;
+    }
   }))).flat();
 };
 

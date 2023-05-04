@@ -62,29 +62,37 @@ export default async cliOptions => {
     },
   };
 
-  if (production) {
-    const { rollup } = await import('rollup');
-    const license = (await import('rollup-plugin-license')).default;
-    /** @type import('rollup-plugin-license').Dependency[] */
-    let deps;
-    const bundle = await rollup({
-      ...config,
-      plugins: config.plugins.concat([
-        license({
-          thirdParty: {
-            includePrivate: true,
-            output: d => deps = d,
-            allow: {
-              test: 'MIT',
-              failOnUnlicensed: true,
-              failOnViolation: true,
+  try {
+    if (production) {
+      // XXX this does not work from top-level rollup because the config it uses doesn't have its paths adjusted for top-level cwd...
+      const { rollup } = await import('rollup');
+      const license = (await import('rollup-plugin-license')).default;
+      /** @type import('rollup-plugin-license').Dependency[] */
+      let deps;
+      const bundle = await rollup({
+        input: config.input,
+        plugins: [
+          consts({ production, git, dependencies }),
+          commonjs(), node_resolve(), esbuild({ target: 'es2022' }),
+          license({
+            thirdParty: {
+              includePrivate: true,
+              output: d => deps = d,
+              allow: {
+                test: 'MIT',
+                failOnUnlicensed: true,
+                failOnViolation: true,
+              }
             }
-          }
-        })]),
-    });
-    await bundle.generate({ file: 'no actual output.js' });
-    // update dependencies, which is referenced by object already closed over by consts
-    deps.forEach(d => dependencies.push({ name: d.name, version: d.version, license: d.license, licenseText: d.licenseText }));
+          })],
+      });
+      await bundle.generate({ dir: 'no actual output' });
+      // update dependencies, which is referenced by object already closed over by consts
+      deps.forEach(d => dependencies.push({ name: d.name, version: d.version, license: d.license, licenseText: d.licenseText }));
+    }
+  } catch (e) {
+    console.error('unable to gather license information!');
+    throw e;
   }
 
   const terser = await (async use => use ? (await import('@rollup/plugin-terser')).default : void 0)(useTerser);
