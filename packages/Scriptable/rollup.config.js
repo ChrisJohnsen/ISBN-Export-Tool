@@ -31,6 +31,9 @@ export default async cliOptions => {
   const production = !!release || !!cliOptions.configProduction;
   const useTerser = !!release || !!cliOptions.configTerser;
 
+  if (production && cliOptions.watch)
+    console.warn('Warning: in watch mode, git description and license information is only collected once per Rollup config load');
+
   const git = { description: '(did not run "git-describe")' };
   const config = {
     input: modifyPath('src/isbn-tool.ts'),
