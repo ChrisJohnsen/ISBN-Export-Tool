@@ -270,17 +270,19 @@ class PickInputState implements UIState {
 
       When you have your data ready, tell us where to find it using the selections on this Input Selection screen.
     `, {
-      'Goodreads Export': outdent`
+      'Goodreads Export': {
+        link: 'https://www.goodreads.com/review/import',
+        text: outdent`
       Exporting from Goodreads can be done on the Goodreads website:
 
 
       Login.
 
       If on a mobile device, tap/click the "Desktop version" link in the footer of the website.
-
       Tap/click on the "My Books" tab.
-
       In the left sidebar, find the "Tools" section and tap/click on "Import and Export" link.
+      OR
+      Tap "open Goodreads Export page" below.
 
       On the Import/Export page tap/click the "Export Library" button at the top of the page.
 
@@ -288,16 +290,19 @@ class PickInputState implements UIState {
 
 
       Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data in your web browser and use Select All and Copy to copy it to the clipboard.
-    `,
-      'LibraryThing Export': outdent`
+    `},
+      'LibraryThing Export': {
+        link: 'https://www.librarything.com/more/import',
+        text: outdent`
       Exporting from LibraryThing can be done on the LibraryThing website:
 
 
       Login.
 
       Tap/click the "More" top tab (inside three-horizontal-lines ("hamburger" menu) in the mobile view).
-
       In the "Useful and Fun" section, tap/click the "Import/Export" link.
+      OR
+      Tap "open LibraryThing Export page" below.
 
       In the "Export from LibraryThing" section, tap/click the "Export as tab-delimited text" link.
 
@@ -307,7 +312,8 @@ class PickInputState implements UIState {
 
 
       Once the export is ready, you can download the file (it will be in the Files app in your Downloads folder), or view the data in your web browser and use Select All and Copy to copy it to the clipboard.
-    `});
+    `}
+    });
     builder.addEmptyRow();
     builder.addTextRow('Where is your export data?');
     builder.addEmptyRow();

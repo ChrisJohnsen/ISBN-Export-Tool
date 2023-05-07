@@ -221,32 +221,40 @@ export class UITableBuilder {
     const textCell = buildCell({ type: 'text', title: text, align: 'left', widthWeight: 100 - chevron.widthWeight });
     return this.addRowWithCells([back, textCell], { onSelect });
   }
-  addSubtitleHelpRow(subtitle: string, helpLines?: string, topics?: Record<string, string | undefined>) {
+  addSubtitleHelpRow(subtitle: string, helpLines?: string, topics?: Record<string, { text: string, link: string } | string | undefined>) {
     const qm = symbolCell('questionmark.circle');
     let helpFn;
     if (helpLines)
       helpFn = async () => {
-        const allTopics = new Array<[topic: string, help: string]>;
+        type TopicInfo = { text: string, link: string | undefined };
+        const allTopics = new Array<[topic: string, info: TopicInfo]>;
         if (topics)
           Object.entries(topics).forEach(([topic, help]) => {
             if (!topic || !help) return;
-            allTopics.push([topic, help]);
+            const info = typeof help == 'string' ? { text: help, link: void 0 } : help;
+            allTopics.push([topic, info]);
           });
-        allTopics.push([subtitle, helpLines]);
         let topic = subtitle;
-        let help = helpLines;
+        let info: TopicInfo = { text: helpLines, link: void 0 };
+        allTopics.push([subtitle, info]);
         do {
           const a = new Alert;
           a.title = this.title + '\n' + subtitle + '\n' + (topic == subtitle ? '' : topic + '\n');
-          a.message = help;
+          a.message = info.text;
+          if (info.link)
+            a.addAction('open ' + topic + ' page');
           const otherTopics = allTopics.filter(([nextTopic]) => nextTopic != topic);
           otherTopics.forEach(([nextTopic]) => {
             a.addAction(nextTopic + ' Help');
           });
           a.addCancelAction('Okay');
-          const pick = await a.presentSheet();
+          let pick = await a.presentSheet();
           if (pick == -1) return;
-          [topic, help] = otherTopics[pick];
+          if (info.link) {
+            if (pick == 0) return Safari.open(info.link);
+            pick -= 1;
+          }
+          [topic, info] = otherTopics[pick];
         } while (true); // eslint-disable-line no-constant-condition
       };
     return this.addCenteredTextWithExtrasRow({ title: subtitle, titleFont: Font.title2(), }, void 0, helpFn ? qm : void 0, { onSelect: helpFn });
