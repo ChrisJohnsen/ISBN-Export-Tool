@@ -136,6 +136,7 @@ class ConfigurationState implements UIState {
     if (production) {
       builder.addEmptyRow();
       builder.addForwardRow('Copyrights', () => setState(new CopyrightsState(this)));
+      builder.addForwardRow('source code on GitHub', () => Safari.open('https://github.com/ChrisJohnsen/ISBN-Export-Tool'));
     }
   }
 }
