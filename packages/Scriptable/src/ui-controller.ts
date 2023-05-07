@@ -107,7 +107,11 @@ export class Controller implements UIRequestReceiver {
   }
   async requestUpdateInstall() {
     if (this.pendingUpdate) {
-      FileManager.local().writeString(module.filename, this.pendingUpdate);
+      const fm = FileManager.local();
+      const current = fm.readString(module.filename);
+      // preserve any line comments at the start of the file (Scriptable header)
+      const commentHeader = current.match(/^(?:\/\/.*(?:\r?\n|\r))*/)?.[0] ?? '';
+      fm.writeString(module.filename, commentHeader + this.pendingUpdate);
       this.pendingUpdate = void 0;
       await this.saveData();
       Timer.schedule(5 * 1000, false, () => Safari.open(URLScheme.forRunningScript()));
