@@ -39,7 +39,7 @@ export default async cliOptions => {
     input: modifyPath('src/isbn-tool.ts'),
     output: [
       { file: modifyPath('dist/isbn-tool.js') },
-      iCloud && { file: modifyPath('iCloud/ISBN Tool.js') },
+      iCloud && { file: modifyPath('iCloud/ISBN Tool (dev).js') },
       release && {
         file: release + '/Scriptable/ISBN Tool.js',
         banner() {
