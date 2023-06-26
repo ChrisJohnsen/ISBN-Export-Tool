@@ -66,7 +66,7 @@ export default async cliOptions => {
     input: toolInput,
     output: [
       { file: modifyPath('dist/isbn-tool.js') },
-      iCloud && { file: modifyPath('iCloud/ISBN Tool (dev).js') },
+      iCloud && { file: modifyPath('iCloud/ISBN Tool (dev).js'), banner: updateScriptableBanner(modifyPath) },
       release && {
         file: release + '/Scriptable/ISBN Tool.js',
         banner() {
@@ -106,14 +106,13 @@ export default async cliOptions => {
     input: rowInput,
     output: [
       { file: modifyPath('dist/check UITableRow.js') },
-      iCloud && { file: modifyPath('iCloud/check UITableRow.js'), },
+      iCloud && { file: modifyPath('iCloud/check UITableRow.js'), banner: updateScriptableBanner(modifyPath) },
     ],
     external: [],
     plugins: [
       deferPlugin('consts', async () =>
         consts({
-          dependencies:
-            production ? await gatherLicenses(rowInput) : [],
+          dependencies: production ? await gatherLicenses(rowInput) : [],
         }))(),
       virtualForMeasureImageCode(),
       virtualForSafeAreaInsetsCode(),
@@ -140,6 +139,56 @@ export default async cliOptions => {
 
   return configs;
 };
+
+import { open } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
+
+/**
+ * @param {(path:string) => string} modifyPath
+ * @returns {import('rollup').AddonFunction}
+ */
+function updateScriptableBanner(modifyPath) {
+  return async chunk => {
+    const contents = await (async () => {
+      try {
+        const path = modifyPath(`iCloud/${chunk.fileName}`);
+        const rr = (await (await open(path)).read({ buffer: Buffer.alloc(1024) }));
+        return rr.buffer.toString('utf-8', 0, rr.bytesRead);
+      } catch {
+        return '';
+      }
+    })();
+    const block = contents.match(/^(?:\/\/.*(?:\r?\n|\r))*/)?.[0] ?? '';
+    const newBanner = (() => {
+      if (block.length > 0) {
+        const lines = block.split(/\r?\n|\r/);
+        if (lines[0] != '// Variables used by Scriptable.')
+          return; // no Scriptable header lines, use default
+        if (lines[1] != '// These must be at the very top of the file. Do not edit.')
+          return ''; // only first Scriptable header line?!; do not add a banner
+        const color = lines[2].match(' icon-color: ([^;]+)(?:$|;)')?.[1];
+        if (!color)
+          return ''; // no color to update; do not add a banner
+        const colors = ['red', 'green', 'blue', 'brown', 'gray'];
+        const nextColor = colors[(colors.findIndex(c => c == color) + 1) % colors.length];
+        lines[2] = lines[2].replace(` icon-color: ${color}`, ` icon-color: ${nextColor}`);
+        // If Scriptable ever adds a fourth line, we will need to find a
+        // way to recognize it before we copy it. If we copied some
+        // non-Scriptable fourth comment line that was actually produced
+        // by some other part of the bundling process we would end up
+        // duplicating it.
+        return lines.slice(0, 3).join('\n');
+      }
+    })();
+    if (newBanner == null)
+      return [
+        '// Variables used by Scriptable.',
+        '// These must be at the very top of the file. Do not edit.',
+        '// icon-color: red; icon-glyph: magic;',
+      ].join('\n');
+    return newBanner;
+  };
+}
 
 import { promisify } from 'node:util';
 import { exec as execCb } from 'node:child_process';
