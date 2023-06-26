@@ -4,6 +4,7 @@ export default async cliOptions => {
   return (await Promise.all([
     'utils',
     'preoutdent',
+    'web',
     'Scriptable',
     'node',
   ].map(async packagesDir => {

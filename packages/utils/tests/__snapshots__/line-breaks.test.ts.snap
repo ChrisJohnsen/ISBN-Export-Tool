@@ -1,0 +1,248 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`estimatedLinesForText breaking character:  : _____ _____ 1`] = `
+[
+  {
+    "beforeIndex": 6,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 4.5,
+  },
+  {
+    "beforeIndex": 11,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText breaking character: !: _____!_____ 1`] = `
+[
+  {
+    "beforeIndex": 6,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 4,
+  },
+  {
+    "beforeIndex": 11,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText breaking character: /: _____/_____ 1`] = `
+[
+  {
+    "beforeIndex": 6,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 4,
+  },
+  {
+    "beforeIndex": 11,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText breaking character: ?: _____?_____ 1`] = `
+[
+  {
+    "beforeIndex": 6,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 4,
+  },
+  {
+    "beforeIndex": 11,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText breaking character: |: _____|_____ 1`] = `
+[
+  {
+    "beforeIndex": 6,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 4,
+  },
+  {
+    "beforeIndex": 11,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText breaking character: }: _____}_____ 1`] = `
+[
+  {
+    "beforeIndex": 6,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 4,
+  },
+  {
+    "beforeIndex": 11,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText breaking character: -: _____-_____ 1`] = `
+[
+  {
+    "beforeIndex": 6,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 4,
+  },
+  {
+    "beforeIndex": 11,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText normal break: This is longer text. It will break onto two lines. 1`] = `
+[
+  {
+    "beforeIndex": 24,
+    "breakCount": 4,
+    "lastBreakPoints": 2.5,
+    "pointsRemaining": 5,
+  },
+  {
+    "beforeIndex": 50,
+    "breakCount": 4,
+    "lastBreakPoints": 4.75,
+    "pointsRemaining": 4.25,
+  },
+]
+`;
+
+exports[`estimatedLinesForText pseudo-realistic 1`] = `
+[
+  {
+    "beforeIndex": 43,
+    "breakCount": 7,
+    "lastBreakPoints": "38.946",
+    "pointsRemaining": "28.185",
+  },
+  {
+    "beforeIndex": 73,
+    "breakCount": 4,
+    "lastBreakPoints": "35.635",
+    "pointsRemaining": "174.658",
+  },
+  {
+    "beforeIndex": 113,
+    "breakCount": 8,
+    "lastBreakPoints": "30.235",
+    "pointsRemaining": "59.254",
+  },
+  {
+    "beforeIndex": 154,
+    "breakCount": 7,
+    "lastBreakPoints": "73.792",
+    "pointsRemaining": "53.719",
+  },
+  {
+    "beforeIndex": 168,
+    "breakCount": 1,
+    "lastBreakPoints": "53.058",
+    "pointsRemaining": "255.862",
+  },
+]
+`;
+
+exports[`estimatedLinesForText single line: This is some text. 1`] = `
+[
+  {
+    "beforeIndex": 18,
+    "breakCount": 3,
+    "lastBreakPoints": 4,
+    "pointsRemaining": 3.5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText two lines, both breaking: This is the first long line. It will break.
+The second line will also break into two. 1`] = `
+[
+  {
+    "beforeIndex": 23,
+    "breakCount": 4,
+    "lastBreakPoints": 3.5,
+    "pointsRemaining": 3.5,
+  },
+  {
+    "beforeIndex": 44,
+    "breakCount": 3,
+    "lastBreakPoints": 4.75,
+    "pointsRemaining": 9.5,
+  },
+  {
+    "beforeIndex": 65,
+    "breakCount": 3,
+    "lastBreakPoints": 3.5,
+    "pointsRemaining": 4.75,
+  },
+  {
+    "beforeIndex": 85,
+    "breakCount": 3,
+    "lastBreakPoints": 3.25,
+    "pointsRemaining": 5.5,
+  },
+]
+`;
+
+exports[`estimatedLinesForText two lines, no extra breaks: This has two lines.
+This is the second. 1`] = `
+[
+  {
+    "beforeIndex": 20,
+    "breakCount": 3,
+    "lastBreakPoints": 4.75,
+    "pointsRemaining": 10.5,
+  },
+  {
+    "beforeIndex": 39,
+    "breakCount": 3,
+    "lastBreakPoints": 5.5,
+    "pointsRemaining": 5.75,
+  },
+]
+`;
+
+exports[`estimatedLinesForText underscore is not a preferred break point: An_underscore? 1`] = `
+[
+  {
+    "beforeIndex": 8,
+    "breakCount": 0,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 3.25,
+  },
+  {
+    "beforeIndex": 14,
+    "breakCount": 1,
+    "lastBreakPoints": 0,
+    "pointsRemaining": 5.25,
+  },
+]
+`;

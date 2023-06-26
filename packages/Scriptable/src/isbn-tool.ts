@@ -1,9 +1,10 @@
 // Scriptable front end for tool-core
 
-import { isObject } from './ts-utils.js';
-import { asidePathname, Store } from './scriptable-utils.js';
+import { isObject } from './lib/ts-utils.js';
+import { asidePathname, Store } from './lib/scriptable-utils.js';
 import { UITableUI } from './ui-uitable.js';
 import { Controller } from './ui-controller.js';
+import { AutoHeightUIRunner } from './lib/auto-height-ui-runner.js';
 
 // setTimeout and clearTimeout used by throttle
 declare const globalThis: Record<PropertyKey, unknown>;
@@ -35,8 +36,9 @@ const controller = new Controller(
   saveStore,
 );
 
-const ui = new UITableUI(controller, store.data.UITableUIData);
-await ui.present(true);
+const uiManager = await AutoHeightUIRunner.start();
+new UITableUI(controller, store.data.UITableUIData).run(uiManager);
+await uiManager.presentationsClosed;
 await controller.abortIfRunning();
 
 await saveStore();

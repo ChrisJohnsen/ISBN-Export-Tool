@@ -4,10 +4,10 @@ import production from 'consts:production';
 import git from 'consts:git';
 import { version } from 'utils';
 
-import { isObject } from './ts-utils.js';
-import { basename, localTempfile, Log, ReadWrite, Store } from './scriptable-utils.js';
+import { isObject } from './lib/ts-utils.js';
+import { basename, localTempfile, Log, ReadWrite, Store } from './lib/scriptable-utils.js';
+import { type AutoHeightUIRunner } from './lib/auto-height-ui-runner.js';
 import { type EditionsProgress, type EditionsSummary, type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UIRequestReceiver } from './ui-types.js';
-import { UITableBuilder } from './uitable-builder.js';
 
 import { assertNever } from 'utils';
 import { type EditionsService, type Fetcher, type Row, AllEditionsServices, parseCSVRows, type ProgressReport, bothISBNsOf, getEditionsOf, guessFormat, type ExportFormat } from 'utils';
@@ -15,7 +15,7 @@ import { type CheckStorage, isCheckStorage, webcheck, webcheckExpired } from 'ut
 import { toCSV } from 'utils';
 import { pick } from 'utils';
 
-export class Controller implements UIRequestReceiver {
+export class Controller implements UIRequestReceiver<AutoHeightUIRunner> {
   private disabledEditionsServices: Set<EditionsService>;
   // spell-checker:ignore Pathnamer
   constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string, private webcheckData: Record<string, unknown>, private saveData: () => Promise<void>) {
@@ -28,39 +28,35 @@ export class Controller implements UIRequestReceiver {
       this.disabledEditionsServices.add(service);
   }
   private testMode = !production;
-  async debugUI() {
-    const table = new UITable;
-    table.showSeparators = true;
-    const builder = new UITableBuilder(table, 'Debug UI');
-    const build = (reload = true) => {
-      reload && table.removeAllRows();
-
-      builder.addTextRow(`Version: ${version}`);
-      builder.addTextRow(`Git: ${git.description}`);
-      builder.addTextRow(production ? 'Production Mode' : 'Development Mode');
+  async debugUI(uiManager: AutoHeightUIRunner) {
+    const builder = uiManager.builder;
+    builder.table.showSeparators = true;
+    builder.title = 'Debug UI';
+    await uiManager.loop<never>(async loop => {
+      await builder.addTextRow(`Version: ${version}`);
+      await builder.addTextRow(`Git: ${git.description}`);
+      await builder.addTextRow(production ? 'Production Mode' : 'Development Mode');
       builder.addEmptyRow();
-      builder.addRowWithDescribedCells([
-        { type: 'text', title: 'Test Mode?', align: 'left' },
-        { type: 'text', title: String(this.testMode), align: 'right' },
-      ], { onSelect: () => { this.testMode = !this.testMode; build() } });
-      builder.addIndentRow('Test Mode makes the following changes:\n'
+      await builder.adderForTableRow(
+        [{ widthWeight: 1, align: 'left' }, { widthWeight: 1, align: 'right' }]
+      )(
+        ['Test Mode?', String(this.testMode)],
+        { onSelect: () => { this.testMode = !this.testMode; loop.again() } });
+      await builder.addIndentRow('Test Mode makes the following changes:\n'
         + '1. The GetISBNs "Editions Of" cache is switched to a test-only location.\n'
-        + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.'
-        , { height: 149 });
+        + '2. The GetISBNs "Editions Of" services will not make actual network requests and instead return fake data.');
       // spell-checker:ignore olwe
       const olweStatus = this.disabledEditionsServices.has('Open Library WorkEditions') ? 'disabled' : 'enabled';
-      const olweToggle = () => this.enableEditionsService('Open Library WorkEditions', !this.disabledEditionsServices.has('Open Library WorkEditions'));
-      builder.addRowWithDescribedCells([
-        { type: 'text', title: 'OL:WE status', align: 'left' },
-        { type: 'text', title: olweStatus, align: 'right' },
-      ], { onSelect: () => { olweToggle(); build() } });
-      builder.addIndentRow('OL:WE requires 1+N fetches/ISBN (throttled to 1 fetch/second) '
-        + 'and probably gives the same results as OL:S (which needs only 1 fetch/ISBN).', { height: 132 });
-
-      reload && table.reload();
-    };
-    build(false);
-    await table.present(false);
+      const olweToggle = () => this.enableEditionsService('Open Library WorkEditions', this.disabledEditionsServices.has('Open Library WorkEditions'));
+      await builder.adderForTableRow(
+        [{ widthWeight: 1, align: 'left' }, { widthWeight: 1, align: 'right' }]
+      )(
+        ['OL:WE status', olweStatus],
+        { onSelect: () => { olweToggle(); loop.again() } });
+      await builder.addIndentRow('OL:WE requires 1+N fetches/ISBN (throttled to 1 fetch/second) '
+        + 'and probably gives the same results as OL:S (which needs only 1 fetch/ISBN).');
+    });
+    await uiManager.presentationsClosed;
   }
   private get pendingUpdate(): string | undefined {
     const content = this.webcheckData.updateContent;
@@ -217,7 +213,7 @@ export class Controller implements UIRequestReceiver {
 
     if (type == 'view') {
 
-      const file = localTempfile(filename, out);
+      const file = await localTempfile(filename, out);
       await QuickLook.present(file.pathname, true);
       await file.remove();
 
@@ -497,7 +493,6 @@ async function fakeFetcher(url: string): Promise<FetchResult> {
 
   throw `nope: ${url}`;
 }
-
 
 import { type CheckHeaders } from 'utils';
 

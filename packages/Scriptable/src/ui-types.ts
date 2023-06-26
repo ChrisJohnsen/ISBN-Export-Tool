@@ -26,8 +26,8 @@ export type EditionsProgress = { total: number, started: number, done: number, f
 export type RequestedInput = { type: 'clipboard' } | { type: 'file' };
 export type RequestedOutput = RequestedInput | { type: 'view' };
 
-export interface UIRequestReceiver {
-  debugUI(): Promise<void>,
+export interface UIRequestReceiver<D> {
+  debugUI(info: D): Promise<void>,
   updateStatus(): 'expired' | 'pending' | 'dormant',
   requestUpdateCheck(force?: boolean): Promise<boolean>,
   requestUpdateInstall(): Promise<boolean>,

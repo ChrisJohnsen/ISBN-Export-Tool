@@ -13,14 +13,18 @@ export function dirname(path: string) {
   return dirSlash.replace(/[/]*$/, '');
 }
 
-export function localTempfile(filename: string, contents?: string | Data): ReadWrite {
+export async function localTempfile(filename: string, contents?: string | Data): Promise<ReadWrite> {
   const rw = new ReadWrite(lfm.joinPath(lfm.temporaryDirectory(), filename));
   if (contents != null)
     if (typeof contents == 'string')
-      rw.writeString(contents);
+      await rw.writeString(contents);
     else
-      rw.write(contents);
+      await rw.write(contents);
   return rw;
+}
+
+export async function downloadFilesFromiCloud(paths: string[]) {
+  return Promise.all(paths.map(path => lfm.downloadFileFromiCloud(path))).then(() => paths);
 }
 
 /**

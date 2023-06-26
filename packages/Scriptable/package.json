@@ -18,7 +18,9 @@
   },
   "dependencies": {
     "outdent": "^0.8.0",
-    "utils": "workspace:^"
+    "typanion": "^3.12.1",
+    "utils": "workspace:^",
+    "web": "workspace:^"
   },
   "scripts": {
     "release": "node release.js"
