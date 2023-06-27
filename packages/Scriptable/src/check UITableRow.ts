@@ -1,4 +1,6 @@
+import production from 'consts:production';
 import * as t from 'typanion';
+import { buildSourceAndLicenses } from './build-source-and-licenses.js';
 import { AutoHeightUIRunner } from './lib/auto-height-ui-runner.js';
 import { type FontMeasurer, type FontMeasures } from './lib/measure.js';
 import { apportionWidth } from './lib/row-width.js';
@@ -6,7 +8,6 @@ import { rulerImage } from './lib/ruler-image.js';
 import { Store, asidePathname, localTempfile } from './lib/scriptable-utils.js';
 import { estimatedHeightOf, heightFor } from './lib/text-height.js';
 import { fontNames, type NamedFont } from './lib/uitable-builder.js';
-import { buildSourceAndLicenses } from './build-source-and-licenses.js';
 
 async function main() {
   for (let saiWebViewBehind = false; ; saiWebViewBehind = !saiWebViewBehind)
@@ -30,6 +31,11 @@ async function main2(saiWebViewBehind: boolean) {
     if (!await measurePadding())
       return; // table closed
 
+  const insetsStatusLog: PortraitAndLandscape<{ times: number, matches: number }> = {
+    portrait: { times: 0, matches: 0 },
+    landscape: { times: 0, matches: 0 },
+  };
+
   let n = 0; // debug counter
   const screenScale = Device.screenScale();
   const runAgain = await ui.loop<true>(async (loop, { safeAreaInsets }) => {
@@ -37,6 +43,47 @@ async function main2(saiWebViewBehind: boolean) {
     const screenSize = Device.screenSize();
 
     await builder.addTitleConfigRow();
+    builder.addEmptyRow();
+
+    const orientation = orientationName(screenSize);
+    const insetStatus = (function checkAndLogInsetsStatus() {
+      const log = insetsStatusLog[orientation];
+      log.times++;
+      const wp = padding[orientation].widthPadding;
+      if (!(isFinite(safeAreaInsets.left) && isFinite(safeAreaInsets.right))) {
+        console.error(`unusable insets: ${JSON.stringify(safeAreaInsets)}`);
+        return 'insets not usable';
+      }
+      if (wp != 40 + safeAreaInsets.left + safeAreaInsets.right) {
+        console.error(`insets do not match padding: ${JSON.stringify(safeAreaInsets)} vs. padding ${wp} for width ${screenSize.width}`);
+        return 'insets do not match padding';
+      }
+      log.matches++;
+      return 'insets match padding';
+    })();
+
+    const goodOpts = { backgroundColor: Color.blue() };
+    const warnOpts = { backgroundColor: Color.yellow() };
+    const errorOpts = { backgroundColor: Color.red() };
+
+    const orientations = ['portrait', 'landscape'] as const;
+    const statuses = mapPnLs([insetsStatusLog], l => l.times == 0
+      ? 'untried'
+      : l.matches / l.times >= 0.9
+        ? 'good'
+        : 'bad');
+    const eachUntriedOrOkay = orientations.every(o => statuses[o] == 'untried' || statuses[o] == 'good');
+    await builder.addTextRow('Insets/Padding Match Status', eachUntriedOrOkay ? {} : errorOpts);
+    for (const orientation of orientations) {
+      const log = insetsStatusLog[orientation];
+      const opts = (() => {
+        const s = statuses[orientation];
+        if (s == 'untried') return warnOpts;
+        else if (s == 'good') return goodOpts;
+        else return errorOpts;
+      })();
+      await builder.addIndentRow(`${orientation} ${log.matches} of ${log.times} times${log.times == 0 ? `\n(please try the ${orientation} orientation, too)` : ''}`, opts);
+    }
     builder.addEmptyRow();
 
     await builder.addForwardRow('Show Line Breaks', () => showLineBreaks(ui));
@@ -53,32 +100,29 @@ async function main2(saiWebViewBehind: boolean) {
     await builder.addForwardRow('Toggle "Visibility" of Safe Area Inset WebView', () => loop.return(true));
     builder.addEmptyRow();
 
-    await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height}pt ${screenScale}× scale`);
-    const saiRow = await builder.addTextRow(`safe area insets (pt): left:${safeAreaInsets.left} right:${safeAreaInsets.right}`);
-    if (isFinite(safeAreaInsets.left) && isFinite(safeAreaInsets.right)) {
-      if (padding[orientationName(screenSize)].widthPadding != 40 + safeAreaInsets.left + safeAreaInsets.right) {
-        console.error(`insets do not match padding: ${JSON.stringify(safeAreaInsets)} vs. padding ${padding[orientationName(screenSize)].widthPadding} for width ${screenSize.width}`);
-        (await builder.addTextRow('WIDTH PADDING DOES NOT MATCH INSETS')).backgroundColor = Color.red();
-      }
-    } else {
-      console.error(`unusable insets: ${JSON.stringify(safeAreaInsets)}`);
-      saiRow.backgroundColor = Color.red();
+    const infoOpts = { backgroundColor: Color.gray() };
+    await builder.addTextRow(`device: ${Device.model()} (${Device.isPhone() ? 'phone' : Device.isPad() ? 'pad' : 'other'}) ${Device.systemName()} ${Device.systemVersion()}`, infoOpts);
+    await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height}pt ${screenScale}× scale`, infoOpts);
+    await builder.addTextRow(`safe area insets (pt): left:${safeAreaInsets.left} right:${safeAreaInsets.right}`, insetStatus == 'insets match padding' ? infoOpts : goodOpts);
+    if (insetStatus == 'insets do not match padding') {
+      await builder.addTextRow('INSETS DO NOT MATCH WIDTH PADDING', errorOpts);
+      if (padding.source == 'default')
+        await builder.addTextRow('Please try using "Measuring Paddings" to measure this device\'s row paddings.', errorOpts);
     }
-
     if (padding.portrait.heightPadding == padding.landscape.heightPadding)
-      await builder.addTextRow(`UITableRow (image) height padding (pt): ${padding.portrait.heightPadding}`);
+      await builder.addTextRow(`UITableRow (image) height padding (pt): ${padding.portrait.heightPadding}`, infoOpts);
     else
-      (await builder.addTextRow(`UITableRow (image) height paddings(!) (pt): P ${padding.portrait.heightPadding} L ${padding.landscape.heightPadding}`)).backgroundColor = Color.red();
-    await builder.addTextRow(`UITableRow (image) width paddings (pt): P ${padding.portrait.widthPadding} L ${padding.landscape.widthPadding}`);
-    await builder.addTextRow(`padding source: ${padding.source}`);
+      await builder.addTextRow(`UITableRow (image) height paddings (pt): P ${padding.portrait.heightPadding} != L ${padding.landscape.heightPadding}`, errorOpts);
+    await builder.addTextRow(`UITableRow (image) width paddings (pt): P ${padding.portrait.widthPadding} L ${padding.landscape.widthPadding}`, infoOpts);
+    await builder.addTextRow(`padding source: ${padding.source}`, infoOpts);
     builder.addEmptyRow();
 
-    // if (dependencies.length > 0)
-    await builder.addForwardRow('Source Code and Licenses', () => ui.loop(async loop => {
-      await builder.addTitleConfigRow();
-      await builder.addBackRow('Back', () => loop.return());
-      await buildSourceAndLicenses(builder);
-    }));
+    if (production)
+      await builder.addForwardRow('Source Code and Licenses', () => ui.loop(async loop => {
+        await builder.addTitleConfigRow();
+        await builder.addBackRow('Back', () => loop.return());
+        await buildSourceAndLicenses(builder);
+      }));
   });
 
   if (runAgain) {

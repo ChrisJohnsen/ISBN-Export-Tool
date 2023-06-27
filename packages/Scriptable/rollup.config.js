@@ -112,6 +112,7 @@ export default async cliOptions => {
     plugins: [
       deferPlugin('consts', async () =>
         consts({
+          production,
           dependencies: production ? await gatherLicenses(rowInput) : [],
         }))(),
       virtualForMeasureImageCode(),

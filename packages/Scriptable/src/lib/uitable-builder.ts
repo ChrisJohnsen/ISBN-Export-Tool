@@ -5,7 +5,7 @@ import { FontMeasurer, type FontMeasures } from './measure.js';
 import { estimatedHeightOf, heightFor, inspectEstimatedLines } from './text-height.js';
 import { apportionWidth } from './row-width.js';
 
-type RowOpts = { onSelect?: () => void, dismissOnSelect?: boolean, height?: number, cellSpacing?: number };
+type RowOpts = { onSelect?: () => void, dismissOnSelect?: boolean, height?: number, cellSpacing?: number, backgroundColor?: Color };
 function buildRow(opts?: RowOpts): UITableRow {
   const row = new UITableRow;
   if (opts?.onSelect) {
@@ -18,6 +18,8 @@ function buildRow(opts?: RowOpts): UITableRow {
     row.height = opts.height;
   if (opts?.cellSpacing)
     row.cellSpacing = opts.cellSpacing;
+  if (opts?.backgroundColor)
+    row.backgroundColor = opts.backgroundColor;
   return row;
 }
 type AlignOpts = { align?: 'left' | 'center' | 'right', widthWeight?: number };
