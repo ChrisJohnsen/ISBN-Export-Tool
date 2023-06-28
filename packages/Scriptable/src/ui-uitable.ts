@@ -559,7 +559,6 @@ class PickEditionsServicesState implements UIState {
   }
   private progressState?: EditionsProgressState;
   private editionsProgress(setState: SetState, progress: EditionsProgress) {
-    // XXX configuration is available during progress, but it is effectively unusable because a new progress will be reported every second (thus switching from config state back to progress)
     if (!this.progressState) {
       this.progressState = new EditionsProgressState(this, this.igs.group, progress);
       setState(this.progressState);
@@ -718,6 +717,7 @@ class NetworkAccessState implements UIState {
 
 class EditionsProgressState implements UIState {
   static readonly title = 'Other Editions Progress';
+  readonly hideConfig = true;
   constructor(private back: UIState, private group: { kind: string, name: string }, private editionsProgress: EditionsProgress) { }
   async build(builder: UITableBuilder, setState: SetState, controller: Controller) {
     await builder.addBackRow('Cancel Other Editions', async () => {
