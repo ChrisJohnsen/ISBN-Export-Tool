@@ -7,7 +7,7 @@ import { apportionWidth } from './lib/row-width.js';
 import { rulerImage } from './lib/ruler-image.js';
 import { Store, asidePathname, localTempfile } from './lib/scriptable-utils.js';
 import { estimatedHeightOf, heightFor } from './lib/text-height.js';
-import { fontNames, type NamedFont } from './lib/uitable-builder.js';
+import { fontNames, textCell, type NamedFont } from './lib/uitable-builder.js';
 
 async function main() {
   for (let saiWebViewBehind = false; ; saiWebViewBehind = !saiWebViewBehind)
@@ -97,6 +97,10 @@ async function main2(saiWebViewBehind: boolean) {
     await builder.addForwardRow('Measure Fonts', () => measureFonts(ui));
     builder.addEmptyRow();
 
+    await builder.addForwardRow('Measure Paddings By Moiré', () => measurePaddingByMoire());
+    await builder.addIndentRow(textCell('This technique is probably more difficult to use than the default "gap" technique. The first step requires subtle discernment that may not be obvious unless you already know what to look for.', { titleFont: 'footnote' }));
+    builder.addEmptyRow();
+
     await builder.addForwardRow('Toggle "Visibility" of Safe Area Inset WebView', () => loop.return(true));
     builder.addEmptyRow();
 
@@ -159,6 +163,20 @@ async function main2(saiWebViewBehind: boolean) {
     }
     return newPadding && padding;
   }
+  async function measurePaddingByMoire() {
+    const heightPadding = await measureHeightPaddingByMoire(ui);
+    if (!heightPadding) return;
+
+    const widthPaddings = await measureWidthPaddingsByMoire(ui, heightPadding);
+
+    return ui.loop(async loop => {
+      await ui.builder.addTitleConfigRow();
+      await ui.builder.addBackRow('Back', () => loop.return());
+      ui.builder.addEmptyRow();
+      await ui.builder.addTextRow(`Height Padding: ${heightPadding}`);
+      await ui.builder.addTextRow(`Width Paddings: P ${widthPaddings.portrait} L ${widthPaddings.landscape}`);
+    });
+  }
 }
 
 function orientationName(screenSize: Size) {
@@ -218,13 +236,10 @@ async function measurePaddingsByGapObservation(ui: AutoHeightUIRunner): Promise<
   return await ui.loop(async loop => {
     const screenSize = Device.screenSize();
 
-    let heightUsed = 0;
-    const ah = (r: UITableRow) => heightUsed += r.height;
-    const padTo = (height: number, r: UITableRow) => r.height = Math.max(0, Math.round(height - heightUsed));
-
     // add title, and scroll padding rows
-    ah(await builder.addTitleConfigRow());
-    ah(await builder.addBackRow('Skip Measurement', () => loop.return('use defaults')));
+    const tp = new VariablePadding(screenSize.height * .75);
+    tp.deduct(await builder.addTitleConfigRow());
+    tp.deduct(await builder.addBackRow('Skip Measurement', () => loop.return('use defaults')));
     const topScrollPad = builder.addEmptyRow();
 
     function unfinishedStateForOrientation(o: keyof typeof allState) {
@@ -265,8 +280,8 @@ async function measurePaddingsByGapObservation(ui: AutoHeightUIRunner): Promise<
     const { rowHeight, state } = orientedState;
 
     // add instruction row
-    ah(await builder.addTextRow('Pick the first row with a gap between the squares. The gap might be quite small!'));
-    padTo(screenSize.height * .75, topScrollPad);
+    tp.deduct(await builder.addTextRow('Pick the first row with a gap between the squares. The gap might be quite small!'));
+    tp.setOn(topScrollPad);
 
     // add test rows
     const steps = 16;
@@ -297,15 +312,15 @@ async function measurePaddingsByGapObservation(ui: AutoHeightUIRunner): Promise<
     // pick first row that is "indented" any amount (even a tiny amount; probably need to use zoom)
 
     // add scroll padding, and informational rows
-    heightUsed = 0;
+    const bp = new VariablePadding(screenSize.height * .75);
     const bottomScrollPad = builder.addEmptyRow();
-    ah(await builder.addTextRow(`device scale: ${screenScale}×`));
-    ah(await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`));
-    ah(await builder.addTextRow(`row cell weighting total: ${widthWeightTotal}`));
-    ah(await builder.addTextRow(`row height: ${rowHeight}`));
-    ah(await builder.addTextRow(`${state.lowerBound} <= cell weight < ${state.upperBound}`));
-    ah(await builder.addTextRow(`${(widthWeightTotal / state.upperBound).toFixed(6)} < ar <= ${(widthWeightTotal / state.lowerBound).toFixed(6)}`));
-    padTo(screenSize.height * .75, bottomScrollPad);
+    bp.deduct(await builder.addTextRow(`device scale: ${screenScale}×`));
+    bp.deduct(await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`));
+    bp.deduct(await builder.addTextRow(`row cell weighting total: ${widthWeightTotal}`));
+    bp.deduct(await builder.addTextRow(`row height: ${rowHeight}`));
+    bp.deduct(await builder.addTextRow(`${state.lowerBound} <= cell weight < ${state.upperBound}`));
+    bp.deduct(await builder.addTextRow(`${(widthWeightTotal / state.upperBound).toFixed(6)} < ar <= ${(widthWeightTotal / state.lowerBound).toFixed(6)}`));
+    bp.setOn(bottomScrollPad);
   });
 }
 function addImage(row: UITableRow, image: Image, fn: (imageCell: UITableCell) => void) {
@@ -319,6 +334,17 @@ function linear(zero: number, one: number, denominator: number): (numerator: num
     else
       throw new RangeError(`linear interpolation: ${numerator}/${denominator} not between 0 and 1 (both inclusive)`);
   };
+}
+class VariablePadding {
+  constructor(private targetHeight: number) { }
+  deduct<R extends { get height(): number }>(r: R): R {
+    this.targetHeight -= r.height;
+    return r;
+  }
+  setOn<R extends { set height(height: number) }>(r: R): R {
+    r.height = Math.max(0, Math.round(this.targetHeight));
+    return r;
+  }
 }
 
 // spell-checker:word moiré
@@ -336,7 +362,7 @@ async function measureHeightPaddingByMoire(ui: AutoHeightUIRunner) {
   const min = 100;
   const tooMuch = min + 32; // XXX what if padding is actually more?
 
-  return await ui.loop<number>(async loop => {
+  return await ui.loop<number | undefined>(async loop => {
     const screenSize = Device.screenSize();
     const orientation = orientationName(screenSize);
     const portraitWidth = orientation == 'portrait' ? screenSize.width : screenSize.height;
@@ -354,31 +380,33 @@ async function measureHeightPaddingByMoire(ui: AutoHeightUIRunner) {
       return;
     }
 
-    // add fixed rows
-    await builder.addTitleConfigRow();
-    await builder.addTextRow(`device scale: ${screenScale}×`);
-    await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`);
-    await builder.addTextRow(`ih: ${imageHeight}: ${min} <= rh < ${tooMuch}`);
-    builder.addEmptyRow();
+    // add title, and scroll padding rows
+    const tp = new VariablePadding(screenSize.height * .75);
+    tp.deduct(await builder.addTitleConfigRow());
+    tp.deduct(await builder.addBackRow('Skip Measurement', () => loop.return(void 0)));
+    const topScrollPad = builder.addEmptyRow();
 
-    await builder.addTextRow('Pick the row, with the most consistent and least blurred moiré pattern.');
-    builder.addEmptyRow();
+    // add instruction row
+    tp.deduct(await builder.addTextRow('Pick the row, with the most consistent and least blurred moiré pattern.'));
+    tp.setOn(topScrollPad);
 
     // add test rows
     for (let h = min; h < tooMuch; h++)
       addRulerRow(builder.table, h, new Size(Math.trunc(portraitWidth / 2), imageHeight), (size, rowHeight) => loop.return(rowHeight - size.height));
 
-    // add spacer rows (lets lower test rows be scrolled into zoom window)
-    for (let i = 0; i < 5; i++)
-      builder.addEmptyRow();
+    // add scroll padding, and informational rows
+    const bp = new VariablePadding(screenSize.height * .75);
+    const bottomScrollPad = builder.addEmptyRow();
+    bp.deduct(await builder.addTextRow(`device scale: ${screenScale}×`));
+    bp.deduct(await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`));
+    bp.deduct(await builder.addTextRow(`ih: ${imageHeight}: ${min} <= rh < ${tooMuch}`));
+    bp.setOn(bottomScrollPad);
   });
 }
 
 async function measureWidthPaddingsByMoire(ui: AutoHeightUIRunner, heightPadding: number, portraitImageWidthBounds?: [number, number]): Promise<PortraitAndLandscape<number | null>> {
   const builder = ui.builder;
   builder.title = 'Measuring Width Padding';
-
-  const updateBuilderFont = ui.fontChangeNotifier.subscribe(fontMeasures => builder.setBodyFontMeasures(fontMeasures));
 
   const screenScale = Device.screenScale();
 
@@ -410,18 +438,17 @@ async function measureWidthPaddingsByMoire(ui: AutoHeightUIRunner, heightPadding
 
     builder.rowWidth = state.width >= 100 ? state.width : null;
 
-    // add fixed rows
-    await builder.addTitleConfigRow();
-    await builder.addTextRow(`device scale: ${screenScale}×`);
-    await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`);
-    await builder.addTextRow(`current: by ${increment}, ${state.width} <= image width < ${state.tooWide}`);
-    builder.addEmptyRow();
+    // add title, and scroll padding rows
+    const tp = new VariablePadding(screenSize.height * .75);
+    tp.deduct(await builder.addTitleConfigRow());
+    tp.deduct(await builder.addBackRow('Skip Measurement', () => loop.return()));
+    const topScrollPad = builder.addEmptyRow();
 
     if (state.done)
       await builder.addTextRow('Row measurement for this orientation is done. Please rotate your device and continue.');
     else {
-      await builder.addTextRow('Pick the lowest row that shows the consistent, un-blurred moiré pattern that matches the pattern shown in the first row).');
-      builder.addEmptyRow();
+      tp.deduct(await builder.addTextRow('Pick the lowest row that shows the consistent, un-blurred moiré pattern that matches the pattern shown in the first row).'));
+      tp.setOn(topScrollPad);
 
       // add test rows
       for (let imageWidth = state.width; imageWidth < state.tooWide; imageWidth += increment)
@@ -437,17 +464,19 @@ async function measureWidthPaddingsByMoire(ui: AutoHeightUIRunner, heightPadding
             loop.again();
         });
 
-      // add spacer rows (lets lower test rows be scrolled into zoom window)
-      for (let i = 0; i < 5; i++)
-        builder.addEmptyRow();
+      // add scroll padding, and informational rows
+      const bp = new VariablePadding(screenSize.height * .75);
+      const bottomScrollPad = builder.addEmptyRow();
+      bp.deduct(await builder.addTextRow(`device scale: ${screenScale}×`));
+      bp.deduct(await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`));
+      bp.deduct(await builder.addTextRow(`current: by ${increment}, ${state.width} <= image width < ${state.tooWide}`));
+      bp.setOn(bottomScrollPad);
     }
 
     function incrementFor(state: State) {
       return powerOf(10, state.tooWide, state.width);
     }
   });
-
-  updateBuilderFont.unsubscribe();
 
   return {
     portrait: widthPaddingIn('portrait'),
