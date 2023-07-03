@@ -19,6 +19,7 @@ export class AutoHeightUIRunner {
     public readonly safeAreaInsetsFetcher: SafeAreaInsetsFetcher,
     public readonly presentationsClosed: Promise<void>,
     public readonly orientationChangeNotifier: OrientationChangeNotifier,
+    public readonly fontMeasurer: FontMeasurer,
     public readonly fontChangeNotifier: FontChangeNotifier,
   ) { }
   static async start(opts: { visibleSafeAreaInsetWebView: boolean } = { visibleSafeAreaInsetWebView: false }) {
@@ -37,6 +38,7 @@ export class AutoHeightUIRunner {
       safeAreaInsetsFetcher,
       tableClosed.then(() => safeAreaInsetsFetcher.webviewClosed),
       new OrientationChangeNotifier,
+      fm,
       await FontChangeNotifier.create(5000, fm));
   }
   async startNewTable() {
@@ -50,6 +52,7 @@ export class AutoHeightUIRunner {
       this.safeAreaInsetsFetcher,
       tableClosed.then(), // this new runner didn't present the SAI fetcher, so it shouldn't automatically let its users wait for it to close
       this.orientationChangeNotifier,
+      this.fontMeasurer,
       this.fontChangeNotifier);
   }
   private activeLoop: { n: number, pauseFor?: (subTask: Promise<void>) => void } | undefined;

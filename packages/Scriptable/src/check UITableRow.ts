@@ -537,7 +537,7 @@ async function measureFonts(ui: AutoHeightUIRunner) {
       const { enWidth, lineSpacing } = fontMeasures;
       if (!measures.has(enWidth)) {
         const { lineCount: diacriticLineCount, height: diacriticHeight } =
-          await measureLinesWithDiacritics(ui.fontChangeNotifier.measurer, enWidth, lineSpacing);
+          await measureLinesWithDiacritics(ui.fontMeasurer, enWidth, lineSpacing);
         measures.set(enWidth, { ...fontMeasures, diacriticHeight, diacriticLineCount });
         return loop.again();
       }
@@ -724,8 +724,8 @@ async function measureHeights(ui: AutoHeightUIRunner) {
 
     if (!startAction || startAction == 'back') return;
 
-    const bodyFm = await ui.fontChangeNotifier.measurer.measureFont();
-    const pickedFm = await ui.fontChangeNotifier.measurer.measureFont(Font[font]());
+    const bodyFm = await ui.fontMeasurer.measureFont();
+    const pickedFm = await ui.fontMeasurer.measureFont(Font[font]());
     let prev = heightFor(startingLineCount - 2, bodyFm, pickedFm);
     let current = heightFor(startingLineCount, bodyFm, pickedFm);
     let notEnough = prev;
