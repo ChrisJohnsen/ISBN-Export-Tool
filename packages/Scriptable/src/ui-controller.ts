@@ -6,6 +6,7 @@ import { version } from 'utils';
 
 import { isObject } from './lib/ts-utils.js';
 import { basename, localTempfile, Log, ReadWrite, Store } from './lib/scriptable-utils.js';
+import { type UITableBuilder } from './lib/uitable-builder.js';
 import { type AutoHeightUIRunner } from './lib/auto-height-ui-runner.js';
 import { type EditionsProgress, type EditionsSummary, type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UIRequestReceiver } from './ui-types.js';
 
@@ -15,7 +16,8 @@ import { type CheckStorage, isCheckStorage, webcheck, webcheckExpired } from 'ut
 import { toCSV } from 'utils';
 import { pick } from 'utils';
 
-export class Controller implements UIRequestReceiver<AutoHeightUIRunner> {
+type UIRunner = AutoHeightUIRunner<UITableBuilder>;
+export class Controller implements UIRequestReceiver<UIRunner> {
   private disabledEditionsServices: Set<EditionsService>;
   // spell-checker:ignore Pathnamer
   constructor(private logPathnamer: (testMode: boolean) => string, private cachePathnamer: (testMode: boolean) => string, private webcheckData: Record<string, unknown>, private saveData: () => Promise<void>) {
@@ -28,7 +30,7 @@ export class Controller implements UIRequestReceiver<AutoHeightUIRunner> {
       this.disabledEditionsServices.add(service);
   }
   private testMode = !production;
-  async debugUI(uiManager: AutoHeightUIRunner) {
+  async debugUI(uiManager: UIRunner) {
     const builder = uiManager.builder;
     builder.table.showSeparators = true;
     builder.title = 'Debug UI';

@@ -1,9 +1,10 @@
 // helper that builds common patterns of UITable elements
 
 import { assertNever } from 'utils/ts-utils.js';
+import { type AutoHeightUIBuilder } from './auto-height-ui-runner.js';
 import { FontMeasurer, type FontMeasures } from './measure.js';
-import { estimatedHeightOf, heightFor, inspectEstimatedLines } from './text-height.js';
 import { apportionWidth } from './row-width.js';
+import { estimatedHeightOf, heightFor, inspectEstimatedLines } from './text-height.js';
 
 type RowOpts = { onSelect?: () => void, dismissOnSelect?: boolean, height?: number, cellSpacing?: number, backgroundColor?: Color };
 function buildRow(opts?: RowOpts): UITableRow {
@@ -142,7 +143,7 @@ function rowHeight(selectable: boolean, ...rowHeights: (number | undefined)[]) {
   else return max;
 }
 
-export class UITableBuilder {
+export class UITableBuilder implements AutoHeightUIBuilder {
   public title = 'Untitled UI';
   private constructor(public table: UITable, private fontMeasurer: FontMeasurer, fontMeasures: FontMeasures) {
     this.fontMeasureCache.set('body', fontMeasures);
@@ -163,7 +164,7 @@ export class UITableBuilder {
   }
 
   private fontMeasureCache = new Map<NamedFont, FontMeasures>;
-  setBodyFontMeasures(fontMeasures: FontMeasures) {
+  set bodyFontMeasures(fontMeasures: FontMeasures) {
     const oldBody = this.fontMeasureCache.get('body');
     if (oldBody && oldBody.enWidth == fontMeasures.enWidth && oldBody.lineSpacing == fontMeasures.lineSpacing)
       return;

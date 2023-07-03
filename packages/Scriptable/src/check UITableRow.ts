@@ -7,7 +7,9 @@ import { apportionWidth } from './lib/row-width.js';
 import { rulerImage } from './lib/ruler-image.js';
 import { Store, asidePathname, localTempfile } from './lib/scriptable-utils.js';
 import { estimatedHeightOf, heightFor } from './lib/text-height.js';
-import { fontNames, textCell, type NamedFont } from './lib/uitable-builder.js';
+import { UITableBuilder, fontNames, textCell, type NamedFont } from './lib/uitable-builder.js';
+
+type UIRunner = AutoHeightUIRunner<UITableBuilder>;
 
 async function main() {
   for (let saiWebViewBehind = false; ; saiWebViewBehind = !saiWebViewBehind)
@@ -16,7 +18,7 @@ async function main() {
 
 async function main2(saiWebViewBehind: boolean) {
 
-  const ui = await AutoHeightUIRunner.start({ visibleSafeAreaInsetWebView: saiWebViewBehind });
+  const ui = await AutoHeightUIRunner.start((t, fm) => UITableBuilder.create(t, fm), { visibleSafeAreaInsetWebView: saiWebViewBehind });
   let padding: PortraitAndLandscape<Padding> & { source: 'loaded previous measure' | 'measured' | 'default' } = {
     source: 'default',
     portrait: { heightPadding: 16, widthPadding: 40 },
@@ -199,7 +201,7 @@ type DePnLTuple<T extends readonly PortraitAndLandscape<unknown>[]> =
 
 type Padding = { heightPadding: number, widthPadding: number };
 
-async function measurePaddingsByGapObservation(ui: AutoHeightUIRunner): Promise<PortraitAndLandscape<Padding> | 'use defaults' | null> {
+async function measurePaddingsByGapObservation(ui: UIRunner): Promise<PortraitAndLandscape<Padding> | 'use defaults' | null> {
   const builder = ui.builder;
   // in a row with 0 cellSpacing,
   // put two images next to each other; left-align the left one, right-align the right one; they will only touch if their widthWeights are "snug"
@@ -348,7 +350,7 @@ class VariablePadding {
 }
 
 // spell-checker:word moiré
-async function measureHeightPaddingByMoire(ui: AutoHeightUIRunner) {
+async function measureHeightPaddingByMoire(ui: UIRunner) {
   // display an moire "screened" image of consistent height in rows of varying
   // heights; visually identify non-scaled row by moire pattern quality; this
   // may be hard to do without already having experience with what to look for:
@@ -404,7 +406,7 @@ async function measureHeightPaddingByMoire(ui: AutoHeightUIRunner) {
   });
 }
 
-async function measureWidthPaddingsByMoire(ui: AutoHeightUIRunner, heightPadding: number, portraitImageWidthBounds?: [number, number]): Promise<PortraitAndLandscape<number | null>> {
+async function measureWidthPaddingsByMoire(ui: UIRunner, heightPadding: number, portraitImageWidthBounds?: [number, number]): Promise<PortraitAndLandscape<number | null>> {
   const builder = ui.builder;
   builder.title = 'Measuring Width Padding';
 
@@ -523,7 +525,7 @@ function addRulerRow(t: UITable, rowHeight: number, imageSize: Size, pick?: (siz
   return r;
 }
 
-async function measureFonts(ui: AutoHeightUIRunner) {
+async function measureFonts(ui: UIRunner) {
   const builder = ui.builder;
 
   type Measures = FontMeasures & {
@@ -584,7 +586,7 @@ async function measureLinesWithDiacritics(fontMeasurer: FontMeasurer, enWidth: n
   return { lineCount: lines, height: renderHeight };
 }
 
-async function showLineBreaks(ui: AutoHeightUIRunner) {
+async function showLineBreaks(ui: UIRunner) {
   const builder = ui.builder;
   return await ui.loop(async loop => {
     await builder.addTitleConfigRow();
@@ -596,7 +598,7 @@ async function showLineBreaks(ui: AutoHeightUIRunner) {
     await builder.addForwardRow('Simple Numbered Lines', () => simpleNumberedLines(ui));
   });
 }
-async function artificialExamples(ui: AutoHeightUIRunner) {
+async function artificialExamples(ui: UIRunner) {
   const builder = ui.builder;
 
   type State = (string | { text: string, widthWeight: number, align: 'left' | 'center' | 'right' }[])[];
@@ -664,7 +666,7 @@ async function artificialExamples(ui: AutoHeightUIRunner) {
     await builder.addBackRow('Back', () => loop.return());
   });
 }
-async function simpleNumberedLines(ui: AutoHeightUIRunner) {
+async function simpleNumberedLines(ui: UIRunner) {
   const builder = ui.builder;
   let font: NamedFont = 'body';
   return await ui.loop(async loop => {
@@ -687,7 +689,7 @@ async function simpleNumberedLines(ui: AutoHeightUIRunner) {
 function numberedLines(n: number) {
   return new Array(n).fill(0).map((...[, i]) => i + 1).join('\n');
 }
-async function measureHeights(ui: AutoHeightUIRunner) {
+async function measureHeights(ui: UIRunner) {
   const builder = ui.builder;
 
   let font: NamedFont = 'body';
@@ -823,7 +825,7 @@ async function measureHeights(ui: AutoHeightUIRunner) {
     if (!measureAction || measureAction == 'quit') return;
   }
 }
-function pickFont(ui: AutoHeightUIRunner, currentFont: NamedFont) {
+function pickFont(ui: UIRunner, currentFont: NamedFont) {
   const builder = ui.builder;
   return ui.loop<NamedFont>(async loop => {
     await builder.addTitleConfigRow();
@@ -837,7 +839,7 @@ function pickFont(ui: AutoHeightUIRunner, currentFont: NamedFont) {
   });
 }
 
-async function showSafeAreaInsets(ui: AutoHeightUIRunner) {
+async function showSafeAreaInsets(ui: UIRunner) {
   const builder = ui.builder;
   await ui.loop(async (loop, { safeAreaInsets }) => {
     await builder.addTitleConfigRow();

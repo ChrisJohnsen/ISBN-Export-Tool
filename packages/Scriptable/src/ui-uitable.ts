@@ -10,10 +10,11 @@ import { buildSourceAndLicenses } from './build-source-and-licenses.js';
 
 type SetState = (state: UIState) => void;
 
-type Controller = UIRequestReceiver<AutoHeightUIRunner>;
+type UIRunner = AutoHeightUIRunner<UITableBuilder>;
+type Controller = UIRequestReceiver<UIRunner>;
 interface UIState {
   readonly hideConfig?: true,
-  build(builder: UITableBuilder, setState: SetState, controller: Controller, newManagedTable: () => Promise<AutoHeightUIRunner>): Promise<void>,
+  build(builder: UITableBuilder, setState: SetState, controller: Controller, newManagedTable: () => Promise<UIRunner>): Promise<void>,
 }
 // no good way to tell TS that UIState should have a static title, so...
 function title(state: UIState): string {
@@ -72,7 +73,7 @@ export class UITableUI {
     this.savedDataObject.extraLines = this.savable.extraLines;
   }
   private state: UIState = new UpdateState(this.savable);
-  async run(ui: AutoHeightUIRunner) {
+  async run(ui: UIRunner) {
     ui.builder.title = 'ISBN Export Tool';
     ui.builder.table.showSeparators = true;
     ui.builder.extraLineEvery = this.savable.extraLines;
@@ -103,7 +104,7 @@ class ConfigurationState implements UIState {
   readonly hideConfig = true;
   constructor(private back: UIState, private savable: SavableData) { }
   private justUpdated = false;
-  async build(builder: UITableBuilder, setState: SetState, controller: Controller, newManagedTable: () => Promise<AutoHeightUIRunner>) {
+  async build(builder: UITableBuilder, setState: SetState, controller: Controller, newManagedTable: () => Promise<UIRunner>) {
     if (this.justUpdated)
       return void await builder.addTextRow('Update installed. Will restart in 5 seconds.');
 

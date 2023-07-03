@@ -3,7 +3,6 @@ import * as t from 'typanion';
 import { FontMeasurer, type FontMeasures } from './measure.js';
 import { FontChangeNotifier, OrientationChangeNotifier } from './polled-notifications.js';
 import { openPromise } from './ts-utils.js';
-import { UITableBuilder } from './uitable-builder.js';
 
 type LoopFunction<T> = (loop: LoopControl<T>, info: { fontMeasures: FontMeasures, safeAreaInsets: { left: number, right: number } }) => void | Promise<unknown>;
 type LoopControl<T> = {
@@ -11,10 +10,18 @@ type LoopControl<T> = {
   return: (value: T) => void,
 };
 
-export class AutoHeightUIRunner {
+export interface AutoHeightUIBuilder {
+  set rowWidth(width: number | null);
+  set bodyFontMeasures(fontMeasures: FontMeasures);
+}
+type CreateBuilder<B extends AutoHeightUIBuilder> = (table: UITable, fontMeasurer: FontMeasurer) => Promise<B> | B;
+
+export class AutoHeightUIRunner<B extends AutoHeightUIBuilder> {
   private constructor(
+    private readonly table: UITable,
     private readonly tableClosed: Promise<'table closed'>,
-    public readonly builder: UITableBuilder,
+    private readonly createBuilder: CreateBuilder<B>,
+    public readonly builder: B,
     private readonly saiVisible: boolean,
     public readonly safeAreaInsetsFetcher: SafeAreaInsetsFetcher,
     public readonly presentationsClosed: Promise<void>,
@@ -22,7 +29,7 @@ export class AutoHeightUIRunner {
     public readonly fontMeasurer: FontMeasurer,
     public readonly fontChangeNotifier: FontChangeNotifier,
   ) { }
-  static async start(opts: { visibleSafeAreaInsetWebView: boolean } = { visibleSafeAreaInsetWebView: false }) {
+  static async start<B extends AutoHeightUIBuilder>(createBuilder: CreateBuilder<B>, opts: { visibleSafeAreaInsetWebView: boolean } = { visibleSafeAreaInsetWebView: false }) {
 
     const safeAreaInsetsFetcher = await SafeAreaInsetsFetcher.create(opts.visibleSafeAreaInsetWebView);
 
@@ -32,8 +39,10 @@ export class AutoHeightUIRunner {
     const fm = new FontMeasurer;
 
     return new AutoHeightUIRunner(
+      table,
       tableClosed,
-      await UITableBuilder.create(table, fm),
+      createBuilder,
+      await createBuilder(table, fm),
       opts.visibleSafeAreaInsetWebView,
       safeAreaInsetsFetcher,
       tableClosed.then(() => safeAreaInsetsFetcher.webviewClosed),
@@ -44,9 +53,11 @@ export class AutoHeightUIRunner {
   async startNewTable() {
     const table = new UITable;
     const tableClosed = table.present(!this.saiVisible).then(() => 'table closed' as const);
-    const builder = await UITableBuilder.create(table, this.fontChangeNotifier.measurer);
+    const builder = await this.createBuilder(table, this.fontMeasurer);
     return new AutoHeightUIRunner(
+      table,
       tableClosed,
+      this.createBuilder,
       builder,
       this.saiVisible,
       this.safeAreaInsetsFetcher,
@@ -131,12 +142,12 @@ export class AutoHeightUIRunner {
                 this.builder.rowWidth = null;
 
               if (newFont)
-                this.builder.setBodyFontMeasures(fontMeasures);
+                this.builder.bodyFontMeasures = fontMeasures;
               newFont = false;
 
-              this.builder.table.removeAllRows();
+              this.table.removeAllRows();
               await fn(loop, { fontMeasures, safeAreaInsets });
-              this.builder.table.reload();
+              this.table.reload();
             } else
               endThisIteration(pausedFor.then(() => 'loop again' as const));
 
