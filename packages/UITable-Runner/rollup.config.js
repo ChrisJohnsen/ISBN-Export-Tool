@@ -21,7 +21,7 @@ export default async cliOptions => {
   };
 
   const virtualForMeasureImageCode = deferPlugin('virtual', async () => {
-    const { code, files } = await prebuild(modifyPath('src/web/measure-image.ts'));
+    const { code, files } = await prebuild(modifyPath('src/web/measure-image.ts'), cwd);
     files.forEach(f => extraWatchFiles.add(f));
     return virtual({
       'measure-image code': 'export default ' + JSON.stringify(code),
@@ -29,7 +29,7 @@ export default async cliOptions => {
   }, true);
 
   const virtualForSafeAreaInsetsCode = deferPlugin('virtual', async () => {
-    const { code, files } = await prebuild(modifyPath('src/web/safe-area-insets.ts'));
+    const { code, files } = await prebuild(modifyPath('src/web/safe-area-insets.ts'), cwd);
     files.forEach(f => extraWatchFiles.add(f));
     return virtual({
       'safe-area-insets code': 'export default ' + JSON.stringify(code),
@@ -99,13 +99,31 @@ Bundled Dependencies:<% dependencies.forEach(dep => { %>
   return configs;
 };
 
-async function prebuild(input) {
+async function prebuild(input, cwd) {
   try {
     const { rollup } = await import('rollup');
     const bundle = await rollup({
       input,
-      plugins: [node_resolve(), esbuild({ target: 'es2022' })],
-      // XXX if prebuilt code uses any dependencies, the license processing will miss them!
+      plugins: [
+        // prebuilt code must not use any dependencies: we could capture
+        // dependency information and integrate it into the "bundled" file's
+        // banner, but there is currently no good way to notify "package"
+        // dependents of such "pre-bundled" dependencies
+        license({
+          cwd,
+          // banner: '#deps == <%= dependencies.length %>',
+          // banner: 'deps == <%= JSON.stringify(dependencies) %>',
+          thirdParty: {
+            includePrivate: true,
+            allow: {
+              test: () => false,
+              failOnUnlicensed: true,
+              failOnViolation: true,
+            }
+          }
+        }),
+        node_resolve(), esbuild({ target: 'es2022' })
+      ],
     });
     const { output: [{ code }] } = await bundle.generate({ file: 'no actual output.js' });
     await bundle.close();
