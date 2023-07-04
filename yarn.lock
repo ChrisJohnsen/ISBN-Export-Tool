@@ -4833,6 +4833,7 @@ __metadata:
     rollup-plugin-esbuild: "npm:^5.0.0"
     rollup-plugin-license: "npm:^3.0.1"
     typanion: "npm:^3.12.1"
+    uitable-runner: "workspace:^"
     utils: "workspace:^"
     web: "workspace:^"
   languageName: unknown
@@ -5363,6 +5364,26 @@ __metadata:
   checksum: b69c99c20f90e1d441939be591a3e4c848d12b88671953fc0de7664bdcdb660f4e9db236099ae966cfb20504d8894825bbdee0fcc31326f2823bf439eadfc02c
   languageName: node
   linkType: hard
+
+"uitable-runner@workspace:^, uitable-runner@workspace:packages/UITable-Runner":
+  version: 0.0.0-use.local
+  resolution: "uitable-runner@workspace:packages/UITable-Runner"
+  dependencies:
+    "@jest/globals": "npm:^29.5.0"
+    "@rollup/plugin-commonjs": "npm:^25.0.2"
+    "@rollup/plugin-node-resolve": "npm:^15.1.0"
+    "@rollup/plugin-virtual": "npm:^3.0.1"
+    "@scriptable-ios/eslint-config": "npm:^1.7.0"
+    "@types/scriptable-ios": "npm:^1.7.1"
+    rollup: "npm:^3.25.3"
+    rollup-plugin-consts: "npm:^1.1.0"
+    rollup-plugin-esbuild: "npm:^5.0.0"
+    rollup-plugin-license: "npm:^3.0.1"
+    rollup-plugin-ts: "npm:^3.2.0"
+    typanion: "npm:^3.12.1"
+    web: "workspace:^"
+  languageName: unknown
+  linkType: soft
 
 "unique-filename@npm:^3.0.0":
   version: 3.0.0

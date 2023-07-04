@@ -5,6 +5,7 @@ export default async cliOptions => {
     'utils',
     'preoutdent',
     'web',
+    'UITable-Runner',
     'Scriptable',
     'node',
   ].map(async packagesDir => {

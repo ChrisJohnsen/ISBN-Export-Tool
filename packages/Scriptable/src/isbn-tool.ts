@@ -4,7 +4,7 @@ import { isObject } from './lib/ts-utils.js';
 import { asidePathname, Store } from './lib/scriptable-utils.js';
 import { UITableUI } from './ui-uitable.js';
 import { Controller } from './ui-controller.js';
-import { AutoWidthUIRunner } from './lib/auto-width-ui-runner.js';
+import { AutoWidthUIRunner } from 'uitable-runner';
 import { UITableBuilder } from './lib/uitable-builder.js';
 
 // setTimeout and clearTimeout used by throttle

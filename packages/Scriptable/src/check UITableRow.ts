@@ -1,12 +1,10 @@
 import production from 'consts:production';
 import * as t from 'typanion';
+import { AutoWidthUIRunner, estimatedHeightOf, heightFor, type FontMeasurer, type FontMeasures } from 'uitable-runner';
 import { buildSourceAndLicenses } from './build-source-and-licenses.js';
-import { AutoWidthUIRunner } from './lib/auto-width-ui-runner.js';
-import { type FontMeasurer, type FontMeasures } from './lib/measure.js';
 import { apportionWidth } from './lib/row-width.js';
 import { rulerImage } from './lib/ruler-image.js';
 import { Store, asidePathname, localTempfile } from './lib/scriptable-utils.js';
-import { estimatedHeightOf, heightFor } from './lib/text-height.js';
 import { UITableBuilder, fontNames, textCell, type NamedFont } from './lib/uitable-builder.js';
 
 type UIRunner = AutoWidthUIRunner<UITableBuilder>;

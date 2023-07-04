@@ -3,7 +3,7 @@
 // This is probably inaccurate, but maybe not entirely useless.
 
 // originally from Scriptable-hosted font measurement
-export type FontMeasures = {
+export type LineBreakFontMeasures = {
   enWidth: number,
   spaceWidth: number,
   averageLowercaseWidth: number,
@@ -14,7 +14,7 @@ const breakAfter = new Set(Array.from(' !-/?|}').map(c => c.codePointAt(0)).flat
 
 export type EstimatedLine = { breakCount: number, beforeIndex: number, pointsRemaining: number, lastBreakPoints: number };
 
-export function estimatedLinesForText(fontMeasures: FontMeasures): (width: number, text: string, safetyMargin?: number) => EstimatedLine[] {
+export function estimatedLinesForText(fontMeasures: LineBreakFontMeasures): (width: number, text: string, safetyMargin?: number) => EstimatedLine[] {
   return (width, text, safetyMargin = 3 * fontMeasures.enWidth) => {
     type PotentialBreak = { before: number, widthSince: number };
     let potentialBreak: PotentialBreak | null = null;

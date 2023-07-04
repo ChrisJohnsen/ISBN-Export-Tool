@@ -1,0 +1,7 @@
+{
+  "include": [ "*" ],
+  "compilerOptions": {
+    "types": [ ]
+  },
+  "extends": "../tsconfig"
+}

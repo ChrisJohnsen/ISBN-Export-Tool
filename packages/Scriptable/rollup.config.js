@@ -36,31 +36,6 @@ export default async cliOptions => {
 
   const git = { description: '(did not run "git-describe")' };
 
-  /** @type Set<string> */
-  const extraWatchFiles = new Set;
-  /** @type import('rollup').PluginImpl */
-  const extraWatchFilesPlugin = {
-    buildStart() {
-      extraWatchFiles.forEach(file => this.addWatchFile(file));
-    }
-  };
-
-  const virtualForMeasureImageCode = deferPlugin('virtual', async () => {
-    const { code, files } = await prebuild(modifyPath('src/web/measure-image.ts'));
-    files.forEach(f => extraWatchFiles.add(f));
-    return virtual({
-      'measure-image code': 'export default ' + JSON.stringify(code),
-    });
-  }, true);
-
-  const virtualForSafeAreaInsetsCode = deferPlugin('virtual', async () => {
-    const { code, files } = await prebuild(modifyPath('src/web/safe-area-insets.ts'));
-    files.forEach(f => extraWatchFiles.add(f));
-    return virtual({
-      'safe-area-insets code': 'export default ' + JSON.stringify(code),
-    });
-  }, true);
-
   const toolInput = modifyPath('src/isbn-tool.ts');
   const toolConfig = {
     input: toolInput,
@@ -89,9 +64,6 @@ export default async cliOptions => {
           dependencies:
             production ? await gatherLicenses(toolInput) : [],
         }))(),
-      virtualForMeasureImageCode(),
-      virtualForSafeAreaInsetsCode(),
-      extraWatchFilesPlugin,
       commonjs(), node_resolve(), esbuild({ target: 'es2022' }),
       outdent(),
     ],
@@ -115,9 +87,6 @@ export default async cliOptions => {
           production,
           dependencies: production ? await gatherLicenses(rowInput) : [],
         }))(),
-      virtualForMeasureImageCode(),
-      virtualForSafeAreaInsetsCode(),
-      extraWatchFilesPlugin,
       node_resolve(), esbuild({ target: 'es2022' }),
     ],
     watch: {
@@ -207,23 +176,6 @@ function gitDescription(fn) {
         .then(e => e.stdout.trim(), () => '(unable to run "git describe")'));
     }
   };
-}
-
-async function prebuild(input) {
-  try {
-    const { rollup } = await import('rollup');
-    const bundle = await rollup({
-      input,
-      plugins: [node_resolve(), esbuild({ target: 'es2022' })],
-    });
-    const { output: [{ code }] } = await bundle.generate({ file: 'no actual output.js' });
-    await bundle.close();
-    return { code, files: bundle.watchFiles };
-  } catch (e) {
-    console.log('unable to prebuild ' + input);
-    console.error(e);
-    throw e;
-  }
 }
 
 async function gatherLicenses(input) {

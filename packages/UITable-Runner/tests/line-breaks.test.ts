@@ -1,5 +1,5 @@
 import { describe, test, expect } from '@jest/globals';
-import { estimatedLinesForText } from 'utils/line-breaks.js';
+import { estimatedLinesForText } from 'uitable-runner/line-breaks.js';
 
 const fakeFm = {
   enWidth: 1,

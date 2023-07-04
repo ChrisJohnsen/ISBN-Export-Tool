@@ -7,7 +7,7 @@ import { version } from 'utils';
 import { isObject } from './lib/ts-utils.js';
 import { basename, localTempfile, Log, ReadWrite, Store } from './lib/scriptable-utils.js';
 import { type UITableBuilder } from './lib/uitable-builder.js';
-import { type AutoWidthUIRunner } from './lib/auto-width-ui-runner.js';
+import { type AutoWidthUIRunner } from 'uitable-runner';
 import { type EditionsProgress, type EditionsSummary, type Input, type InputParseInfo, type RequestedInput, type RequestedOutput, type UIRequestReceiver } from './ui-types.js';
 
 import { assertNever } from 'utils';

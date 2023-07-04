@@ -1,4 +1,4 @@
-import { type FontMeasures as LineBreakFontMeasures } from 'utils/line-breaks.js';
+import { type LineBreakFontMeasures } from './line-breaks.js';
 import * as t from 'typanion';
 
 const isSize = t.isObject({ width: t.isNumber(), height: t.isNumber() });

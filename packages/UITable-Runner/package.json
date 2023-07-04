@@ -1,0 +1,41 @@
+{
+  "name": "uitable-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    },
+    "./measure.js": {
+      "import": "./dist/measure.js"
+    },
+    "./polled-notifications.js": {
+      "import": "./dist/polled-notifications.js"
+    },
+    "./line-breaks.js": {
+      "import": "./dist/line-breaks.js"
+    },
+    "./text-height.js": {
+      "import": "./dist/text-height.js"
+    }
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.5.0",
+    "@rollup/plugin-commonjs": "^25.0.2",
+    "@rollup/plugin-node-resolve": "^15.1.0",
+    "@rollup/plugin-virtual": "^3.0.1",
+    "@scriptable-ios/eslint-config": "^1.7.0",
+    "@types/scriptable-ios": "^1.7.1",
+    "rollup": "^3.25.3",
+    "rollup-plugin-consts": "^1.1.0",
+    "rollup-plugin-esbuild": "^5.0.0",
+    "rollup-plugin-license": "^3.0.1",
+    "rollup-plugin-ts": "^3.2.0"
+  },
+  "dependencies": {
+    "typanion": "^3.12.1",
+    "web": "workspace:^"
+  }
+}

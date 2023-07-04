@@ -5,7 +5,7 @@ import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver,
 import { textCell, type UITableBuilder } from './lib/uitable-builder.js';
 import production from 'consts:production';
 import { assertNever } from 'utils';
-import { type AutoWidthUIRunner } from './lib/auto-width-ui-runner.js';
+import { type AutoWidthUIRunner } from 'uitable-runner';
 import { buildSourceAndLicenses } from './build-source-and-licenses.js';
 
 type SetState = (state: UIState) => void;

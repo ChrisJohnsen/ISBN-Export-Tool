@@ -1,10 +1,8 @@
 // helper that builds common patterns of UITable elements
 
+import { FontMeasurer, estimatedHeightOf, heightFor, inspectEstimatedLines, type AutoWidthUIBuilder, type FontMeasures } from 'uitable-runner';
 import { assertNever } from 'utils/ts-utils.js';
-import { type AutoWidthUIBuilder } from './auto-width-ui-runner.js';
-import { FontMeasurer, type FontMeasures } from './measure.js';
 import { apportionWidth } from './row-width.js';
-import { estimatedHeightOf, heightFor, inspectEstimatedLines } from './text-height.js';
 
 type RowOpts = { onSelect?: () => void, dismissOnSelect?: boolean, height?: number, cellSpacing?: number, backgroundColor?: Color };
 function buildRow(opts?: RowOpts): UITableRow {

@@ -11,4 +11,3 @@ export * from './webcheck.js';
 export * from './tool-core.js';
 export * from './version.js';
 export * from './ts-utils.js';
-export * from './line-breaks.js';

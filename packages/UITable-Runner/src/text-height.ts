@@ -1,4 +1,4 @@
-import { estimatedLinesForText } from 'utils/line-breaks.js';
+import { estimatedLinesForText } from './line-breaks.js';
 import { type FontMeasures } from './measure.js';
 
 export async function inspectEstimatedLines(text: string, fontMeasures: FontMeasures, width: number) {
