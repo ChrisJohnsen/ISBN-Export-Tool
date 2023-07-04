@@ -1,7 +1,7 @@
 import production from 'consts:production';
 import * as t from 'typanion';
 import { buildSourceAndLicenses } from './build-source-and-licenses.js';
-import { AutoHeightUIRunner } from './lib/auto-height-ui-runner.js';
+import { AutoWidthUIRunner } from './lib/auto-width-ui-runner.js';
 import { type FontMeasurer, type FontMeasures } from './lib/measure.js';
 import { apportionWidth } from './lib/row-width.js';
 import { rulerImage } from './lib/ruler-image.js';
@@ -9,7 +9,7 @@ import { Store, asidePathname, localTempfile } from './lib/scriptable-utils.js';
 import { estimatedHeightOf, heightFor } from './lib/text-height.js';
 import { UITableBuilder, fontNames, textCell, type NamedFont } from './lib/uitable-builder.js';
 
-type UIRunner = AutoHeightUIRunner<UITableBuilder>;
+type UIRunner = AutoWidthUIRunner<UITableBuilder>;
 
 async function main() {
   for (let saiWebViewBehind = false; ; saiWebViewBehind = !saiWebViewBehind)
@@ -18,7 +18,7 @@ async function main() {
 
 async function main2(saiWebViewBehind: boolean) {
 
-  const ui = await AutoHeightUIRunner.start((t, fm) => UITableBuilder.create(t, fm), { visibleSafeAreaInsetWebView: saiWebViewBehind });
+  const ui = await AutoWidthUIRunner.start((t, fm) => UITableBuilder.create(t, fm), { visibleSafeAreaInsetWebView: saiWebViewBehind });
   let padding: PortraitAndLandscape<Padding> & { source: 'loaded previous measure' | 'measured' | 'default' } = {
     source: 'default',
     portrait: { heightPadding: 16, widthPadding: 40 },

@@ -10,13 +10,13 @@ type LoopControl<T> = {
   return: (value: T) => void,
 };
 
-export interface AutoHeightUIBuilder {
+export interface AutoWidthUIBuilder {
   set rowWidth(width: number | null);
   set bodyFontMeasures(fontMeasures: FontMeasures);
 }
-type CreateBuilder<B extends AutoHeightUIBuilder> = (table: UITable, fontMeasurer: FontMeasurer) => Promise<B> | B;
+type CreateBuilder<B extends AutoWidthUIBuilder> = (table: UITable, fontMeasurer: FontMeasurer) => Promise<B> | B;
 
-export class AutoHeightUIRunner<B extends AutoHeightUIBuilder> {
+export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
   private constructor(
     private readonly table: UITable,
     private readonly tableClosed: Promise<'table closed'>,
@@ -29,7 +29,7 @@ export class AutoHeightUIRunner<B extends AutoHeightUIBuilder> {
     public readonly fontMeasurer: FontMeasurer,
     public readonly fontChangeNotifier: FontChangeNotifier,
   ) { }
-  static async start<B extends AutoHeightUIBuilder>(createBuilder: CreateBuilder<B>, opts: { visibleSafeAreaInsetWebView: boolean } = { visibleSafeAreaInsetWebView: false }) {
+  static async start<B extends AutoWidthUIBuilder>(createBuilder: CreateBuilder<B>, opts: { visibleSafeAreaInsetWebView: boolean } = { visibleSafeAreaInsetWebView: false }) {
 
     const safeAreaInsetsFetcher = await SafeAreaInsetsFetcher.create(opts.visibleSafeAreaInsetWebView);
 
@@ -38,7 +38,7 @@ export class AutoHeightUIRunner<B extends AutoHeightUIBuilder> {
 
     const fm = new FontMeasurer;
 
-    return new AutoHeightUIRunner(
+    return new AutoWidthUIRunner(
       table,
       tableClosed,
       createBuilder,
@@ -54,7 +54,7 @@ export class AutoHeightUIRunner<B extends AutoHeightUIBuilder> {
     const table = new UITable;
     const tableClosed = table.present(!this.saiVisible).then(() => 'table closed' as const);
     const builder = await this.createBuilder(table, this.fontMeasurer);
-    return new AutoHeightUIRunner(
+    return new AutoWidthUIRunner(
       table,
       tableClosed,
       this.createBuilder,

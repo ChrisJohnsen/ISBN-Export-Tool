@@ -4,7 +4,7 @@ import { isObject } from './lib/ts-utils.js';
 import { asidePathname, Store } from './lib/scriptable-utils.js';
 import { UITableUI } from './ui-uitable.js';
 import { Controller } from './ui-controller.js';
-import { AutoHeightUIRunner } from './lib/auto-height-ui-runner.js';
+import { AutoWidthUIRunner } from './lib/auto-width-ui-runner.js';
 import { UITableBuilder } from './lib/uitable-builder.js';
 
 // setTimeout and clearTimeout used by throttle
@@ -37,7 +37,7 @@ const controller = new Controller(
   saveStore,
 );
 
-const uiManager = await AutoHeightUIRunner.start(UITableBuilder.create);
+const uiManager = await AutoWidthUIRunner.start(UITableBuilder.create);
 new UITableUI(controller, store.data.UITableUIData).run(uiManager);
 await uiManager.presentationsClosed;
 await controller.abortIfRunning();

@@ -5,12 +5,12 @@ import { type EditionsSummary, type Summary, type Input, type UIRequestReceiver,
 import { textCell, type UITableBuilder } from './lib/uitable-builder.js';
 import production from 'consts:production';
 import { assertNever } from 'utils';
-import { type AutoHeightUIRunner } from './lib/auto-height-ui-runner.js';
+import { type AutoWidthUIRunner } from './lib/auto-width-ui-runner.js';
 import { buildSourceAndLicenses } from './build-source-and-licenses.js';
 
 type SetState = (state: UIState) => void;
 
-type UIRunner = AutoHeightUIRunner<UITableBuilder>;
+type UIRunner = AutoWidthUIRunner<UITableBuilder>;
 type Controller = UIRequestReceiver<UIRunner>;
 interface UIState {
   readonly hideConfig?: true,
