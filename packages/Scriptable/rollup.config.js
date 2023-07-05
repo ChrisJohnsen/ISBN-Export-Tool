@@ -198,7 +198,7 @@ async function gatherLicenses(input) {
         commonjs(), node_resolve(), esbuild({ target: 'es2022' }),
         license({
           thirdParty: {
-            includePrivate: true,
+            includePrivate: false,
             output: d => deps = d,
             allow: {
               test: 'MIT',
@@ -212,7 +212,7 @@ async function gatherLicenses(input) {
     await bundle.close();
     return deps.map(d => ({ name: d.name, version: d.version, license: d.license, licenseText: d.licenseText }));
   } catch (e) {
-    console.error('unable to gather license information!');
+    console.error('unable to gather license information! ' + String(e));
     throw e;
   }
 }
