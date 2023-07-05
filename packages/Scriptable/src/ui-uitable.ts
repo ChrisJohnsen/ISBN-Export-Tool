@@ -139,7 +139,7 @@ class ConfigurationState implements UIState {
     await builder.addForwardRow('Text Row Line Count', async () => {
       const a = new Alert;
       a.title = 'Extra Lines For Text Rows';
-      a.message = 'The height of text rows in this program is estimated based on the text, the current Dynamic Text font settings, and the available display width. If an estimate comes out too low, the text will be truncated and will end in an ellipsis.\n\nIf this happens, you can use this setting to increase the number of estimated lines.\n\nAdd an extra line for every N estimated lines?';
+      a.message = 'The height of text rows in this program is estimated based on the text, the current Dynamic Type font settings, and the available display width. If an estimate comes out too low, the text will be truncated and will end in an ellipsis.\n\nIf this happens, you can use this setting to increase the number of estimated lines.\n\nAdd an extra line for every N estimated lines?';
       a.addTextField('0', String(this.savable.extraLines ?? 0)).setDecimalPadKeyboard();
       a.addAction('No Extra Lines');
       a.addAction('Set Extra Lines');

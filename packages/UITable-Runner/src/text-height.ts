@@ -28,7 +28,7 @@ export function estimatedHeightOf(text: string, bodyMeasures: FontMeasures, font
 export function heightFor(numLines: number, bodyMeasures: FontMeasures, fontMeasures: FontMeasures) {
   // Not sure why the "starting height" (2*enWidth) is based on the body font,
   // but that is the story the numbers tell (from measuring the row heights
-  // needed for 2-10 lines of every "named" font at every Dynamic Text size).
+  // needed for 2-10 lines of every "named" font at every Dynamic Type size).
   // Only one font+size needs 4+, a couple need 1+, most are fine with 0+.
   return Math.round(4 + 2 * bodyMeasures.enWidth + fontMeasures.lineSpacing * numLines);
 }

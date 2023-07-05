@@ -776,7 +776,7 @@ async function measureHeights(ui: UIRunner) {
           no.widthWeight = noWidth;
 
           const questionText = `See ${lineCount}?`;
-          questionRow.height = estimatedHeightOf(questionText, bodyFm, bodyFm, questionWidth); // could also max with est height of buttons, too; but what is their default font? it is usually smaller than body. also it seems like it doesn't scale with Dynamic Text size?
+          questionRow.height = estimatedHeightOf(questionText, bodyFm, bodyFm, questionWidth); // could also max with est height of buttons, too; but what is their default font? it is usually smaller than body. also it seems like it doesn't scale with Dynamic Type size?
           const question = questionRow.addText(questionText);
           question.centerAligned();
           question.widthWeight = questionWidth;
