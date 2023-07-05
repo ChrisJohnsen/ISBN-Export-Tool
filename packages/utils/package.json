@@ -13,7 +13,7 @@
     }
   },
   "devDependencies": {
-    "@jest/globals": "^29.5.0",
+    "@jest/globals": "^29.6.0",
     "@rollup/plugin-commonjs": "^25.0.2",
     "@rollup/plugin-node-resolve": "^15.1.0",
     "@types/papaparse": "^5.3.7",
@@ -21,10 +21,10 @@
     "rollup-plugin-ts": "^3.2.0"
   },
   "dependencies": {
-    "isbn3": "^1.1.38",
+    "isbn3": "^1.1.39",
     "p-limit": "^4.0.0",
     "p-throttle": "^5.1.0",
     "papaparse": "patch:papaparse@npm%3A5.4.1#~/.yarn/patches/papaparse-npm-5.4.0-aa63633b8b.patch",
-    "typanion": "^3.12.1"
+    "typanion": "^3.13.0"
   }
 }
