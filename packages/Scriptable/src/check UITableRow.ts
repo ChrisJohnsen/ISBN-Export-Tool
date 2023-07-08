@@ -107,7 +107,7 @@ async function main2(saiWebViewBehind: boolean) {
     const infoOpts = { backgroundColor: Color.gray() };
     await builder.addTextRow(`device: ${Device.model()} (${Device.isPhone() ? 'phone' : Device.isPad() ? 'pad' : 'other'}) ${Device.systemName()} ${Device.systemVersion()}`, infoOpts);
     await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height}pt ${screenScale}× scale`, infoOpts);
-    await builder.addTextRow(`safe area insets (pt): left:${safeAreaInsets.left} right:${safeAreaInsets.right}`, insetStatus == 'insets match padding' ? infoOpts : goodOpts);
+    await builder.addTextRow(`safe area insets (pt): left:${safeAreaInsets.left} right:${safeAreaInsets.right}`, insetStatus == 'insets match padding' ? infoOpts : errorOpts);
     if (insetStatus == 'insets do not match padding') {
       await builder.addTextRow('INSETS DO NOT MATCH WIDTH PADDING', errorOpts);
       if (padding.source == 'default')
