@@ -17,15 +17,11 @@ async function main() {
 async function main2(saiWebViewBehind: boolean) {
 
   const ui = await AutoWidthUIRunner.start((t, fm) => UITableBuilder.create(t, fm), { visibleSafeAreaInsetWebView: saiWebViewBehind });
-  let padding: PortraitAndLandscape<Padding> & { source: 'loaded previous measure' | 'measured' | 'default' } = {
-    source: 'default',
-    portrait: { heightPadding: 16, widthPadding: 40 },
-    landscape: { heightPadding: 16, widthPadding: 40 + 48 * 2 },
-  };
-
   const builder = ui.builder;
 
-  await loadPadding();
+  const padding = new PaddingStore(Device.screenSize());
+
+  await padding.load();
 
   if (padding.source == 'default')
     if (!await measurePadding())
@@ -137,31 +133,16 @@ async function main2(saiWebViewBehind: boolean) {
 
   return runAgain;
 
-  async function loadPadding() {
-    const isOrientedPadding = t.isObject({ heightPadding: t.isNumber(), widthPadding: t.isNumber() });
-    const isPadding = t.isObject({ portrait: isOrientedPadding, landscape: isOrientedPadding });
-    const store = new Store(asidePathname(module.filename, 'json'));
-    await store.read();
-    if (isPadding(store.data))
-      padding = { source: 'loaded previous measure', ...store.data };
-    return padding;
-  }
-  async function savePadding() {
-    const store = new Store(asidePathname(module.filename, 'json'));
-    const { portrait, landscape } = padding;
-    store.data = { portrait, landscape };
-    await store.write();
-  }
   async function measurePadding() {
     const newPadding = await measurePaddingsByGapObservation(ui);
-    // // alternate method
-    // const heightPadding = await measureHeightPaddingByMoire(ui);
-    // const widthPaddings = await measureWidthPaddingsByMoire(ui, heightPadding);
-    if (newPadding && newPadding != 'use defaults') {
-      padding = { source: 'measured' as const, ...newPadding };
-      await savePadding();
+    if (!newPadding) return newPadding;
+    if (newPadding != 'use defaults') {
+      const differs = mapPnLs([padding, newPadding], (o, n) => o.heightPadding != n.heightPadding || o.widthPadding != n.widthPadding);
+      if (differs.portrait || differs.landscape)
+        insetsStatusLog.portrait = insetsStatusLog.landscape = { times: 0, matches: 0 };
+      await padding.save({ ...newPadding, source: 'measured' });
     }
-    return newPadding && padding;
+    return true;
   }
   async function measurePaddingByMoire() {
     const heightPadding = await measureHeightPaddingByMoire(ui);
@@ -176,6 +157,44 @@ async function main2(saiWebViewBehind: boolean) {
       await ui.builder.addTextRow(`Height Padding: ${heightPadding}`);
       await ui.builder.addTextRow(`Width Paddings: P ${widthPaddings.portrait} L ${widthPaddings.landscape}`);
     });
+  }
+}
+
+type ActivePadding = PortraitAndLandscape<Padding> & { source: 'loaded previous measure' | 'measured' | 'default' };
+const isOrientedPadding = t.isObject({ heightPadding: t.isNumber(), widthPadding: t.isNumber() });
+const isPadding = t.isObject({ portrait: isOrientedPadding, landscape: isOrientedPadding });
+const isSavedPadding = t.isRecord(t.isOptional(isPadding));
+class PaddingStore implements ActivePadding {
+  private padding: ActivePadding;
+  get portrait() { return this.padding.portrait }
+  get landscape() { return this.padding.landscape }
+  get source() { return this.padding.source }
+  private paddingKey: string;
+  private store = new Store(asidePathname(module.filename, 'json'));
+  constructor(screenSize: Size) {
+    this.padding = {
+      portrait: { heightPadding: 16, widthPadding: 40 },
+      landscape: { heightPadding: 16, widthPadding: 40 + 48 * 2 },
+      source: 'default'
+    };
+    this.paddingKey = [screenSize.width, screenSize.height].sort((a, b) => a - b).join('x');
+  }
+  async load() {
+    await this.store.read();
+    if (!isSavedPadding(this.store.data)) return this.padding;
+    const padding = this.store.data[this.paddingKey];
+    if (!padding) return this.padding;
+    this.padding = { ...padding, source: 'loaded previous measure' };
+  }
+  async save(padding: PortraitAndLandscape<Padding> & { source: 'measured' }) {
+    this.padding = padding;
+    const { portrait, landscape } = padding;
+    await this.store.read();
+    if (!isSavedPadding(this.store.data))
+      this.store.data = { [this.paddingKey]: { portrait, landscape } } satisfies t.InferType<typeof isSavedPadding>;
+    else
+      this.store.data[this.paddingKey] = { portrait, landscape };
+    await this.store.write();
   }
 }
 
