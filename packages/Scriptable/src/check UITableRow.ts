@@ -23,14 +23,14 @@ async function main2(saiWebViewBehind: boolean) {
 
   await padding.load();
 
+  const insetsStatusLog: PortraitAndLandscape<{ times: number, matches: number, insetCounts: Map<string, number> }> = {
+    portrait: { times: 0, matches: 0, insetCounts: new Map },
+    landscape: { times: 0, matches: 0, insetCounts: new Map },
+  };
+
   if (padding.source == 'default')
     if (!await measurePadding())
       return; // table closed
-
-  const insetsStatusLog: PortraitAndLandscape<{ times: number, matches: number }> = {
-    portrait: { times: 0, matches: 0 },
-    landscape: { times: 0, matches: 0 },
-  };
 
   let n = 0; // debug counter
   const screenScale = Device.screenScale();
@@ -45,6 +45,8 @@ async function main2(saiWebViewBehind: boolean) {
     const insetStatus = (function checkAndLogInsetsStatus() {
       const log = insetsStatusLog[orientation];
       log.times++;
+      const key = `${safeAreaInsets.left}L${safeAreaInsets.right}R`;
+      log.insetCounts.set(key, (log.insetCounts.get(key) ?? 0) + 1);
       const wp = padding[orientation].widthPadding;
       if (!(isFinite(safeAreaInsets.left) && isFinite(safeAreaInsets.right))) {
         console.error(`unusable insets: ${JSON.stringify(safeAreaInsets)}`);
@@ -80,6 +82,30 @@ async function main2(saiWebViewBehind: boolean) {
       })();
       await builder.addIndentRow(`${orientation} ${log.matches} of ${log.times} times${log.times == 0 ? `\n(please try the ${orientation} orientation, too)` : ''}`, opts);
     }
+    if (insetsStatusLog.portrait.times > 0 && insetsStatusLog.landscape.times > 0)
+      await builder.addForwardRow('Copy Size/Inset/Padding Info', async () => {
+        const deviceInfo = `device: ${Device.model()} (${Device.isPhone() ? 'phone' : Device.isPad() ? 'pad' : 'other'}) ${Device.systemName()} ${Device.systemVersion()}`;
+        const { width, height } = (size => size.width < size.height ? size : { width: size.height, height: size.width })(screenSize);
+        const deviceSize = `size: ${screenScale}× scale ${width}×${height}pt `;
+        const sai = mapPnLs([insetsStatusLog], l => {
+          const insetStr = Array.from(l.insetCounts.entries()).reduce(([hi, hc], [i, c]) => c > hc ? [i, c] : [hi, hc])[0];
+          const match = insetStr.match(/(.*)L(.*)R/);
+          if (!match) return { left: '?', right: '?' };
+          return { left: match[1], right: match[2] };
+        });
+        const p = `portrait li ${sai.portrait.left} ri ${sai.portrait.right} hp ${padding.portrait.heightPadding} wp ${padding.portrait.widthPadding}`;
+        const l = `landscape li ${sai.landscape.left} ri ${sai.landscape.right} hp ${padding.landscape.heightPadding} wp ${padding.landscape.widthPadding}`;
+        const info = [deviceInfo, deviceSize, p, l].join('\n');
+
+        const a = new Alert;
+        a.title = 'Size/Inset/Padding Info';
+        a.message = info;
+        a.addAction('Copy to Clipboard');
+        a.addCancelAction('Cancel');
+        const r = await a.present();
+        if (r == -1) return;
+        Pasteboard.copyString(info);
+      });
     builder.addEmptyRow();
 
     await builder.addForwardRow('Show Line Breaks', () => showLineBreaks(ui));
@@ -139,7 +165,8 @@ async function main2(saiWebViewBehind: boolean) {
     if (newPadding != 'use defaults') {
       const differs = mapPnLs([padding, newPadding], (o, n) => o.heightPadding != n.heightPadding || o.widthPadding != n.widthPadding);
       if (differs.portrait || differs.landscape)
-        insetsStatusLog.portrait = insetsStatusLog.landscape = { times: 0, matches: 0 };
+        insetsStatusLog.portrait.times = insetsStatusLog.portrait.matches =
+          insetsStatusLog.landscape.times = insetsStatusLog.landscape.matches = 0;
       await padding.save({ ...newPadding, source: 'measured' });
     }
     return true;
