@@ -29,11 +29,12 @@ export const fontNames = Object.freeze(new Set([
   'caption1', 'caption2',
 ] as const));
 export type NamedFont = typeof fontNames extends Set<infer T> ? T : never;
+type UndefinedFont = '__ undefined __'; // missing/undefined titleFont is somewhat irregular (non-integer points line spacing) that is not currently measured correctly, so we normally replace it with 'body' (which has a correctly measured integer points line spacing); this special value lets us actually use a missing titleFont (e.g. for demonstration purposes)
 function isNamedFont(font: string): font is NamedFont {
   return (fontNames as Set<string>).has(font);
 }
 type TextFont = NamedFont | Font;
-type TextCell = { title: string, subtitle?: string, titleFont?: TextFont, titleColor?: Color /* font+color for subtitle */ };
+type TextCell = { title: string, subtitle?: string, titleFont?: TextFont | UndefinedFont, titleColor?: Color /* font+color for subtitle */ };
 type CellOpts = (
   | { type: 'text' } & TextCell
   | { type: 'button', title: string, onTap: () => void }
@@ -56,9 +57,9 @@ function buildCell(opts: CellOpts): UITableCell {
   const cell = (() => {
     if (opts.type == 'text') {
       const cell = UITableCell.text(opts.title, opts.subtitle);
-      // {titleFont: Font.body()} is not identical to {titleFont: undefined} (or titleFont missing): it is close, but does not have identical line spacing coefficients and some sizes have noticeably different letter widths
-      // if (opts.titleFont)
-      cell.titleFont = textFont(opts.titleFont);
+      // {titleFont: Font.body()} is not identical to {titleFont: undefined} (or titleFont missing): it is close, but does not have identical line spacing coefficients and some sizes have noticeably different letter widths; unless we are given the special "undefined, really" value, we will use body, since we know how to measure it and have observed its nice integer line spacings at all sizes
+      if (opts.titleFont != '__ undefined __')
+        cell.titleFont = textFont(opts.titleFont);
       if (opts.titleColor) cell.titleColor = opts.titleColor;
       return cell;
     } else if (opts.type == 'button') {
@@ -169,8 +170,8 @@ export class UITableBuilder implements AutoWidthUIBuilder {
     this.fontMeasureCache.clear();
     this.fontMeasureCache.set('body', fontMeasures);
   }
-  private async fontMeasures(font?: TextFont): Promise<FontMeasures> {
-    if (!font) font = 'body';
+  private async fontMeasures(font?: TextFont | UndefinedFont): Promise<FontMeasures> {
+    if (!font || font == '__ undefined __') font = 'body'; // undefined/missing titleFont is not actually the same as body, but it is close (usually tighter line spacing than body, but at xSmall, it is actually looser!)
     if (typeof font == 'string' && isNamedFont(font)) {
       const cached = this.fontMeasureCache.get(font);
       if (cached) return cached;

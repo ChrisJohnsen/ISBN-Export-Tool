@@ -640,6 +640,7 @@ async function showLineBreaks(ui: UIRunner) {
     // XXX Passages?
     await builder.addForwardRow('Artificial Examples', () => artificialExamples(ui));
     await builder.addForwardRow('Simple Numbered Lines', () => simpleNumberedLines(ui));
+    await builder.addForwardRow('Compare undefined vs. "body" Font', () => compareUndefinedFont(ui));
   });
 }
 async function artificialExamples(ui: UIRunner) {
@@ -728,6 +729,21 @@ async function simpleNumberedLines(ui: UIRunner) {
       await builder.addTextRow({ title: numberedLines(i + 1), titleFont: font });
     builder.addEmptyRow();
     await builder.addBackRow('Back', () => loop.return());
+  });
+}
+async function compareUndefinedFont(ui: UIRunner) {
+  const builder = ui.builder;
+  return ui.loop(async loop => {
+    await builder.addTitleConfigRow();
+    await builder.addSubtitleHelpRow('Undefined Font vs. Font.body()', 'I expected a missing or undefined titleFont to be the same as Font.body(). It is not. For most sizes the "undefined" line spacing is tighter than that of Font.body(), but at xSmall it uses about a tenth of a point more per line than does Font.body().');
+    await builder.addBackRow('Back', () => loop.return());
+    builder.addEmptyRow();
+    builder.addTextRow('Using a missing or undefined titleFont gives a different result from specifying Font.body().\n\nIs this a bug?\n\nFor most Dynamic Type sizes the "undefined font" uses a tighter line spacing than the corresponding body font, so estimating the row height based on the body font works okay.\n\nThe xSmall Dynamic Type size (the smallest one) uses a slightly looser line spacing than the xSmall body font (about a tenth of a point per line taller than the spacing that body uses). The row height has 4 extra points of padding built in (some fonts/sizes seem to need it), so it takes a several tens of lines before the undefined xSmall gets truncated when it is displayed at the height calculated for xSmall body.');
+    builder.addEmptyRow();
+    const a = builder.adderForTableRow([{ widthWeight: 1, align: 'right' }, { widthWeight: 1, align: 'left' }]);
+    const str = numberedLines(50);
+    await a(['undefined titleFont', 'titleFont: Font.body()'], { cellSpacing: 10 });
+    builder.addHeightAdjuster(await a([{ title: str, titleFont: '__ undefined __' }, { title: str, titleFont: 'body' }], { cellSpacing: 10 }));
   });
 }
 function numberedLines(n: number) {
