@@ -111,7 +111,7 @@ export class FontChangeNotifier extends PollingNotifier<FontMeasures> {
     super(interval);
   }
   public static async create(interval = 5000, measurer = new FontMeasurer) {
-    const measures = await measurer.measureFont();
+    const measures = await measurer.measureFont(Font.body());
     return new FontChangeNotifier(interval, measurer, measures);
   }
   public subscribe(fn: PollingSubscriber<FontMeasures>) {
@@ -119,10 +119,10 @@ export class FontChangeNotifier extends PollingNotifier<FontMeasures> {
     return super.subscribe(fn);
   }
   protected async poll() {
-    const basicMeasures = await this.measurer.measureEnAndLineSpacing();
+    const basicMeasures = await this.measurer.measureEnAndLineSpacing(Font.body());
     if (this.measures?.enWidth != basicMeasures.enWidth
       || this.measures.lineSpacing != basicMeasures.lineSpacing) {
-      const fontMeasures = await this.measurer.measureFont();
+      const fontMeasures = await this.measurer.measureFont(Font.body());
       this.measures = fontMeasures;
       this.notify();
     }

@@ -625,7 +625,7 @@ async function measureLinesWithDiacritics(fontMeasurer: FontMeasurer, enWidth: n
     0x0329, 0x032e, 0x032f, 0x0330, 0x0331,
   ].map(cc => 'A' + String.fromCodePoint(cc)).join('');
   const str = `X${above}I͝JK͡L\nX\n${below}gjpqyp͜qɳᶇX`; // spell-checker:ignoreRegExp X\S*X
-  const renderHeight = (await fontMeasurer.measureString_(str, enWidth * 1.25 /* these chars wider than one en */, lineSpacing)).height;
+  const renderHeight = (await fontMeasurer.measureString_(str, enWidth * 1.25 /* these chars wider than one en */, lineSpacing, Font.body())).height;
   const lines = Array.from(str.matchAll(/\n/g)).length + 1;
   return { lineCount: lines, height: renderHeight };
 }
@@ -786,7 +786,7 @@ async function measureHeights(ui: UIRunner) {
 
     if (!startAction || startAction == 'back') return;
 
-    const bodyFm = await ui.fontMeasurer.measureFont();
+    const bodyFm = await ui.fontMeasurer.measureFont(Font.body());
     const pickedFm = await ui.fontMeasurer.measureFont(Font[font]());
     let prev = heightFor(startingLineCount - 2, bodyFm, pickedFm);
     let current = heightFor(startingLineCount, bodyFm, pickedFm);

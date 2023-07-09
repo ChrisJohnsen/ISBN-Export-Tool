@@ -148,7 +148,7 @@ export class UITableBuilder implements AutoWidthUIBuilder {
     this.fontMeasureCache.set('body', fontMeasures);
   }
   static async create(table: UITable, fontMeasurer = new FontMeasurer) {
-    return new UITableBuilder(table, fontMeasurer, await fontMeasurer.measureFont());
+    return new UITableBuilder(table, fontMeasurer, await fontMeasurer.measureFont(Font.body()));
   }
 
   private _rowWidth: number | null = null;

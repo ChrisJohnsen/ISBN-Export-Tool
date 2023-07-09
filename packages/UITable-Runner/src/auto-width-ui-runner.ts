@@ -114,7 +114,7 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
       return: (value: T) => endThisIteration({ return: value }),
     };
 
-    let fontMeasures: FontMeasures = await this.fontChangeNotifier.measurer.measureFont();
+    let fontMeasures: FontMeasures = await this.fontChangeNotifier.measurer.measureFont(Font.body());
     let newFont = false;
     const fontSub = this.fontChangeNotifier.subscribe(fm => {
       fontMeasures = fm;

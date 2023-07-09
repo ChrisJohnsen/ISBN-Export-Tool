@@ -110,11 +110,11 @@ export type FontMeasures = LineBreakFontMeasures & {
 
 export class FontMeasurer {
   constructor(private readonly imageMeasurer = new ImageMeasurer(3)) { }
-  async measureString(str: string, font = Font.body()) {
+  async measureString(str: string, font: Font) {
     const { enWidth, lineSpacing } = await this.measureEnAndLineSpacing(font);
     return this.measureString_(str, enWidth, lineSpacing, font);
   }
-  async measureString_(str: string, enWidth: number, lineSpacing: number, font = Font.body()) {
+  async measureString_(str: string, enWidth: number, lineSpacing: number, font: Font) {
     const checkedBorder = this.imageMeasurer.checkedBorderPixels / Device.screenScale();
     const { lineCount, longestLine } = str.split(/\r\n|\n|\r/).reduce(({ lineCount, longestLine }, line) => {
       lineCount++;
@@ -139,7 +139,7 @@ export class FontMeasurer {
     const image = render(str, size, renderOffset, font);
     return await this.imageMeasurer.nontransparentBounds(image, str);
   }
-  async measureFont(font = Font.body()): Promise<FontMeasures> {
+  async measureFont(font: Font): Promise<FontMeasures> {
 
     const { enWidth, enDashHeight, lineSpacing } = await this.measureEnAndLineSpacing(font);
 
@@ -185,7 +185,7 @@ export class FontMeasurer {
 
     return { enWidth, enDashHeight, spaceWidth, averageDigitWidth, averageLowercaseWidth, averageUppercaseWidth, lineSpacing };
   }
-  async measureEnAndLineSpacing(font = Font.body()) {
+  async measureEnAndLineSpacing(font: Font) {
     const placeHolderEnWidth = 60; // en dash width and height
     const placeHolderLineSpacing = 100;
     const { width: enWidth, height: enDashHeight } = await this.measureString_(enDash, placeHolderEnWidth, placeHolderLineSpacing, font);
@@ -195,7 +195,7 @@ export class FontMeasurer {
   }
 }
 
-function render(text: string, size: Size, topLeftOrEnWidth: number | Point, font = Font.body()): Image {
+function render(text: string, size: Size, topLeftOrEnWidth: number | Point, font: Font): Image {
   try {
     if (typeof topLeftOrEnWidth == 'number')
       topLeftOrEnWidth = new Point(topLeftOrEnWidth, topLeftOrEnWidth);
