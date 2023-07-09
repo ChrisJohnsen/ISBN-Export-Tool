@@ -204,6 +204,11 @@ function render(text: string, size: Size, topLeftOrEnWidth: number | Point, font
     d.size = size;
     d.opaque = false;
     d.setTextColor(Color.orange());
+    // we can draw text without doing setFont first, but the result does not
+    // scale with Dynamic Type setting; it also did not match any body font size
+    // that I have seen: it has 7.5 enWidth and 16.7 lineSpacing (across 20
+    // lines instead of just 1) while xSmall body has 7.5 enWidth but 19
+    // lineSpacing
     d.setFont(font);
     d.drawText(text, topLeftOrEnWidth);
     return d.getImage();
