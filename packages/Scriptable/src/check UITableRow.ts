@@ -585,7 +585,6 @@ async function measureFonts(ui: UIRunner) {
         const { lineCount: diacriticLineCount, height: diacriticHeight } =
           await measureLinesWithDiacritics(ui.fontMeasurer, enWidth, lineSpacing);
         measures.set(enWidth, { ...fontMeasures, diacriticHeight, diacriticLineCount });
-        return loop.again();
       }
     }
 
