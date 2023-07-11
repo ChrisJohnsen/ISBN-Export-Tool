@@ -115,6 +115,7 @@ async function main2(saiWebViewBehind: boolean) {
     const measurePaddings = padding.source == 'default' ? 'Measure Paddings' : 'Re-measure Paddings';
     await builder.addForwardRow(measurePaddings, () => measurePadding());
     await builder.addForwardRow('Show Safe Area Insets', () => showSafeAreaInsets(ui));
+    await builder.addForwardRow('Show Zero widthWeights', () => showWidthWeights(ui));
     await builder.addForwardRow('Measure Row Height for N Lines', () => measureHeights(ui));
     await builder.addForwardRow('Measure Fonts', () => measureFonts(ui));
     builder.addEmptyRow();
@@ -908,6 +909,117 @@ async function showSafeAreaInsets(ui: UIRunner) {
     await builder.addTextRow(JSON.stringify(safeAreaInsets), { onSelect: () => loop.again() });
     await builder.addTextRow(JSON.stringify(await ui.safeAreaInsetsFetcher.getLeftAndRight()), { onSelect: () => loop.again() });
   });
+}
+
+async function showWidthWeights(ui: UIRunner) {
+  const builder = ui.builder;
+  const demoColor = Color.gray();
+  const sepColor = Color.dynamic(Color.black(), Color.white());
+  await ui.loop(async loop => {
+    await builder.addTitleConfigRow();
+    await builder.addSubtitleHelpRow('Show Zero widthWeight');
+    await builder.addBackRow('Back', () => loop.return());
+
+    builder.addEmptyRow();
+    await builder.addTextRow({ title: 'Lone non-zero widthWeight cell', titleFont: 'title3' });
+    addRow(r => r.addImage(rulerImage(new Size(builder.rowWidth, 44 - 16), false)).widthWeight = 1).height = 44;
+    await addWidthWeightedTexts([1], 'OK: a gets full width', cells => cells[0].rightAligned());
+    addSep();
+
+    builder.addEmptyRow();
+    await builder.addTextRow({ title: 'Lone zero widthWeight cell', titleFont: 'title3' });
+    await builder.addIndentRow('The cell gets the whole width. Seems reasonable. These rows (especially the image row) show the extent of the "normal content area" for rows. Later examples will show some cells that are drawn just after (or even spanning) the right edge of this normal content area.');
+    addRow(r => r.addImage(rulerImage(new Size(builder.rowWidth, 44 - 16), false)).widthWeight = 0).height = 44;
+    await addWidthWeightedTexts([0], 'OK?: a gets full width', cells => cells[0].rightAligned());
+    addSep();
+
+    builder.addEmptyRow();
+    await builder.addTextRow({ title: 'Zero widthWeight cell(s)', titleFont: 'title3' });
+    await builder.addIndentRow('It seems like zero-weighted cells have their weights replaced with the minimum weight, but only after they are totaled. Since the total is used to divide up the width of the normal content area, this means that some cells can overflow (or be drawn past) the right edge of the normal content area.\n\nOOB: out of bounds (outside the normal content area)');
+
+    await addWidthWeightedTexts([0, 0], 'OK?: a == b (zero-total special case?)');
+    await addWidthWeightedTexts([0, 1], 'b just OOB');
+    await addWidthWeightedTexts([1, 0], 'b just OOB');
+    addSep();
+
+    await addWidthWeightedTexts([0, 0, 0], 'OK?: a == b == c (zero-total special case?)');
+    await addWidthWeightedTexts([0, 0, 1], 'a whole, b just OOB, c not visible (very OOB?)');
+    await addWidthWeightedTexts([0, 1, 0], 'a whole, b just OOB, c not visible (very OOB?)');
+    await addWidthWeightedTexts([0, 1, 1], 'a == b, c just OOB');
+    await addWidthWeightedTexts([1, 0, 0], 'a whole, b just OOB, c not visible (very OOB?)');
+    await addWidthWeightedTexts([1, 0, 1], 'a == b, c just OOB');
+    await addWidthWeightedTexts([1, 1, 0], 'a == b, c just OOB');
+    addSep();
+
+    await builder.addIndentRow('Trying a mixture of non-zero weights.\n\nThese all use weights 0,0,1,2,3 with permuted placement for the zeros.\nThe 0-weighted cells end up the same size as the 1-weighted (non-zero minimum weight) cell, giving an effective total weight of 8. But the row\'s "normal content area" is only considered to be 6 wide (the sum of the original weights), so some cells either span the end of the normal content area (or are drawn just outside of it).\n\nThe notations below show the presumed "effective" weights. The vertical bar (pipe symbol) represents the end of the row\'s normal content area. If a cell spans the end, it is parenthesized and broken down to show how much fits inside and how much overflows the normal content area.');
+    await addWidthWeightedTexts([0, 0, 1, 2, 3], 'like 1,1,1,2,(3=1|2)');
+    await addWidthWeightedTexts([0, 1, 0, 2, 3], 'like 1,1,1,2,(3=1|2)');
+    await addWidthWeightedTexts([0, 1, 2, 0, 3], 'like 1,1,2,1,(3=1|2)');
+    await addWidthWeightedTexts([0, 1, 2, 3, 0], 'like 1,1,2,(3=2|1),1');
+    await addWidthWeightedTexts([1, 0, 0, 2, 3], 'like 1,1,1,2,(3=1|2)');
+    await addWidthWeightedTexts([1, 0, 2, 0, 3], 'like 1,1,2,1,(3=1|2)');
+    await addWidthWeightedTexts([1, 0, 2, 3, 0], 'like 1,1,2,(3=2|1),1');
+    await addWidthWeightedTexts([1, 2, 0, 0, 3], 'like 1,2,1,1,(3=1|2)');
+    await addWidthWeightedTexts([1, 2, 0, 3, 0], 'like 1,2,1,(3=2|1),1');
+    await addWidthWeightedTexts([1, 2, 3, 0, 0], 'like 1,2,3|1,1');
+    addSep();
+
+    await builder.addIndentRow('Trying non-zero minimum other than one.\n\nThese all use weights 0,0,2,4 with permuted placement for the zeros.\nThe 0-weighted cells end up the same size as the 2-weighted (non-zero minimum weight) cell, giving an effective total weight of 10. But the row\'s "normal content area" is only considered to be 6 wide (the sum of the original weights), so some cells either span the end of the normal content area (or are drawn just outside of it).\n\nThe notations below show the presumed "effective" weights. The vertical bar (pipe symbol) represents the end of the row\'s normal content area. If a cell spans the end, it is parenthesized and broken down to show how much fits inside and how much overflows the normal content area.');
+    await addWidthWeightedTexts([0, 0, 2, 4], '2,2,2|4');
+    await addWidthWeightedTexts([0, 2, 0, 4], '2,2,2|4');
+    await addWidthWeightedTexts([0, 2, 4, 0], '2,2,(4=2|2),2');
+    await addWidthWeightedTexts([2, 0, 0, 4], '2,2,2|4');
+    await addWidthWeightedTexts([2, 0, 4, 0], '2,2,(4=2|2),2');
+    await addWidthWeightedTexts([2, 4, 0, 0], '2,4|2,2');
+    addSep();
+
+    /*
+    // these fractional widthWeights all seem be processed okay, not sure what problem I was running into that prompted me to round in apportionWidth...
+    builder.addEmptyRow();
+    await builder.addTextRow({ title: 'Fractional (non-integer) widthWeight', titleFont: 'title3' });
+    await builder.addIndentRow('XXX summary');
+    await addWidthWeightedTexts([.5, .5], 'OK: a == b');
+    addSep();
+    await addWidthWeightedTexts([.25, .25], 'OK: a == b');
+    await addWidthWeightedTexts([.25, .75], 'OK: a == 1/4, b == 3/4');
+    await addWidthWeightedTexts([.75, .25], 'OK: a == 3/4, b == 1/4');
+    await addWidthWeightedTexts([.75, .75], 'OK: a == b');
+    addSep();
+    await addWidthWeightedTexts([1.5, 2], 'OK: a == 3/7, b == 4/7');
+    */
+  });
+
+  function addRow(fn: (r: UITableRow) => void) {
+    const row = new UITableRow;
+    row.backgroundColor = demoColor;
+    fn(row);
+    builder.table.addRow(row);
+    return row;
+  }
+  function addSep() {
+    const sep = new UITableRow;
+    sep.height = 3;
+    sep.backgroundColor = sepColor;
+    const sepSep = new UITableRow;
+    sepSep.height = 2;
+    builder.table.addRow(sepSep);
+    builder.table.addRow(sep);
+    builder.table.addRow(sepSep);
+  }
+  async function addWidthWeightedTexts(widthWeights: number[], note: string, cellsFn?: (cells: UITableCell[]) => void) {
+    const texts = Array.from('abcde');
+    if (widthWeights.length > texts.length) throw new Error('more weights than available texts');
+    await builder.addTextRow(`${widthWeights.length} cell${widthWeights.length == 1 ? '' : 's'}: ww ${widthWeights} `);
+    await builder.addIndentRow(note);
+    const cells = widthWeights.map((ww, i) => {
+      const cell = UITableCell.text(texts[i].repeat(10));
+      cell.widthWeight = ww;
+      return cell;
+    });
+    cellsFn?.(cells);
+    addRow(r => cells.forEach(c => r.addCell(c))).cellSpacing = 0;
+    addSep();
+  }
 }
 
 await main();
