@@ -430,7 +430,7 @@ export class UITableBuilder implements AutoWidthUIBuilder {
       const textWidth = this.remainingWidth([icon.widthWeight]);
       const height = rowHeight(true, icon.rowHeight, await this.estimatedHeightOfTextCell(tc, textWidth));
       const cells = [
-        { ...tc, widthWeight: textWidth },
+        { ...tc, widthWeight: textWidth, align: 'right' },
         ...paddedCell(maxSymbolWidth, icon),
       ] as const;
       return this.addRowWithCells(cells.map(buildCell), { height, onSelect: this.interposeInspection([tc], [textWidth], onSelect) });
