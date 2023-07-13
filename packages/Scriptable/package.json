@@ -9,7 +9,7 @@
     "@rollup/plugin-virtual": "^3.0.1",
     "@scriptable-ios/eslint-config": "^1.7.0",
     "@types/scriptable-ios": "^1.7.1",
-    "esbuild": "^0.18.11",
+    "esbuild": "^0.18.12",
     "preoutdent": "workspace:^",
     "rollup": "^3.26.2",
     "rollup-plugin-consts": "^1.1.0",
