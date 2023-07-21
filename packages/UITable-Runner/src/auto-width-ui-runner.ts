@@ -136,8 +136,9 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
             if (!pausedFor) {
               const safeAreaInsets = await this.safeAreaInsetsFetcher.getLeftAndRightInPoints();
               const screenSize = Device.screenSize();
+              const basePadding = Math.floor(Math.min(400, screenSize.width, screenSize.height) / 10 / 8) * 8;
               if (isFinite(safeAreaInsets.left) && isFinite(safeAreaInsets.right))
-                this.builder.rowWidth = screenSize.width - 40 - safeAreaInsets.left - safeAreaInsets.right;
+                this.builder.rowWidth = screenSize.width - basePadding - safeAreaInsets.left - safeAreaInsets.right;
               else
                 this.builder.rowWidth = null;
 

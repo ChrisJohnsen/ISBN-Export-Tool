@@ -157,9 +157,15 @@ export class UITableBuilder implements AutoWidthUIBuilder {
   }
   get rowWidth(): number {
     if (this._rowWidth != null) return this._rowWidth;
+    // when used with the "auto-width UI runner", it will automatically set our
+    // width based on device width and queried safe area insets, so the below
+    // defaults are not normally used.
     const screenSize = Device.screenSize();
+    if (Device.isPad()) return screenSize.width - 40; // XXX only tested one model
     const portrait = screenSize.width < screenSize.height;
-    return screenSize.width - 40 - (portrait ? 0 : 48 * 2); // XXX check other devices: any that use larger padding for either orientation?
+    // other devices have smaller "base padding" (40) and inset (48); we use the
+    // largest values to be safe (underestimate available width)
+    return screenSize.width - 40 - (portrait ? 0 : 48 * 2);
   }
 
   private fontMeasureCache = new Map<NamedFont, FontMeasures>;

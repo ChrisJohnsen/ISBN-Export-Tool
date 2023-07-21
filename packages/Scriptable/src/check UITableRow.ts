@@ -52,7 +52,8 @@ async function main2(saiWebViewBehind: boolean) {
         console.error(`unusable insets: ${JSON.stringify(safeAreaInsets)}`);
         return 'insets not usable';
       }
-      if (wp != 40 + safeAreaInsets.left + safeAreaInsets.right) {
+      const basePadding = Math.floor(Math.min(400, screenSize.width, screenSize.height) / 10 / 8) * 8;
+      if (wp != basePadding + safeAreaInsets.left + safeAreaInsets.right) {
         console.error(`insets do not match padding: ${JSON.stringify(safeAreaInsets)} vs. padding ${wp} for width ${screenSize.width}`);
         return 'insets do not match padding';
       }
