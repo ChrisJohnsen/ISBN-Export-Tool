@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@jest/globals": "^29.6.1",
-    "@rollup/plugin-commonjs": "^25.0.2",
+    "@rollup/plugin-commonjs": "^25.0.3",
     "@rollup/plugin-node-resolve": "^15.1.0",
     "@types/papaparse": "^5.3.7",
     "outdent": "^0.8.0",
