@@ -1,5 +1,5 @@
 export type PollingSubscriber<T> = (info: T, unsubscribe: () => void) => void;
-abstract class PollingNotifier<T> {
+export abstract class PollingNotifier<T> {
   protected constructor(private _interval: number) { }
 
   // XXX use WeakRef to let abandoned subscriptions be cleaned out?

@@ -1,11 +1,11 @@
 import safeAreaInsetsCode from 'safe-area-insets code';
 import * as t from 'typanion';
 import { FontMeasurer, type FontMeasures } from './measure.js';
-import { FontChangeNotifier, OrientationChangeNotifier } from './polled-notifications.js';
+import { FontChangeNotifier, OrientationChangeNotifier, PollingNotifier } from './polled-notifications.js';
 import { openPromise } from './ts-utils.js';
 
-type LoopFunction<T> = (loop: LoopControl<T>, info: { fontMeasures: FontMeasures, safeAreaInsets: { left: number, right: number } }) => void | Promise<unknown>;
-type LoopControl<T> = {
+type LoopFunction<T> = (loop: LoopControl<T>, info: { fontMeasures: FontMeasures, windowSize: Size, safeAreaInsets: { left: number, right: number } }) => void | Promise<unknown>;
+export type LoopControl<T> = {
   again: () => void,
   return: (value: T) => void,
 };
@@ -26,10 +26,14 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
     public readonly safeAreaInsetsFetcher: SafeAreaInsetsFetcher,
     public readonly presentationsClosed: Promise<void>,
     public readonly orientationChangeNotifier: OrientationChangeNotifier,
+    public readonly multitaskingSizeChangeNotifier: MultitaskingSizeChangeNotifier,
     public readonly fontMeasurer: FontMeasurer,
     public readonly fontChangeNotifier: FontChangeNotifier,
   ) { }
-  static async start<B extends AutoWidthUIBuilder>(createBuilder: CreateBuilder<B>, opts: { visibleSafeAreaInsetWebView: boolean } = { visibleSafeAreaInsetWebView: false }) {
+  static async start<B extends AutoWidthUIBuilder>(createBuilder: CreateBuilder<B>, options: { visibleSafeAreaInsetWebView?: boolean } = {}) {
+    // default to visible SAI for multitasking devices (iPad) so we can retrieve
+    // the "window" size
+    const opts: Required<typeof options> = { visibleSafeAreaInsetWebView: Device.isPad(), ...options };
 
     const safeAreaInsetsFetcher = await SafeAreaInsetsFetcher.create(opts.visibleSafeAreaInsetWebView);
 
@@ -47,6 +51,7 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
       safeAreaInsetsFetcher,
       tableClosed.then(() => safeAreaInsetsFetcher.webviewClosed),
       new OrientationChangeNotifier,
+      new MultitaskingSizeChangeNotifier(safeAreaInsetsFetcher),
       fm,
       await FontChangeNotifier.create(5000, fm));
   }
@@ -63,10 +68,12 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
       this.safeAreaInsetsFetcher,
       tableClosed.then(), // this new runner didn't present the SAI fetcher, so it shouldn't automatically let its users wait for it to close
       this.orientationChangeNotifier,
+      this.multitaskingSizeChangeNotifier,
       this.fontMeasurer,
       this.fontChangeNotifier);
   }
   private activeLoop: { n: number, pauseFor?: (subTask: Promise<void>) => void } | undefined;
+  public paddingBasedOnScreenSize = true;
   async loop<T = void>(fn: LoopFunction<T>) {
     const { promise: thisLoopFinished, resolve: releasePause } = openPromise<void>();
 
@@ -122,9 +129,21 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
       endThisIteration?.('loop again');
     });
 
+    let orientationChangedFromInitial = false;
+    let previousSize = Device.screenSize();
     const orientationSub = this.orientationChangeNotifier.subscribe(() => {
-      endThisIteration?.('loop again'); // XXX only if dimensions have changed?
+      const newSize = Device.screenSize();
+      if (newSize.width != previousSize.width || newSize.height != previousSize.height) {
+        orientationChangedFromInitial = true;
+        previousSize = newSize;
+        endThisIteration?.('loop again');
+      }
     });
+
+    // XXX we could also skip this on non-multitasking devices (even if SAI is presented)
+    const sizeSub = this.saiVisible
+      ? this.multitaskingSizeChangeNotifier.subscribe(() => endThisIteration?.('loop again'))
+      : void 0;
 
     try {
       for (; ;) {
@@ -134,11 +153,52 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
         const event = await (async event => {
           try {
             if (!pausedFor) {
-              const safeAreaInsets = await this.safeAreaInsetsFetcher.getLeftAndRightInPoints();
               const screenSize = Device.screenSize();
-              const basePadding = Math.floor(Math.min(400, screenSize.width, screenSize.height) / 10 / 8) * 8;
-              if (isFinite(safeAreaInsets.left) && isFinite(safeAreaInsets.right))
-                this.builder.rowWidth = screenSize.width - basePadding - safeAreaInsets.left - safeAreaInsets.right;
+              const { left, right, top, bottom, width, height } = await this.safeAreaInsetsFetcher.getInsetsAndSizeInPoints();
+
+              const windowSize = (() => {
+
+                const windowSize = new Size(width, height);
+
+                // after the first orientation change the reported size seems to be reliable
+                if (orientationChangedFromInitial) return windowSize;
+
+                // before the first orientation change, the width and height are
+                // erroneously reduced by the applicable insets; try to fix
+                // them, but only in a way that won't cause its own problems if
+                // this bug is fixed
+
+                if (screenSize.height - (windowSize.height + top + bottom) == 0)
+                  if (
+                    // full screen
+                    screenSize.width - (windowSize.width + left + right) == 0
+                    // Split View sizes
+                    || [1 / 3, 2 / 3, 1 / 2]
+                      .map(f => screenSize.width - (windowSize.width + left + right) / f)
+                      .some(w => (0 <= w && w <= 20))
+                    // XXX Slide Over looks like it is close to 1/3 width, but not full height...
+                  ) {
+                    console.log(`adjusting reported windowSize: ${windowSize.width}(+${left + right})x${windowSize.height}(+${top + bottom})`);
+                    windowSize.width += left + right;
+                    windowSize.height += top + bottom;
+                    return windowSize;
+                  }
+
+                // for Stage Manager and any other unhandled window
+                // configurations, there may be no good way to know whether the
+                // bug happened or not; just return the reported size; if the
+                // bug happened, then the size might be smaller than ideal (but,
+                // a smaller width is safer for our line breaking purposes)
+                // console.warn(`using unadjusted windowSize: ${windowSize.width}x${windowSize.height}`);
+
+                return windowSize;
+              })();
+
+              const paddingBase = this.paddingBasedOnScreenSize ? screenSize : windowSize;
+              const basePadding = Math.floor(Math.min(400, paddingBase.width, paddingBase.height) / 10 / 8) * 8;
+              const contentWidth = windowSize.width - basePadding - left - right;
+              if (isFinite(contentWidth))
+                this.builder.rowWidth = contentWidth;
               else
                 this.builder.rowWidth = null;
 
@@ -147,7 +207,7 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
               newFont = false;
 
               this.table.removeAllRows();
-              await fn(loop, { fontMeasures, safeAreaInsets });
+              await fn(loop, { fontMeasures, windowSize, safeAreaInsets: { left, right } });
               this.table.reload();
             } else
               endThisIteration(pausedFor.then(() => 'loop again' as const));
@@ -167,13 +227,23 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
         return event.return;
       }
     } finally {
-      fontSub.unsubscribe();
+      sizeSub?.unsubscribe();
       orientationSub.unsubscribe();
+      fontSub.unsubscribe();
     }
   }
 }
 
-const isInsets = t.isObject({ left: t.isString(), right: t.isString() }, { extra: t.isObject({ angle: t.isNumber() }) });
+const isInsets = t.isObject({
+  left: t.isString(), right: t.isString(),
+  top: t.isString(), bottom: t.isString(),
+  width: t.isNumber(), height: t.isNumber(),
+}, {
+  extra: t.isObject({
+    angle: t.isNumber(),
+    x: t.isNumber(), y: t.isNumber(),
+  })
+});
 class SafeAreaInsetsFetcher {
   private constructor(private readonly wv: WebView, private readonly presented: Promise<void> | false, public readonly webviewClosed: Promise<void>) { }
   /**
@@ -190,14 +260,14 @@ class SafeAreaInsetsFetcher {
    * When the inset-query WebView is "hidden", the queries may not be as
    * reliable:
    *    * the 'right' inset never updates, and
-   *    * there is often a larger delay between an orientation change and the inset
-   *   values updating.
+   *    * there is often a larger delay between an orientation change and the
+   *      inset values updating, and
+   *    * the 'width' and 'height' seem to use placeholder values (300).
    *
-   * This code attempts to compensate for both of these
-   * problems. Not presenting the inset-query WebView is probably better UX (the
-   * user never sees this non-interactive WebView presentation), but this kind
-   * of "behind-the-scenes" WebView may not be an entirely supported Scriptable
-   * technique.
+   * This code attempts to compensate for these problems. Not presenting the
+   * inset-query WebView is probably better UX (the user never sees this
+   * non-interactive WebView presentation), but this kind of "behind-the-scenes"
+   * WebView may not be an entirely supported Scriptable technique.
    *
    * Despite efforts to return stable values, the insets provided by this code
    * may occasionally be wrong. In these cases, you may get the insets that were
@@ -250,7 +320,8 @@ class SafeAreaInsetsFetcher {
     return new SafeAreaInsetsFetcher(webView, presented, webviewClosed);
 
   }
-  async getLeftAndRight() {
+  private warned = false;
+  async getInsetsEtc() {
     if (this.presented)
       await this.presented;
 
@@ -264,23 +335,71 @@ class SafeAreaInsetsFetcher {
       }
     })();
     if (!isInsets(insets))
-      throw new Error(`expected Record<'left'|'right',string> for insets from web code (got ${JSON.stringify(insets)})`);
+      throw new Error(`expected Record<'left'|'right'|'top'|'bottom',string>&Record<'width'|'height',number> for from web code (got ${JSON.stringify(insets)})`);
 
-    // When the WebView is not presented, 'right' never updates, so if it is
-    // different from 'left', use the 'left' value (various descriptions of
-    // iOS-level safe area insets seem to show that they are always the same: 0
-    // if the notch/island is not to the left or right or some value larger than
-    // the notch/island height if the notch/island is on the left or right).
-    if (!this.presented && insets.right != insets.left)
-      insets.right = insets.left;
+    // When the WebView is not presented ...
+    if (!this.presented) {
+      // ... 'right' never updates, so if it is different from 'left', use the
+      // 'left' value (various descriptions of iOS-level safe area insets seem
+      // to show that they are always the same: 0 if the notch/island is not to
+      // the left or right or some value larger than the notch/island height if
+      // the notch/island is on the left or right).
+      if (insets.right != insets.left)
+        insets.right = insets.left;
+
+      // ... the reported size seems to always be 300x300 (a placeholder
+      // value?); the best we can do is assume we are full screen; this will be
+      // wrong for multitasking scenarios, but we can't do much about it other
+      // than issue a warning.
+      if (!Device.isPad()) {
+        const screenSize = Device.screenSize();
+        insets.width = screenSize.width;
+        insets.height = screenSize.height;
+      } else if (!this.warned) {
+        console.warn('Safe Area Inset WebView must be presented on devices that offer multitasking (iPads)');
+        this.warned = true;
+      }
+    }
+
+    // the rest of the size fixups are done in the runner since it knows whether the orientation has been changed
 
     return insets;
   }
   async getLeftAndRightInPoints() {
-    const { left, right } = await this.getLeftAndRight();
+    const { left, right } = await this.getInsetsEtc();
     return {
       left: parseInt(left),
       right: parseInt(right),
     };
+  }
+  async getInsetsAndSizeInPoints() {
+    const { left, right, top, bottom, width, height } = await this.getInsetsEtc();
+    return {
+      left: parseInt(left),
+      right: parseInt(right),
+      top: parseInt(top),
+      bottom: parseInt(bottom),
+      width, height,
+    };
+  }
+}
+
+// this might be able to replace the orientation notifier:
+// this directly checks the size, which is what we are really concerned with
+// unfortunately, this is probably more expensive than the OCN (due to calls into WebView)
+class MultitaskingSizeChangeNotifier extends PollingNotifier<Size> {
+  constructor(private sai: SafeAreaInsetsFetcher, interval = 1000) {
+    super(interval);
+  }
+  private size: null | Size = null;
+  protected async poll() {
+    const { width, height } = await this.sai.getInsetsEtc();
+    if (width != this.size?.width || height != this.size?.height) {
+      this.size = new Size(width, height);
+      this.notify();
+    }
+  }
+  protected notificationInfo(): { info: Size; } | null {
+    return this.size && { info: this.size };
   }
 }

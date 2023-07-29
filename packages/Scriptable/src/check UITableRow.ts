@@ -1,16 +1,16 @@
 import production from 'consts:production';
-import * as t from 'typanion';
-import { AutoWidthUIRunner, estimatedHeightOf, heightFor, type FontMeasurer, type FontMeasures } from 'uitable-runner';
+import { AutoWidthUIRunner, estimatedHeightOf, heightFor, type FontMeasurer, type FontMeasures, type LoopControl } from 'uitable-runner';
 import { buildSourceAndLicenses } from './build-source-and-licenses.js';
 import { apportionWidth } from './lib/row-width.js';
 import { rulerImage } from './lib/ruler-image.js';
-import { Store, asidePathname, localTempfile } from './lib/scriptable-utils.js';
+import { localTempfile } from './lib/scriptable-utils.js';
+import { getOrSetNew } from './lib/ts-utils.js';
 import { UITableBuilder, fontNames, textCell, type NamedFont } from './lib/uitable-builder.js';
 
 type UIRunner = AutoWidthUIRunner<UITableBuilder>;
 
 async function main() {
-  for (let saiWebViewBehind = false; ; saiWebViewBehind = !saiWebViewBehind)
+  for (let saiWebViewBehind = Device.isPad(); ; saiWebViewBehind = !saiWebViewBehind) // multitasking on iPad needs width report that is only accurate when presented...
     if (!await main2(saiWebViewBehind)) return;
 }
 
@@ -19,130 +19,39 @@ async function main2(saiWebViewBehind: boolean) {
   const ui = await AutoWidthUIRunner.start((t, fm) => UITableBuilder.create(t, fm), { visibleSafeAreaInsetWebView: saiWebViewBehind });
   const builder = ui.builder;
 
-  const padding = new PaddingStore(Device.screenSize());
-
-  await padding.load();
-
-  const insetsStatusLog: PortraitAndLandscape<{ times: number, matches: number, insetCounts: Map<string, number> }> = {
-    portrait: { times: 0, matches: 0, insetCounts: new Map },
-    landscape: { times: 0, matches: 0, insetCounts: new Map },
-  };
-
-  if (padding.source == 'default')
-    if (!await measurePadding())
-      return; // table closed
-
   let n = 0; // debug counter
-  const screenScale = Device.screenScale();
-  const runAgain = await ui.loop<true>(async (loop, { safeAreaInsets }) => {
+  const runAgain = await ui.loop<true>(async loop => {
     builder.title = 'Automatic Row Height Demonstrations ' + n++;
-    const screenSize = Device.screenSize();
 
     await builder.addTitleConfigRow();
-    builder.addEmptyRow();
-
-    const orientation = orientationName(screenSize);
-    const insetStatus = (function checkAndLogInsetsStatus() {
-      const log = insetsStatusLog[orientation];
-      log.times++;
-      const key = `${safeAreaInsets.left}L${safeAreaInsets.right}R`;
-      log.insetCounts.set(key, (log.insetCounts.get(key) ?? 0) + 1);
-      const wp = padding[orientation].widthPadding;
-      if (!(isFinite(safeAreaInsets.left) && isFinite(safeAreaInsets.right))) {
-        console.error(`unusable insets: ${JSON.stringify(safeAreaInsets)}`);
-        return 'insets not usable';
-      }
-      const basePadding = Math.floor(Math.min(400, screenSize.width, screenSize.height) / 10 / 8) * 8;
-      if (wp != basePadding + safeAreaInsets.left + safeAreaInsets.right) {
-        console.error(`insets do not match padding: ${JSON.stringify(safeAreaInsets)} vs. padding ${wp} for width ${screenSize.width}`);
-        return 'insets do not match padding';
-      }
-      log.matches++;
-      return 'insets match padding';
-    })();
-
-    const goodOpts = { backgroundColor: Color.blue() };
-    const warnOpts = { backgroundColor: Color.yellow() };
-    const errorOpts = { backgroundColor: Color.red() };
-
-    const orientations = ['portrait', 'landscape'] as const;
-    const statuses = mapPnLs([insetsStatusLog], l => l.times == 0
-      ? 'untried'
-      : l.matches / l.times >= 0.9
-        ? 'good'
-        : 'bad');
-    const eachUntriedOrOkay = orientations.every(o => statuses[o] == 'untried' || statuses[o] == 'good');
-    await builder.addTextRow('Insets/Padding Match Status', eachUntriedOrOkay ? {} : errorOpts);
-    for (const orientation of orientations) {
-      const log = insetsStatusLog[orientation];
-      const opts = (() => {
-        const s = statuses[orientation];
-        if (s == 'untried') return warnOpts;
-        else if (s == 'good') return goodOpts;
-        else return errorOpts;
-      })();
-      await builder.addIndentRow(`${orientation} ${log.matches} of ${log.times} times${log.times == 0 ? `\n(please try the ${orientation} orientation, too)` : ''}`, opts);
-    }
-    if (insetsStatusLog.portrait.times > 0 && insetsStatusLog.landscape.times > 0)
-      await builder.addForwardRow('Copy Size/Inset/Padding Info', async () => {
-        const deviceInfo = `device: ${Device.model()} (${Device.isPhone() ? 'phone' : Device.isPad() ? 'pad' : 'other'}) ${Device.systemName()} ${Device.systemVersion()}`;
-        const { width, height } = (size => size.width < size.height ? size : { width: size.height, height: size.width })(screenSize);
-        const deviceSize = `size: ${screenScale}× scale ${width}×${height}pt `;
-        const sai = mapPnLs([insetsStatusLog], l => {
-          const insetStr = Array.from(l.insetCounts.entries()).reduce(([hi, hc], [i, c]) => c > hc ? [i, c] : [hi, hc])[0];
-          const match = insetStr.match(/(.*)L(.*)R/);
-          if (!match) return { left: '?', right: '?' };
-          return { left: match[1], right: match[2] };
-        });
-        const p = `portrait li ${sai.portrait.left} ri ${sai.portrait.right} hp ${padding.portrait.heightPadding} wp ${padding.portrait.widthPadding}`;
-        const l = `landscape li ${sai.landscape.left} ri ${sai.landscape.right} hp ${padding.landscape.heightPadding} wp ${padding.landscape.widthPadding}`;
-        const info = [deviceInfo, deviceSize, p, l].join('\n');
-
-        const a = new Alert;
-        a.title = 'Size/Inset/Padding Info';
-        a.message = info;
-        a.addAction('Copy to Clipboard');
-        a.addCancelAction('Cancel');
-        const r = await a.present();
-        if (r == -1) return;
-        Pasteboard.copyString(info);
-      });
     builder.addEmptyRow();
 
     await builder.addForwardRow('Show Line Breaks', () => showLineBreaks(ui));
     // XXX show comparisons: native text block vs. "our" breaking (and rendering?)
     builder.addEmptyRow();
 
-    const measurePaddings = padding.source == 'default' ? 'Measure Paddings' : 'Re-measure Paddings';
-    await builder.addForwardRow(measurePaddings, () => measurePadding());
+    await builder.addForwardRow('Check Row Paddings', () => checkPaddingsByGapObservation(ui));
     await builder.addForwardRow('Show Safe Area Insets', () => showSafeAreaInsets(ui));
     await builder.addForwardRow('Show Zero widthWeights', () => showWidthWeights(ui));
     await builder.addForwardRow('Measure Row Height for N Lines', () => measureHeights(ui));
     await builder.addForwardRow('Measure Fonts', () => measureFonts(ui));
     builder.addEmptyRow();
 
-    await builder.addForwardRow('Measure Paddings By Moiré', () => measurePaddingByMoire());
+    await builder.addForwardRow('Check Row Paddings By Moiré', () => checkPaddingByMoire());
     await builder.addIndentRow(textCell('This technique is probably more difficult to use than the default "gap" technique. The first step requires subtle discernment that may not be obvious unless you already know what to look for.', { titleFont: 'footnote' }));
     builder.addEmptyRow();
 
-    await builder.addForwardRow('Toggle "Visibility" of Safe Area Inset WebView', () => loop.return(true));
-    builder.addEmptyRow();
+    // XXX move these to config? anything else? "extra lines" config?
+    await builder.addCheckableRow('Derive "base padding" from screen width?', ui.paddingBasedOnScreenSize, () => {
+      ui.paddingBasedOnScreenSize = !ui.paddingBasedOnScreenSize;
+      loop.again();
+    });
 
-    const infoOpts = { backgroundColor: Color.gray() };
-    await builder.addTextRow(`device: ${Device.model()} (${Device.isPhone() ? 'phone' : Device.isPad() ? 'pad' : 'other'}) ${Device.systemName()} ${Device.systemVersion()}`, infoOpts);
-    await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height}pt ${screenScale}× scale`, infoOpts);
-    await builder.addTextRow(`safe area insets (pt): left:${safeAreaInsets.left} right:${safeAreaInsets.right}`, insetStatus == 'insets match padding' ? infoOpts : errorOpts);
-    if (insetStatus == 'insets do not match padding') {
-      await builder.addTextRow('INSETS DO NOT MATCH WIDTH PADDING', errorOpts);
-      if (padding.source == 'default')
-        await builder.addTextRow('Please try using "Measuring Paddings" to measure this device\'s row paddings.', errorOpts);
-    }
-    if (padding.portrait.heightPadding == padding.landscape.heightPadding)
-      await builder.addTextRow(`UITableRow (image) height padding (pt): ${padding.portrait.heightPadding}`, infoOpts);
-    else
-      await builder.addTextRow(`UITableRow (image) height paddings (pt): P ${padding.portrait.heightPadding} != L ${padding.landscape.heightPadding}`, errorOpts);
-    await builder.addTextRow(`UITableRow (image) width paddings (pt): P ${padding.portrait.widthPadding} L ${padding.landscape.widthPadding}`, infoOpts);
-    await builder.addTextRow(`padding source: ${padding.source}`, infoOpts);
+    await builder.addIndentRow(textCell(ui.paddingBasedOnScreenSize
+      ? `Will use screen width.`
+      : `Will use multitasking "window" width.\nThis is only meaningful on devices that can "multitask" (Split View, Slide Over, Stage Manager).`,
+      { titleFont: 'footnote' }));
+    await builder.addForwardRow('Toggle "Visibility" of Safe Area Inset WebView', () => loop.return(true));
     builder.addEmptyRow();
 
     if (production)
@@ -161,93 +70,123 @@ async function main2(saiWebViewBehind: boolean) {
 
   return runAgain;
 
-  async function measurePadding() {
-    const newPadding = await measurePaddingsByGapObservation(ui);
-    if (!newPadding) return newPadding;
-    if (newPadding != 'use defaults') {
-      const differs = mapPnLs([padding, newPadding], (o, n) => o.heightPadding != n.heightPadding || o.widthPadding != n.widthPadding);
-      if (differs.portrait || differs.landscape)
-        insetsStatusLog.portrait.times = insetsStatusLog.portrait.matches =
-          insetsStatusLog.landscape.times = insetsStatusLog.landscape.matches = 0;
-      await padding.save({ ...newPadding, source: 'measured' });
-    }
-    return true;
-  }
-  async function measurePaddingByMoire() {
+  async function checkPaddingByMoire() {
     const heightPadding = await measureHeightPaddingByMoire(ui);
     if (!heightPadding) return;
-
-    const widthPaddings = await measureWidthPaddingsByMoire(ui, heightPadding);
-
-    return ui.loop(async loop => {
-      await ui.builder.addTitleConfigRow();
-      await ui.builder.addBackRow('Back', () => loop.return());
-      ui.builder.addEmptyRow();
-      await ui.builder.addTextRow(`Height Padding: ${heightPadding}`);
-      await ui.builder.addTextRow(`Width Paddings: P ${widthPaddings.portrait} L ${widthPaddings.landscape}`);
-    });
+    await checkWidthPaddingsByMoire(ui, heightPadding);
   }
 }
-
-type ActivePadding = PortraitAndLandscape<Padding> & { source: 'loaded previous measure' | 'measured' | 'default' };
-const isOrientedPadding = t.isObject({ heightPadding: t.isNumber(), widthPadding: t.isNumber() });
-const isPadding = t.isObject({ portrait: isOrientedPadding, landscape: isOrientedPadding });
-const isSavedPadding = t.isRecord(t.isOptional(isPadding));
-class PaddingStore implements ActivePadding {
-  private padding: ActivePadding;
-  get portrait() { return this.padding.portrait }
-  get landscape() { return this.padding.landscape }
-  get source() { return this.padding.source }
-  private paddingKey: string;
-  private store = new Store(asidePathname(module.filename, 'json'));
-  constructor(screenSize: Size) {
-    this.padding = {
-      portrait: { heightPadding: 16, widthPadding: 40 },
-      landscape: { heightPadding: 16, widthPadding: 40 + 48 * 2 },
-      source: 'default'
-    };
-    this.paddingKey = [screenSize.width, screenSize.height].sort((a, b) => a - b).join('x');
-  }
-  async load() {
-    await this.store.read();
-    if (!isSavedPadding(this.store.data)) return this.padding;
-    const padding = this.store.data[this.paddingKey];
-    if (!padding) return this.padding;
-    this.padding = { ...padding, source: 'loaded previous measure' };
-  }
-  async save(padding: PortraitAndLandscape<Padding> & { source: 'measured' }) {
-    this.padding = padding;
-    const { portrait, landscape } = padding;
-    await this.store.read();
-    if (!isSavedPadding(this.store.data))
-      this.store.data = { [this.paddingKey]: { portrait, landscape } } satisfies t.InferType<typeof isSavedPadding>;
-    else
-      this.store.data[this.paddingKey] = { portrait, landscape };
-    await this.store.write();
-  }
-}
-
-function orientationName(screenSize: Size) {
-  return screenSize.width < screenSize.height ? 'portrait' : 'landscape';
-}
-type PortraitAndLandscape<T> = { portrait: T, landscape: T };
-function mapPnLs<T extends readonly [PortraitAndLandscape<unknown>, ...PortraitAndLandscape<unknown>[]], U>(pnlS: T, fn: (...values: DePnLTuple<T>) => U): PortraitAndLandscape<U>;
-function mapPnLs<U>(pnlS: readonly PortraitAndLandscape<unknown>[], fn: (...values: unknown[]) => U): PortraitAndLandscape<U> {
-  return {
-    portrait: fn(...pnlS.map(pnl => pnl.portrait)),
-    landscape: fn(...pnlS.map(pnl => pnl.landscape)),
-  };
-}
-type DePnL<T> = T extends PortraitAndLandscape<infer U> ? U : never;
-type DePnLTuple<T extends readonly PortraitAndLandscape<unknown>[]> =
-  T extends [] ? []
-  : T extends readonly [infer U, ...infer R extends PortraitAndLandscape<unknown>[]] ? readonly [DePnL<U>, ...DePnLTuple<R>]
-  : T extends readonly PortraitAndLandscape<infer U>[] ? U[] // U will be a union if the types are heterogenous: sometimes "as const" will help
-  : never;
 
 type Padding = { heightPadding: number, widthPadding: number };
 
-async function measurePaddingsByGapObservation(ui: UIRunner): Promise<PortraitAndLandscape<Padding> | 'use defaults' | null> {
+type SizeKey = {
+  screenSize: { width: number, height: number },
+  windowSize: { width: number, height: number },
+  safeAreaInsets: { left: number, right: number },
+  contentWidth: number, // not part of key lookup; included so summary can check runner's provided content width against measured width padding
+}
+async function multiSize<SizeState>(ui: UIRunner, makeNewState: (key: SizeKey) => SizeState, runOne: (loop: LoopControl<void>, key: SizeKey, state: SizeState, addStatusRows: (paddings: Map<SizeKey, Padding>) => Promise<void>) => Promise<void>): Promise<void | null> {
+  const builder = ui.builder;
+
+  const stateKeys = new Map<number, Map<number, Map<number, Map<number, Map<number, Map<number, SizeKey>>>>>>;
+  function getStateKey(screenSize: Size, windowSize: Size, safeAreaInsets: { left: number, right: number }, contentWidth: number) {
+    const sh = getOrSetNew(stateKeys, screenSize.width, () => new Map);
+    const ww = getOrSetNew(sh, screenSize.height, () => new Map);
+    const wh = getOrSetNew(ww, windowSize.width, () => new Map);
+    const li = getOrSetNew(wh, windowSize.height, () => new Map);
+    const ri = getOrSetNew(li, safeAreaInsets.left, () => new Map);
+    const key = getOrSetNew(ri, safeAreaInsets.right, () => ({
+      screenSize,
+      windowSize,
+      safeAreaInsets,
+      contentWidth,
+    }));
+    return key;
+  }
+  const allStates = new Map<SizeKey, SizeState>;
+
+  return await ui.loop(async (loop, { windowSize, safeAreaInsets }) => {
+    const key = getStateKey(Device.screenSize(), windowSize, safeAreaInsets, builder.rowWidth);
+    const state = getOrSetNew(allStates, key, () => makeNewState(key));
+    await runOne(loop, key, state, paddings => addStatusRows(key, paddings));
+  });
+
+  async function addStatusRows(currentKey: SizeKey, paddings: Map<SizeKey, Padding>) {
+    const sortedKeys = Array.from(allStates.keys()).sort((a, b) => [
+      a.screenSize.width - b.screenSize.width,
+      a.windowSize.width - b.windowSize.width,
+      a.safeAreaInsets.left - b.safeAreaInsets.left,
+      a.safeAreaInsets.right - b.safeAreaInsets.right,
+      a.screenSize.height - b.screenSize.height,
+    ].reduce((ret, comparison) => ret != 0 ? ret : comparison));
+
+    const info = ['screen width,screen height,window width,window height,left inset,right inset,row width padding,row height padding'];
+    await builder.addForwardRow('View or Copy Padding Info', async () => {
+      const text = info.join('\n');
+      const a = new Alert;
+      a.title = 'Size/Inset/Padding Info';
+      a.message = text;
+      a.addAction('Copy');
+      a.addCancelAction('Cancel');
+      const ac = await a.present();
+      if (ac == -1) return;
+      Pasteboard.copyString(text);
+    });
+
+    for (const key of sortedKeys) {
+      const { screenSize, windowSize, safeAreaInsets } = key;
+      const name = orientationAndMultitaskingName(screenSize, windowSize);
+
+      const text = `${name?.concat('\n') ?? ''}screen size ${sz(screenSize)} window size ${sz(windowSize)}\nleft/right insets ${safeAreaInsets.left}/${safeAreaInsets.right}`;
+      const backgroundColor = key == currentKey ? Color.gray() : void 0;
+
+      const padding = paddings.get(key);
+      if (padding) {
+        info.push(`${screenSize.width},${screenSize.height},${windowSize.width},${windowSize.height},${safeAreaInsets.left},${safeAreaInsets.right},${padding.widthPadding},${padding.heightPadding}`);
+        const hOk = padding.heightPadding == 16;
+        const wOk = windowSize.width - padding.widthPadding == key.contentWidth;
+        await builder.addTextRow(`${text}\nwidth padding ${mark(wOk)} ${padding.widthPadding}, height padding ${mark(hOk)} ${padding.heightPadding}`, { backgroundColor });
+      } else
+        await builder.addTextRow(`${text}: incomplete`, { backgroundColor });
+    }
+    function orientationAndMultitaskingName(screenSize: Size, windowSize: Size) {
+      const orientation = screenSize.width < screenSize.height ? 'portrait' : 'landscape';
+      if (windowSize.height == screenSize.height) {
+        if (windowSize.width == screenSize.width)
+          return 'full-screen ' + orientation;
+        else if (validSplit(1 / 2, screenSize.width, windowSize.width))
+          return '1/2 ' + orientation;
+        else if (validSplit(1 / 3, screenSize.width, windowSize.width))
+          return '1/3 ' + orientation;
+        else if (validSplit(2 / 3, screenSize.width, windowSize.width))
+          return '2/3 ' + orientation;
+        // XXX I don't think 1/4 and 3/4 are actually possible, but some places mention 25% and 75% (HIG says 1/3 and 2/3...)
+        else if (validSplit(1 / 4, screenSize.width, windowSize.width))
+          return '1/4 ' + orientation;
+        else if (validSplit(3 / 4, screenSize.width, windowSize.width))
+          return '3/4 ' + orientation;
+      }
+      // XXX slide over is probably not full height and a bit less than 1/3 width
+      return sz(windowSize) + ' in ' + orientation;
+    }
+    function sz(size: { width: number, height: number }) {
+      return `${size.width}×${size.height}`;
+    }
+    function validSplit(fraction: number, screenWidth: number, windowWidth: number) {
+      // XXX only one of these is correct; probably "a"? but unless we actually measure the divider handle width we are only guessing
+      const a = screenWidth - windowWidth / fraction; // subtract space for divider, then split
+      const b = screenWidth * fraction - windowWidth; // split, then subtract space for divider
+      const dividerSizeGuess = 20;
+      return a >= 0 && a <= dividerSizeGuess
+        || b >= 0 && b <= dividerSizeGuess;
+    }
+    function mark(ok: boolean) {
+      return ok ? '✔' : '✘';
+    }
+  }
+}
+
+async function checkPaddingsByGapObservation(ui: UIRunner): Promise<void | null> {
   const builder = ui.builder;
   // in a row with 0 cellSpacing,
   // put two images next to each other; left-align the left one, right-align the right one; they will only touch if their widthWeights are "snug"
@@ -258,74 +197,56 @@ async function measurePaddingsByGapObservation(ui: UIRunner): Promise<PortraitAn
   // the aspect ratio of the "maximum unscaled image height" will be the widthWeightTotal/foundWidthWeight
   // do this for two different row heights (thus two different aspect ratios)
   // the two row heights and aspect ratios can be combined to compute the row height padding
-  // the screen width, row height, aspect ratio, and height padding can be combined to compute the row width padding
-  // do all this for both orientations
-
-  const screenScale = Device.screenScale();
+  // the window width, row height, aspect ratio, and height padding can be combined to compute the row width padding
+  // do all this for each orientation or multitasking window size the user arranges
 
   const image = rulerImage(new Size(1, 1));
 
   const rowHeights = new Set([44, 105] as const);
   type RowHeights = typeof rowHeights extends Set<infer T> ? T : never;
   const widthWeightTotal = 2 ** 16; // 12 just enough on my iPhone XR
-  const allState: PortraitAndLandscape<Record<RowHeights, { lowerBound: number, upperBound: number }>> = {
-    portrait: {
-      44: { lowerBound: 0, upperBound: widthWeightTotal },
-      105: { lowerBound: 0, upperBound: widthWeightTotal },
-    },
-    landscape: {
-      44: { lowerBound: 0, upperBound: widthWeightTotal },
-      105: { lowerBound: 0, upperBound: widthWeightTotal },
-    },
-  };
 
-  builder.title = 'Measure Row Padding';
+  type State = Record<RowHeights, { lowerBound: number, upperBound: number }>;
+  const paddings = new Map<SizeKey, Padding>;
 
-  return await ui.loop(async loop => {
-    const screenSize = Device.screenSize();
+  builder.title = 'Check Row Paddings';
+
+  return multiSize(ui, (): State => ({
+    44: { lowerBound: 0, upperBound: widthWeightTotal },
+    105: { lowerBound: 0, upperBound: widthWeightTotal },
+  }), async (loop, key, bothHeightsState, addStatusRows) => {
 
     // add title, and scroll padding rows
-    const tp = new VariablePadding(screenSize.height * .75);
+    const tp = new VariablePadding(key.windowSize.height * .75);
     tp.deduct(await builder.addTitleConfigRow());
-    tp.deduct(await builder.addBackRow('Skip Measurement', () => loop.return('use defaults')));
+    tp.deduct(await builder.addBackRow('Back', () => loop.return()));
     const topScrollPad = builder.addEmptyRow();
 
-    function unfinishedStateForOrientation(o: keyof typeof allState) {
+    function unfinishedRowHeight(state: State) {
       return Array.from(rowHeights)
-        .map(rh => ({ rowHeight: rh, state: allState[o][rh] }))
-        .filter(s => s.state.upperBound > s.state.lowerBound + 1)
+        .map(rh => ({ rowHeight: rh, state: state[rh] }))
+        .filter(s => s.state && s.state.upperBound > s.state.lowerBound + 1)
         .at(0);
     }
-    const orientation = orientationName(screenSize);
-    const orientedState = unfinishedStateForOrientation(orientation);
+    const unfinished = unfinishedRowHeight(bothHeightsState);
 
-    if (!orientedState) {
+    if (!unfinished) {
 
-      const other = orientation == 'portrait' ? 'landscape' : 'portrait';
-      if (!unfinishedStateForOrientation(other)) {
-        // ar = (sw-wp)/(rh-hp)             aspect ratio of maximum unscaled image size
-        // wp = sw-(rh-hp)ar
-        // (rh1-hp)ar1 = (rh2-hp)ar2        in the same orientation, wp are equal whatever the rh
-        // hp = (rh1*ar1-rh2*ar2)/(ar1-ar2)
-        const rhs = Array.from(rowHeights);
-        const ars = mapPnLs([allState], s => rhs.map(rh => widthWeightTotal / s[rh].upperBound));
-        const heightPadding = mapPnLs([ars],
-          ars => Math.round((rhs[0] * ars[0] - rhs[1] * ars[1]) / (ars[0] - ars[1])));
-        const screenWidth = orientationName(screenSize) == 'portrait'
-          ? { portrait: screenSize.width, landscape: screenSize.height }
-          : { portrait: screenSize.height, landscape: screenSize.width };
-        const widthPadding = mapPnLs([ars, heightPadding, screenWidth],
-          (ars, heightPadding, screenWidth) => Math.round(screenWidth - (rhs[0] - heightPadding) * ars[0]));
-        return loop.return(mapPnLs([heightPadding, widthPadding],
-          (heightPadding, widthPadding) => ({ heightPadding, widthPadding })));
+      if (!paddings.has(key)) {
+        const padding = paddingForState(key, bothHeightsState);
+        if (padding) paddings.set(key, padding);
       }
 
-      await builder.addTextRow('This orientation is done, please rotate your device and continue.');
+      await builder.addTextRow('You have completed the padding check for this size and orientation. To check another configuration, activate another multitasking size and/or rotate your device into a different orientation.');
+      await builder.addIndentRow(textCell('Multitasking is available on iPads through Split View, Slide Over, and (if the iPad supports it) Stage Manager.', { titleFont: 'footnote' }));
+      builder.addEmptyRow();
+
+      await addStatusRows(paddings);
 
       return;
     }
 
-    const { rowHeight, state } = orientedState;
+    const { rowHeight, state } = unfinished;
 
     // add instruction row
     tp.deduct(await builder.addTextRow('Pick the first row with a gap between the squares. The gap might be quite small!'));
@@ -360,16 +281,27 @@ async function measurePaddingsByGapObservation(ui: UIRunner): Promise<PortraitAn
     // pick first row that is "indented" any amount (even a tiny amount; probably need to use zoom)
 
     // add scroll padding, and informational rows
-    const bp = new VariablePadding(screenSize.height * .75);
+    const bp = new VariablePadding(key.windowSize.height * .75);
     const bottomScrollPad = builder.addEmptyRow();
-    bp.deduct(await builder.addTextRow(`device scale: ${screenScale}×`));
-    bp.deduct(await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`));
-    bp.deduct(await builder.addTextRow(`row cell weighting total: ${widthWeightTotal}`));
-    bp.deduct(await builder.addTextRow(`row height: ${rowHeight}`));
-    bp.deduct(await builder.addTextRow(`${state.lowerBound} <= cell weight < ${state.upperBound}`));
-    bp.deduct(await builder.addTextRow(`${(widthWeightTotal / state.upperBound).toFixed(6)} < ar <= ${(widthWeightTotal / state.lowerBound).toFixed(6)}`));
+    bp.deduct(await builder.addTextRow(`row cell weighting total: ${widthWeightTotal}\nrow height: ${rowHeight}\n${state.lowerBound} <= cell weight < ${state.upperBound}\n${(widthWeightTotal / state.upperBound).toFixed(6)} < ar <= ${(widthWeightTotal / state.lowerBound).toFixed(6)}`));
     bp.setOn(bottomScrollPad);
+    builder.addEmptyRow();
+
+    await addStatusRows(paddings);
   });
+
+  function paddingForState(key: SizeKey, state: State) {
+    // ar = (ww-wp)/(rh-hp)             aspect ratio of unscaled image size
+    // wp = ww-(rh-hp)ar
+    // (rh1-hp)ar1 = (rh2-hp)ar2        in the same orientation, wp should be the same for all rh
+    // hp = (rh1*ar1-rh2*ar2)/(ar1-ar2)
+    const rhs = Array.from(rowHeights);
+    const ars = rhs.map(rh => widthWeightTotal / state[rh].upperBound);
+    const heightPadding = Math.round((rhs[0] * ars[0] - rhs[1] * ars[1]) / (ars[0] - ars[1]));
+    const windowWidth = key.windowSize.width;
+    const widthPadding = Math.round(windowWidth - (rhs[0] - heightPadding) * ars[0]);
+    return { heightPadding, widthPadding };
+  }
 }
 function addImage(row: UITableRow, image: Image, fn: (imageCell: UITableCell) => void) {
   fn(row.addImage(image));
@@ -404,32 +336,15 @@ async function measureHeightPaddingByMoire(ui: UIRunner) {
   // up"
 
   const builder = ui.builder;
-  const screenScale = Device.screenScale();
 
   const imageHeight = 100;
   const min = 100;
   const tooMuch = min + 32; // XXX what if padding is actually more?
 
-  return await ui.loop<number | undefined>(async loop => {
-    const screenSize = Device.screenSize();
-    const orientation = orientationName(screenSize);
-    const portraitWidth = orientation == 'portrait' ? screenSize.width : screenSize.height;
-
-
-    if (orientation == 'landscape') {
-      // portrait only; this should work in landscape, but row height padding
-      // doesn't seem to vary between portrait and landscape (which is
-      // reasonable since the table scrolls vertically: the row heights are not
-      // really related to device height); so, letting the user iterate on both
-      // is probably just wasted effort; also we can reasonably use portrait's
-      // image width (lower bound) that we derive here as a lower bound for
-      // landscape's image width to speed up landscape width measuring a bit
-      await builder.addTextRow('This part of the row measurement only works in portrait mode. Please turn your device so the longest edges are "up and down".');
-      return;
-    }
+  return await ui.loop<number | undefined>(async (loop, { windowSize }) => {
 
     // add title, and scroll padding rows
-    const tp = new VariablePadding(screenSize.height * .75);
+    const tp = new VariablePadding(windowSize.height * .75);
     tp.deduct(await builder.addTitleConfigRow());
     tp.deduct(await builder.addBackRow('Skip Measurement', () => loop.return(void 0)));
     const topScrollPad = builder.addEmptyRow();
@@ -440,61 +355,47 @@ async function measureHeightPaddingByMoire(ui: UIRunner) {
 
     // add test rows
     for (let h = min; h < tooMuch; h++)
-      addRulerRow(builder.table, h, new Size(Math.trunc(portraitWidth / 2), imageHeight), (size, rowHeight) => loop.return(rowHeight - size.height));
+      addRulerRow(builder.table, h, new Size(Math.trunc(windowSize.width / 2), imageHeight), (size, rowHeight) => loop.return(rowHeight - size.height));
 
     // add scroll padding, and informational rows
-    const bp = new VariablePadding(screenSize.height * .75);
+    const bp = new VariablePadding(windowSize.height * .75);
     const bottomScrollPad = builder.addEmptyRow();
-    bp.deduct(await builder.addTextRow(`device scale: ${screenScale}×`));
-    bp.deduct(await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`));
-    bp.deduct(await builder.addTextRow(`ih: ${imageHeight}: ${min} <= rh < ${tooMuch}`));
+    bp.deduct(await builder.addTextRow(`image height: ${imageHeight}\n${min} <= row height < ${tooMuch}`));
     bp.setOn(bottomScrollPad);
   });
 }
 
-async function measureWidthPaddingsByMoire(ui: UIRunner, heightPadding: number, portraitImageWidthBounds?: [number, number]): Promise<PortraitAndLandscape<number | null>> {
+async function checkWidthPaddingsByMoire(ui: UIRunner, heightPadding: number): Promise<void | null> {
   const builder = ui.builder;
   builder.title = 'Measuring Width Padding';
 
-  const screenScale = Device.screenScale();
-
-  type State = { screenSize: Size, width: number, tooWide: number, done: boolean };
-  const orientationState: PortraitAndLandscape<State | null> = {
-    portrait: null,
-    landscape: null
-  };
-
   const rowHeight = 105;
   const imageHeight = rowHeight - heightPadding;
+  const paddings = new Map<SizeKey, Padding>;
 
-  await ui.loop(async loop => {
-    const screenSize = Device.screenSize();
+  type State = { width: number, tooWide: number, done: boolean };
+  return multiSize(ui, (key): State => ({
+    width: 1,
+    tooWide: key.windowSize.width + 1,
+    done: false,
+  }), async (loop, key, state, addStatusRows) => {
 
-    const state = ((orientation: keyof typeof orientationState) => {
-      const state = orientationState[orientation];
-      if (state != null) return state;
-
-      return orientationState[orientation] = {
-        screenSize,
-        width: portraitImageWidthBounds?.[0] ?? 1,
-        tooWide: (orientation == 'portrait' ? portraitImageWidthBounds?.[1] : null) ?? screenSize.width + 1,
-        done: false,
-      };
-    })(orientationName(screenSize));
-
+    const windowSize = key.windowSize;
     const increment = incrementFor(state);
 
-    builder.rowWidth = state.width >= 100 ? state.width : null;
-
     // add title, and scroll padding rows
-    const tp = new VariablePadding(screenSize.height * .75);
+    const tp = new VariablePadding(windowSize.height * .75);
     tp.deduct(await builder.addTitleConfigRow());
-    tp.deduct(await builder.addBackRow('Skip Measurement', () => loop.return()));
+    tp.deduct(await builder.addBackRow('Back', () => loop.return()));
     const topScrollPad = builder.addEmptyRow();
 
-    if (state.done)
-      await builder.addTextRow('Row measurement for this orientation is done. Please rotate your device and continue.');
-    else {
+    if (state.done) {
+
+      await builder.addTextRow('You have completed the padding check for this size and orientation. To check another configuration, activate another multitasking size and/or rotate your device into a different orientation.');
+      await builder.addIndentRow(textCell('Multitasking is available on iPads through Split View, Slide Over, and (if the iPad supports it) Stage Manager.', { titleFont: 'footnote' }));
+
+    } else {
+
       tp.deduct(await builder.addTextRow('Pick the lowest row that shows the consistent, un-blurred moiré pattern that matches the pattern shown in the first row).'));
       tp.setOn(topScrollPad);
 
@@ -503,40 +404,27 @@ async function measureWidthPaddingsByMoire(ui: UIRunner, heightPadding: number, 
         addRulerRow(builder.table, rowHeight, new Size(imageWidth, imageHeight), size => {
           state.width = size.width;
           state.tooWide = Math.min(state.tooWide, state.width + increment);
-          if (incrementFor(state) < 1)
+          if (incrementFor(state) < 1) {
             state.done = true;
-          const allDone = orientationState.portrait?.done && orientationState.landscape?.done;
-          if (allDone)
-            loop.return();
-          else
-            loop.again();
+            paddings.set(key, { heightPadding, widthPadding: windowSize.width - state.width });
+          }
+          loop.again();
         });
 
       // add scroll padding, and informational rows
-      const bp = new VariablePadding(screenSize.height * .75);
+      const bp = new VariablePadding(windowSize.height * .75);
       const bottomScrollPad = builder.addEmptyRow();
-      bp.deduct(await builder.addTextRow(`device scale: ${screenScale}×`));
-      bp.deduct(await builder.addTextRow(`device W×H: ${screenSize.width}×${screenSize.height} pt`));
       bp.deduct(await builder.addTextRow(`current: by ${increment}, ${state.width} <= image width < ${state.tooWide}`));
       bp.setOn(bottomScrollPad);
     }
+
+    builder.addEmptyRow();
+    await addStatusRows(paddings);
 
     function incrementFor(state: State) {
       return powerOf(10, state.tooWide, state.width);
     }
   });
-
-  return {
-    portrait: widthPaddingIn('portrait'),
-    landscape: widthPaddingIn('landscape'),
-  };
-
-  function widthPaddingIn(pl: keyof typeof orientationState) {
-    const state = orientationState[pl];
-    if (!state?.done)
-      return null;
-    return state.screenSize.width - state.width;
-  }
 }
 function powerOf(factor: number, tooMuch: number, start: number) {
   if (!(start < tooMuch)) throw new RangeError(`backward range: expected start (${start}) < (${tooMuch}) tooMuch`);
@@ -902,13 +790,15 @@ function pickFont(ui: UIRunner, currentFont: NamedFont) {
 
 async function showSafeAreaInsets(ui: UIRunner) {
   const builder = ui.builder;
-  await ui.loop(async (loop, { safeAreaInsets }) => {
+  await ui.loop(async loop => {
     await builder.addTitleConfigRow();
     await builder.addSubtitleHelpRow('Safe Area Insets', 'This part of the program reports the horizontal (left/right) safe area insets available in a WebView. iOS provides these insets so that "full screen" web pages can avoid placing elements that might end up under the notch/island on certain devices. This should give us a numbers that can be used to reconstruct a UITableRow\'s "width padding" without needing to measure it.');
     await builder.addBackRow('Back', () => loop.return());
     builder.addEmptyRow();
-    await builder.addTextRow(JSON.stringify(safeAreaInsets), { onSelect: () => loop.again() });
-    await builder.addTextRow(JSON.stringify(await ui.safeAreaInsetsFetcher.getLeftAndRight()), { onSelect: () => loop.again() });
+
+    const { left, right, width, height, top, bottom, x, y } = await ui.safeAreaInsetsFetcher.getInsetsEtc();
+    const text = [{ left, right }, { top, bottom }, { width, height }, { x, y }].map(o => JSON.stringify(o)).join('\n');
+    await builder.addTextRow(text, { onSelect: () => loop.again() });
   });
 }
 

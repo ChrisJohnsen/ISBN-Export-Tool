@@ -1,22 +1,34 @@
-type Insets = { left: string, right: string };
-type InsetsAndAngle = Insets & { angle: number };
+type Insets = {
+  left: string, right: string,
+  top: string, bottom: string,
+  angle: number,
+  width: number, height: number,
+  x: number, y: number,
+};
 
-export function getLeftAndRightInsets(): InsetsAndAngle {
+export function getLeftAndRightInsets(): Insets {
   const angle = window.screen.orientation.angle;
   const cs = getComputedStyle(document.documentElement);
   const left = cs.getPropertyValue('--left');
   const right = cs.getPropertyValue('--right');
-  return { left, right, angle };
+  const top = cs.getPropertyValue('--top');
+  const bottom = cs.getPropertyValue('--bottom');
+  const width = window.innerWidth; // if not presented, we see 300; document.documentElement.clientWidth has same issue with not being presented, and before first orientation change
+  const height = window.innerHeight;
+  const x = window.screenX;
+  const y = window.screenY;
+  // XXX does window.screenX/Y help to more fully capture multitasking configuration (e.g. which side in a split view)?
+  return { left, right, angle, width, height, top, bottom, x, y };
 }
 
-export function getStableLeftAndRightInsets(): Promise<InsetsAndAngle> {
+export function getStableLeftAndRightInsets(): Promise<Insets> {
   const interval = 25;
   const requiredStablePeriods = 4;
   let queries = 0;
   let stableFor = 0;
-  let previousInsets: InsetsAndAngle | undefined;
+  let previousInsets: Insets | undefined;
   return new Promise(poll);
-  async function poll(resolve: (insets: InsetsAndAngle) => void, reject: (reason: Error) => void) {
+  async function poll(resolve: (insets: Insets) => void, reject: (reason: Error) => void) {
     const insets = getLeftAndRightInsets();
     queries++;
     if (previousInsets)
