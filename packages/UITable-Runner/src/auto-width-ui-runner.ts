@@ -39,6 +39,7 @@ export class AutoWidthUIRunner<B extends AutoWidthUIBuilder> {
 
     const table = new UITable;
     const tableClosed = table.present(!opts.visibleSafeAreaInsetWebView).then(() => 'table closed' as const);
+    tableClosed.finally(() => safeAreaInsetsFetcher.unhideMessage());
 
     const fm = new FontMeasurer;
 
@@ -290,6 +291,7 @@ class SafeAreaInsetsFetcher {
       margin: 0px;
       font-size: 48px;
       text-align: center;
+      visibility: hidden;
     }
     :root {
       background-color: white;
@@ -312,13 +314,21 @@ class SafeAreaInsetsFetcher {
     }`, true);
     if (message)
       await webView.evaluateJavaScript(`document.getElementById('m').innerText = ${JSON.stringify(message)}`);
-    const webviewClosed = present ? webView.present(true) : Promise.resolve();
-    // for some reason, if we call evaluateJavaScript immediately after
-    // presenting, the WebView will show up as blank; so wait a bit before
-    // allowing the first post-presentation evaluateJavaScript call
-    const presented = present && new Promise<void>(r => Timer.schedule(10, false, r));
-    return new SafeAreaInsetsFetcher(webView, presented, webviewClosed);
+    if (present) {
+      const webviewClosed = webView.present(true);
+      // for some reason, if we call evaluateJavaScript immediately after
+      // presenting, the WebView will show up as blank; so wait a bit before
+      // allowing the first post-presentation evaluateJavaScript call
+      const presented = new Promise<void>(r => Timer.schedule(10, false, r));
+      return new SafeAreaInsetsFetcher(webView, presented, webviewClosed);
+    } else
+      return new SafeAreaInsetsFetcher(webView, false, Promise.resolve());
 
+  }
+  async unhideMessage() {
+    if (this.presented)
+      await this.presented;
+    await this.wv.evaluateJavaScript(`document.getElementById('m').style.visibility = 'visible'`);
   }
   private warned = false;
   async getInsetsEtc() {
