@@ -13,18 +13,18 @@
     }
   },
   "devDependencies": {
-    "@jest/globals": "^29.6.2",
-    "@rollup/plugin-commonjs": "^25.0.3",
-    "@rollup/plugin-node-resolve": "^15.1.0",
+    "@jest/globals": "^29.6.3",
+    "@rollup/plugin-commonjs": "^25.0.4",
+    "@rollup/plugin-node-resolve": "^15.2.0",
     "@types/papaparse": "^5.3.7",
     "outdent": "^0.8.0",
-    "rollup-plugin-ts": "^3.2.0"
+    "rollup-plugin-ts": "^3.4.4"
   },
   "dependencies": {
-    "isbn3": "^1.1.39",
+    "isbn3": "^1.1.40",
     "p-limit": "^4.0.0",
     "p-throttle": "^5.1.0",
     "papaparse": "patch:papaparse@npm%3A5.4.1#~/.yarn/patches/papaparse-npm-5.4.0-aa63633b8b.patch",
-    "typanion": "^3.13.0"
+    "typanion": "^3.14.0"
   }
 }

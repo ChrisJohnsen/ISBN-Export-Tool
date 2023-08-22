@@ -3,22 +3,22 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^25.0.3",
-    "@rollup/plugin-node-resolve": "^15.1.0",
+    "@rollup/plugin-commonjs": "^25.0.4",
+    "@rollup/plugin-node-resolve": "^15.2.0",
     "@rollup/plugin-terser": "^0.4.3",
     "@rollup/plugin-virtual": "^3.0.1",
     "@scriptable-ios/eslint-config": "^1.7.0",
     "@types/scriptable-ios": "^1.7.1",
-    "esbuild": "^0.18.17",
+    "esbuild": "^0.19.2",
     "preoutdent": "workspace:^",
-    "rollup": "^3.26.3",
-    "rollup-plugin-consts": "^1.1.0",
+    "rollup": "^3.28.0",
+    "rollup-plugin-consts": "^1.2.0",
     "rollup-plugin-esbuild": "^5.0.0",
     "rollup-plugin-license": "^3.0.1"
   },
   "dependencies": {
     "outdent": "^0.8.0",
-    "typanion": "^3.13.0",
+    "typanion": "^3.14.0",
     "uitable-runner": "workspace:^",
     "utils": "workspace:^"
   },
