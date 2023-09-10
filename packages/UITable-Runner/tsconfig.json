@@ -4,7 +4,6 @@
     "checkJs": true,
     "declaration": true,
     "declarationMap": true,
-    "moduleResolution": "node16"
   },
   "extends": "../../configs/tsconfig-Scriptable"
 }

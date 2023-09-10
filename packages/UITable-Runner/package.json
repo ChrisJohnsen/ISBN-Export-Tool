@@ -22,17 +22,17 @@
     }
   },
   "devDependencies": {
-    "@jest/globals": "^29.6.3",
+    "@jest/globals": "^29.6.4",
     "@rollup/plugin-commonjs": "^25.0.4",
-    "@rollup/plugin-node-resolve": "^15.2.0",
+    "@rollup/plugin-node-resolve": "^15.2.1",
     "@rollup/plugin-virtual": "^3.0.1",
     "@scriptable-ios/eslint-config": "^1.7.0",
     "@types/scriptable-ios": "^1.7.1",
-    "rollup": "^3.28.0",
+    "rollup": "^3.29.0",
     "rollup-plugin-consts": "^1.2.0",
     "rollup-plugin-esbuild": "^5.0.0",
-    "rollup-plugin-license": "^3.0.1",
-    "rollup-plugin-ts": "^3.4.4"
+    "rollup-plugin-license": "^3.1.0",
+    "rollup-plugin-ts": "^3.4.5"
   },
   "dependencies": {
     "typanion": "^3.14.0",

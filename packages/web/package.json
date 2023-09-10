@@ -8,6 +8,6 @@
     }
   },
   "devDependencies": {
-    "rollup-plugin-ts": "^3.4.4"
+    "rollup-plugin-ts": "^3.4.5"
   }
 }

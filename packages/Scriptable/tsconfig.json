@@ -2,7 +2,6 @@
   "include": [ "src/**/*" ],
   "compilerOptions": {
     "checkJs": true,
-    "moduleResolution": "node16"
   },
   "extends": "../../configs/tsconfig-Scriptable"
 }
