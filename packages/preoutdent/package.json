@@ -3,21 +3,21 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@jest/globals": "^29.6.4",
-    "@rollup/plugin-commonjs": "^25.0.4",
-    "@rollup/plugin-node-resolve": "^15.2.1",
-    "@rollup/plugin-virtual": "^3.0.1",
-    "@types/estree": "^1.0.1",
-    "@types/node": "^20.6.0",
+    "@jest/globals": "^29.7.0",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-virtual": "^3.0.2",
+    "@types/estree": "^1.0.3",
+    "@types/node": "^20.8.8",
     "acorn": "^8.10.0",
     "outdent": "^0.8.0",
-    "rollup": "^3.29.0",
+    "rollup": "^4.1.4",
     "rollup-plugin-ts": "^3.4.5"
   },
   "dependencies": {
-    "@rollup/pluginutils": "^5.0.4",
+    "@rollup/pluginutils": "^5.0.5",
     "estree-walker": "^3.0.3",
-    "magic-string": "^0.30.3"
+    "magic-string": "^0.30.5"
   },
   "types": "./dist/index.d.ts",
   "main": "./dist/index.cjs",

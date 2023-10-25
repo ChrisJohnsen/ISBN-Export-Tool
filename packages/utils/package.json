@@ -13,15 +13,15 @@
     }
   },
   "devDependencies": {
-    "@jest/globals": "^29.6.4",
-    "@rollup/plugin-commonjs": "^25.0.4",
-    "@rollup/plugin-node-resolve": "^15.2.1",
-    "@types/papaparse": "^5.3.8",
+    "@jest/globals": "^29.7.0",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@types/papaparse": "^5.3.10",
     "outdent": "^0.8.0",
     "rollup-plugin-ts": "^3.4.5"
   },
   "dependencies": {
-    "isbn3": "^1.1.41",
+    "isbn3": "^1.1.42",
     "p-limit": "^4.0.0",
     "p-throttle": "^5.1.0",
     "papaparse": "patch:papaparse@npm%3A5.4.1#~/.yarn/patches/papaparse-npm-5.4.0-aa63633b8b.patch",
