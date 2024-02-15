@@ -7,13 +7,13 @@
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",
-    "@types/node": "^20.8.8",
-    "esbuild": "^0.19.5",
-    "rollup-plugin-esbuild": "^6.1.0"
+    "@types/node": "^20.11.17",
+    "esbuild": "^0.20.0",
+    "rollup-plugin-esbuild": "^6.1.1"
   },
   "dependencies": {
-    "clipanion": "^4.0.0-rc.2",
-    "lowdb": "^6.1.1",
+    "clipanion": "^4.0.0-rc.3",
+    "lowdb": "^7.0.1",
     "node-fetch": "^3.3.2",
     "utils": "workspace:^"
   }
