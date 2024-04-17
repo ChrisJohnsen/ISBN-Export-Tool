@@ -1,6 +1,6 @@
 {
   "name": "isbn-export-tools",
-  "packageManager": "yarn@4.1.1",
+  "packageManager": "yarn@4.3.1",
   "type": "module",
   "private": true,
   "workspaces": [
