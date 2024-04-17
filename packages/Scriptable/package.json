@@ -8,13 +8,13 @@
     "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-virtual": "^3.0.2",
     "@scriptable-ios/eslint-config": "^1.7.0",
-    "@types/scriptable-ios": "^1.7.6",
-    "esbuild": "^0.20.0",
+    "@types/scriptable-ios": "^1.7.7",
+    "esbuild": "^0.20.2",
     "preoutdent": "workspace:^",
-    "rollup": "^4.11.0",
+    "rollup": "^4.14.3",
     "rollup-plugin-consts": "^1.2.0",
     "rollup-plugin-esbuild": "^6.1.1",
-    "rollup-plugin-license": "^3.2.0"
+    "rollup-plugin-license": "^3.3.1"
   },
   "dependencies": {
     "outdent": "^0.8.0",

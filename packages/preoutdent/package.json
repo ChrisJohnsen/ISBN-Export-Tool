@@ -8,16 +8,16 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-virtual": "^3.0.2",
     "@types/estree": "^1.0.5",
-    "@types/node": "^20.11.17",
+    "@types/node": "^20.12.7",
     "acorn": "^8.11.3",
     "outdent": "^0.8.0",
-    "rollup": "^4.11.0",
+    "rollup": "^4.14.3",
     "rollup-plugin-ts": "^3.4.5"
   },
   "dependencies": {
     "@rollup/pluginutils": "^5.1.0",
     "estree-walker": "^3.0.3",
-    "magic-string": "^0.30.7"
+    "magic-string": "^0.30.9"
   },
   "types": "./dist/index.d.ts",
   "main": "./dist/index.cjs",

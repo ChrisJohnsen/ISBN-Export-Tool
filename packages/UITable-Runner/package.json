@@ -27,11 +27,11 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-virtual": "^3.0.2",
     "@scriptable-ios/eslint-config": "^1.7.0",
-    "@types/scriptable-ios": "^1.7.6",
-    "rollup": "^4.11.0",
+    "@types/scriptable-ios": "^1.7.7",
+    "rollup": "^4.14.3",
     "rollup-plugin-consts": "^1.2.0",
     "rollup-plugin-esbuild": "^6.1.1",
-    "rollup-plugin-license": "^3.2.0",
+    "rollup-plugin-license": "^3.3.1",
     "rollup-plugin-ts": "^3.4.5"
   },
   "dependencies": {
