@@ -54,7 +54,7 @@ if (!checks.failed) {
     const cp = spawn('yarn.cmd',
       ['workspace', 'scriptable', 'run', '-T', 'rollup', '-c', '--configRelease', releasedDir],
       {
-        shell: false,
+        shell: true,
         stdio: ['ignore', 'inherit', 'inherit'],
       });
     cp.on('exit', (code, signal) => {
