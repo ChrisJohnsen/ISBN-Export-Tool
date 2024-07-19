@@ -350,10 +350,10 @@ const makeParseState = (() => {
 
         // the following exprs either do not produce function values or produce
         // _new_ function values that could not possibly be an indentation marker
-        if (false
+        if (false // eslint-disable-line no-constant-binary-expression
           || expr.type == 'ArrayExpression'
           || expr.type == 'ArrowFunctionExpression'
-          || expr.type == 'AssignmentExpression' && (false
+          || expr.type == 'AssignmentExpression' && (false // eslint-disable-line no-constant-binary-expression
             || expr.operator == '+='
             || expr.operator == '-='
             || expr.operator == '*='
@@ -529,7 +529,6 @@ const makeParseState = (() => {
 
           return allNonStatic;
 
-          // eslint-disable-next-line no-inner-declarations
           function analyzeOptionValueFromProperty(baseOptions: AnalyzedOutdentOptions, p: ExtendNode<ESTree.Property>, key: string) {
             // ignore extraneous keys
             if (!isOptionKey(key))

@@ -3,18 +3,17 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-commonjs": "^26.0.1",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-virtual": "^3.0.2",
-    "@scriptable-ios/eslint-config": "^1.7.0",
     "@types/scriptable-ios": "^1.7.7",
-    "esbuild": "^0.20.2",
+    "esbuild": "^0.23.0",
     "preoutdent": "workspace:^",
-    "rollup": "^4.14.3",
+    "rollup": "^4.18.1",
     "rollup-plugin-consts": "^1.2.0",
     "rollup-plugin-esbuild": "^6.1.1",
-    "rollup-plugin-license": "^3.3.1"
+    "rollup-plugin-license": "^3.5.2"
   },
   "dependencies": {
     "outdent": "^0.8.0",

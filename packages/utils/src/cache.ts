@@ -208,7 +208,6 @@ export type CacheCheck<T> = { hit: true, value: T } | { hit: false, value: undef
 function hit<T>(value: T): CacheCheck<T> { return { hit: true, value } }
 function miss<T>(): CacheCheck<T> { return { hit: false, value: void 0 } }
 function getCached<K, T>(key: K, cache: Map<K, T>): CacheCheck<T> {
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   if (cache.has(key)) return hit(cache.get(key)!);
   else return miss();
 }

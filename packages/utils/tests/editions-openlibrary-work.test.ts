@@ -281,10 +281,9 @@ class FetcherBuilder {
         map.set(editionsURL(workId, start), editions);
       });
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return async (url) => {
       if (map.has(url)) {
-        const responseObj = map.get(url)!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+        const responseObj = map.get(url)!;
         if (responseObj instanceof Literal) return responseObj.value;
         if (responseObj instanceof Rejection) throw responseObj.error;
         return toJ(responseObj);

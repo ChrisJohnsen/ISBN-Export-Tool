@@ -67,8 +67,8 @@ Note: Files under `tests/` are not included in the package-level
 ### ESLint
 
     yarn eslint packages/foo
-    yarn workspace foo run --top-level eslint .
-    packages/foo> yarn run --top-level eslint .     # cwd in workspace
+    yarn workspace foo run --top-level eslint
+    packages/foo> yarn run --top-level eslint       # cwd in workspace
 
 ### Rollup
 

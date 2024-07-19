@@ -50,7 +50,7 @@ function modifyConfig(rawConfig, configFile) {
   } else {
     newConfig.plugins.push({
       name: 'watch-included-config',
-      buildStart(options) {
+      buildStart(options) { // eslint-disable-line @typescript-eslint/no-unused-vars
         this.addWatchFile(configFile);
       },
     });

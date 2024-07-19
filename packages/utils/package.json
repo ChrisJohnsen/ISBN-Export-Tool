@@ -14,15 +14,15 @@
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
-    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-commonjs": "^26.0.1",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@types/papaparse": "^5.3.14",
     "outdent": "^0.8.0",
     "rollup-plugin-ts": "^3.4.5"
   },
   "dependencies": {
-    "isbn3": "^1.1.47",
-    "p-limit": "^5.0.0",
+    "isbn3": "^1.1.50",
+    "p-limit": "^6.1.0",
     "p-throttle": "^6.1.0",
     "papaparse": "patch:papaparse@npm%3A5.4.1#~/.yarn/patches/papaparse-npm-5.4.0-aa63633b8b.patch",
     "typanion": "^3.14.0"

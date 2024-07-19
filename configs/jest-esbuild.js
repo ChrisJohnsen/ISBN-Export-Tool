@@ -41,6 +41,6 @@ export default {
 };
 
 function debug(...args) {
-  if (false)
+  if (false) // eslint-disable-line no-constant-condition
     console.log(...args);
 }
