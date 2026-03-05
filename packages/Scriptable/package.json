@@ -5,7 +5,7 @@
   "devDependencies": {
     "@rollup/plugin-commonjs": "^26.0.1",
     "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-virtual": "^3.0.2",
     "@types/scriptable-ios": "^1.7.7",
     "esbuild": "^0.25.0",
