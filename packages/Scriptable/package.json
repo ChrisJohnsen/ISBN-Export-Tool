@@ -13,7 +13,7 @@
     "rollup": "^4.18.1",
     "rollup-plugin-consts": "^1.2.0",
     "rollup-plugin-esbuild": "^6.1.1",
-    "rollup-plugin-license": "^3.5.2"
+    "rollup-plugin-license": "^3.7.0"
   },
   "dependencies": {
     "outdent": "^0.8.0",
