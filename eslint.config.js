@@ -10,6 +10,8 @@ export default [{
     '**/__snapshots__/',
     '**/dist/',
     '**/iCloud/',
+    'released/',
+    '.yarn/',
   ],
 },
 {
