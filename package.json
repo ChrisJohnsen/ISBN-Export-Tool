@@ -21,6 +21,9 @@
     "typescript": "^5.4.5",
     "typescript-eslint": "^7.16.1"
   },
+  "resolutions": {
+    "@istanbuljs/load-nyc-config@npm:1.1.0/js-yaml": "^4.1.2"
+  },
   "scripts": {
     "esm": "node --experimental-vm-modules",
     "jest": "node --experimental-vm-modules \"$(yarn bin jest)\""
