@@ -1,3 +1,6 @@
+Note: This repo is being archived. Scriptable was my primary target, and it
+stopped working there (hangs on launch) sometime ago.
+
 Using a book list app or service is a great way to track books you have read and those you want to read. Unfortunately it is quite easy for your "to be read" list to grow until it is difficult to review while browsing books.
 
 Many book sources (libraries, stores, etc.) will let you maintain lists (or wishlists), but there may be no good way to import your "to be read" list from your book list service.
